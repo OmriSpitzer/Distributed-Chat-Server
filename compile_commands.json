@@ -1,0 +1,7 @@
+[
+  {
+    "directory": "C:/GitProjects/Distributed-Chat-Server",
+    "command": "g++ -std=c++17 -I include -c src/utils/logger.cpp -o logger.o",
+    "file": "src/utils/logger.cpp"
+  }
+]

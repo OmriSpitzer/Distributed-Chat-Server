@@ -1,0 +1,11 @@
+{
+  "clang-format.executable": "C:/msys64/ucrt64/bin/clang-format.exe",
+  "clang-format.style": "file",
+  "editor.formatOnSave": true,
+  "[cpp]": {
+    "editor.defaultFormatter": "xaver.clang-format"
+  },
+  "[c]": {
+    "editor.defaultFormatter": "xaver.clang-format"
+  }
+}

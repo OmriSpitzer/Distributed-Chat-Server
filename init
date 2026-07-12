@@ -1,5 +1,0 @@
-$env:Path += ";C:\msys64\ucrt64\bin"
-
-g++ main.cpp -o app.exe
-
-./app.exe

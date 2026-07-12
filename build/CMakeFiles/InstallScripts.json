@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/GitProjects/Distributed-Chat-Server/build/cmake_install.cmake",
+		"C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-build/cmake_install.cmake",
+		"C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-build/src/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

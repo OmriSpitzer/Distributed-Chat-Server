@@ -1,0 +1,47 @@
+Logger starts empty 3 0.0368028
+Logger logInfo stores INFO messages 3 0.0396534
+Logger logWarning stores WARNING messages 3 0.033856
+Logger logError stores ERROR messages 3 0.0300421
+Logger preserves message order 3 0.0264446
+Logger getMessage edge cases 3 0.0276861
+Logger accepts empty and unusual message content 3 0.0324846
+Logger accepts string_view slices 3 0.0323474
+Logger mixed message types 3 0.0342719
+Logger stream output 3 0.0332652
+Logger stream output edge cases 3 0.0343142
+Logger stores independent message copies 3 0.0362884
+Logger handles repeated logging calls 3 0.0324562
+Logger destruction is safe after logging 3 0.0309239
+Message constructor stores content and type 3 0.0348804
+Message constructor edge cases 3 0.0304673
+Message metadata is initialized on construction 3 0.0361411
+Message setters update fields 3 0.0346724
+Message equality compares ids only 1 0.103797
+Message stream output format 3 0.0316635
+Message stream output edge cases 3 0.0321501
+Message getters return consistent values after updates 3 0.0319641
+Constructor Test 1 0.0835057
+Log Methods Test 1 0.0849046
+Ordering Test 1 0.0883969
+Mixed Types Test 1 0.0867314
+GetMessage Edge Cases 1 0.0857304
+Content Edge Cases 1 0.0956364
+String View Test 1 0.115773
+Stored Message Metadata Test 1 0.0906527
+Stream Output Test 1 0.0910799
+Stream Output Type Labels 1 0.100607
+Stream Output Edge Cases 1 0.0965562
+Independent Copies Test 1 0.14321
+Repeated Logging Test 1 0.128269
+Lifetime Test 1 0.133391
+Constructor Test 1 0.12689
+Constructor Edge Cases 1 0.110713
+Metadata Test 1 0.15894
+Setters Test 1 0.141891
+Equality Test 1 0.140586
+Stream Output Format 1 0.164756
+Stream Output Type Labels 1 0.248089
+Stream Output Edge Cases 1 0.0743274
+Getters Test 1 0.0963697
+Copy Semantics Test 1 0.101527
+---

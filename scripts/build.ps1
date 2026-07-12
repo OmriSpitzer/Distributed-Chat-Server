@@ -1,0 +1,1 @@
+g++ -I include -c src/utils/logger.cpp -o logger.o
