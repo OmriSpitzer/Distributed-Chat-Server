@@ -1,5 +1,8 @@
 # Distributed-Chat-Server
 
+# Logger (implemented)
+
+
                     +------------------+
                     |   Desktop/Web    |
                     |      Client      |

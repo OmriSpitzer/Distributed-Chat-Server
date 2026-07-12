@@ -1,6 +1,7 @@
 C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/utils.dir
 C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/logger_test.dir
 C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/message_test.dir
+C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/user_test.dir
 C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/Experimental.dir
 C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/Nightly.dir
 C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/Continuous.dir

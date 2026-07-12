@@ -5,7 +5,7 @@
  * @date 12-07-2026
  */
 
-#include "utils/logger.h"
+#include "utils/models/logger.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <memory>

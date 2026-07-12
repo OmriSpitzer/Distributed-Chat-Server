@@ -1,15 +1,21 @@
 [
 {
   "directory": "C:/GitProjects/Distributed-Chat-Server/build",
-  "command": "C:\\msys64\\ucrt64\\bin\\c++.exe -IC:/GitProjects/Distributed-Chat-Server/include -std=gnu++17 -o CMakeFiles\\utils.dir\\src\\utils\\logger.cpp.obj -c C:\\GitProjects\\Distributed-Chat-Server\\src\\utils\\logger.cpp",
-  "file": "C:/GitProjects/Distributed-Chat-Server/src/utils/logger.cpp",
-  "output": "C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/utils.dir/src/utils/logger.cpp.obj"
+  "command": "C:\\msys64\\ucrt64\\bin\\c++.exe -IC:/GitProjects/Distributed-Chat-Server/include -std=gnu++17 -o CMakeFiles\\utils.dir\\src\\utils\\models\\logger.cpp.obj -c C:\\GitProjects\\Distributed-Chat-Server\\src\\utils\\models\\logger.cpp",
+  "file": "C:/GitProjects/Distributed-Chat-Server/src/utils/models/logger.cpp",
+  "output": "C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/utils.dir/src/utils/models/logger.cpp.obj"
 },
 {
   "directory": "C:/GitProjects/Distributed-Chat-Server/build",
-  "command": "C:\\msys64\\ucrt64\\bin\\c++.exe -IC:/GitProjects/Distributed-Chat-Server/include -std=gnu++17 -o CMakeFiles\\utils.dir\\src\\utils\\message.cpp.obj -c C:\\GitProjects\\Distributed-Chat-Server\\src\\utils\\message.cpp",
-  "file": "C:/GitProjects/Distributed-Chat-Server/src/utils/message.cpp",
-  "output": "C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/utils.dir/src/utils/message.cpp.obj"
+  "command": "C:\\msys64\\ucrt64\\bin\\c++.exe -IC:/GitProjects/Distributed-Chat-Server/include -std=gnu++17 -o CMakeFiles\\utils.dir\\src\\utils\\models\\message.cpp.obj -c C:\\GitProjects\\Distributed-Chat-Server\\src\\utils\\models\\message.cpp",
+  "file": "C:/GitProjects/Distributed-Chat-Server/src/utils/models/message.cpp",
+  "output": "C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/utils.dir/src/utils/models/message.cpp.obj"
+},
+{
+  "directory": "C:/GitProjects/Distributed-Chat-Server/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\c++.exe -IC:/GitProjects/Distributed-Chat-Server/include -std=gnu++17 -o CMakeFiles\\utils.dir\\src\\utils\\models\\user.cpp.obj -c C:\\GitProjects\\Distributed-Chat-Server\\src\\utils\\models\\user.cpp",
+  "file": "C:/GitProjects/Distributed-Chat-Server/src/utils/models/user.cpp",
+  "output": "C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/utils.dir/src/utils/models/user.cpp.obj"
 },
 {
   "directory": "C:/GitProjects/Distributed-Chat-Server/build",
@@ -22,6 +28,12 @@
   "command": "C:\\msys64\\ucrt64\\bin\\c++.exe -IC:/GitProjects/Distributed-Chat-Server/include -IC:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src/src/catch2/.. -IC:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-build/generated-includes -std=gnu++17 -o CMakeFiles\\message_test.dir\\tests\\class\\message_test.cpp.obj -c C:\\GitProjects\\Distributed-Chat-Server\\tests\\class\\message_test.cpp",
   "file": "C:/GitProjects/Distributed-Chat-Server/tests/class/message_test.cpp",
   "output": "C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/message_test.dir/tests/class/message_test.cpp.obj"
+},
+{
+  "directory": "C:/GitProjects/Distributed-Chat-Server/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\c++.exe -IC:/GitProjects/Distributed-Chat-Server/include -IC:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src/src/catch2/.. -IC:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-build/generated-includes -std=gnu++17 -o CMakeFiles\\user_test.dir\\tests\\class\\user_test.cpp.obj -c C:\\GitProjects\\Distributed-Chat-Server\\tests\\class\\user_test.cpp",
+  "file": "C:/GitProjects/Distributed-Chat-Server/tests/class/user_test.cpp",
+  "output": "C:/GitProjects/Distributed-Chat-Server/build/CMakeFiles/user_test.dir/tests/class/user_test.cpp.obj"
 },
 {
   "directory": "C:/GitProjects/Distributed-Chat-Server/build",
