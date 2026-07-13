@@ -1,5 +1,12 @@
+/**
+ * Message header file class
+ *
+ * @date 12-07-2026
+ */
+
 #pragma once
 
+#include "utils/models/user.h"
 #include <ctime>
 #include <ostream>
 #include <string>
@@ -7,33 +14,26 @@
 
 class Message {
 public:
-  // message type enum class
-  enum class Type { INFO, WARNING, ERROR };
-
   // constructor
-  Message(std::string_view message, Message::Type type);
-
-  // getters
-  std::string getId() const;
-  std::string getMessage() const;
-  std::time_t getTimestamp() const;
-  Message::Type getType() const;
-
-  // setters
-  void setMessage(std::string_view message);
-  void setType(Message::Type type);
-  void setTimestamp(std::time_t timestamp);
+  Message(User &from, User &to, std::string_view message);
 
   // print operator
   friend std::ostream &operator<<(std::ostream &out, const Message &msg);
 
   // equality operator
   bool operator==(const Message &other) const;
+  bool operator!=(const Message &other) const;
+
+  // comparison operators
+  bool operator<(const Message &other) const;
+  bool operator>(const Message &other) const;
+  bool operator<=(const Message &other) const;
+  bool operator>=(const Message &other) const;
 
 private:
-  std::string _id;                                     // message id
-  std::string _message;                                // message content
-  Message::Type _type;                                 // message type
-  std::time_t _timestamp;                              // message timestamp
-  static std::string typeToString(Message::Type type); // type to string
+  User &from;            // sender
+  User &to;              // receiver
+  std::string content;   // message content
+  std::time_t timestamp; // message timestamp
+  std::string id;        // message id
 };

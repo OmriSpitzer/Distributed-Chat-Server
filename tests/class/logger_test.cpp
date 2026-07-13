@@ -22,7 +22,7 @@ std::string captureStream(const Logger &logger) {
   return stream.str();
 }
 
-uint64_t parseId(const Message &message) { return std::stoull(message.getId()); }
+uint64_t parseId(const LogMessage &message) { return std::stoull(message.getId()); }
 
 } // namespace
 
@@ -51,9 +51,9 @@ TEST_CASE("Log Methods Test", "[Logger][logging]") {
     Logger logger;
     logger.logInfo("info message");
 
-    const Message message = logger.getMessage(0);
+    const LogMessage message = logger.getMessage(0);
     REQUIRE(message.getMessage() == "info message");
-    REQUIRE(message.getType() == Message::Type::INFO);
+    REQUIRE(message.getType() == LogMessage::Type::INFO);
   }
 
   // test the logWarning stores WARNING messages
@@ -61,9 +61,9 @@ TEST_CASE("Log Methods Test", "[Logger][logging]") {
     Logger logger;
     logger.logWarning("warning message");
 
-    const Message message = logger.getMessage(0);
+    const LogMessage message = logger.getMessage(0);
     REQUIRE(message.getMessage() == "warning message");
-    REQUIRE(message.getType() == Message::Type::WARNING);
+    REQUIRE(message.getType() == LogMessage::Type::WARNING);
   }
 
   // test the logError stores ERROR messages
@@ -71,9 +71,9 @@ TEST_CASE("Log Methods Test", "[Logger][logging]") {
     Logger logger;
     logger.logError("error message");
 
-    const Message message = logger.getMessage(0);
+    const LogMessage message = logger.getMessage(0);
     REQUIRE(message.getMessage() == "error message");
-    REQUIRE(message.getType() == Message::Type::ERROR);
+    REQUIRE(message.getType() == LogMessage::Type::ERROR);
   }
 }
 
@@ -93,9 +93,9 @@ TEST_CASE("Ordering Test", "[Logger][ordering]") {
 
   // test the type order is preserved
   SECTION("type order is preserved") {
-    REQUIRE(logger.getMessage(0).getType() == Message::Type::INFO);
-    REQUIRE(logger.getMessage(1).getType() == Message::Type::WARNING);
-    REQUIRE(logger.getMessage(2).getType() == Message::Type::ERROR);
+    REQUIRE(logger.getMessage(0).getType() == LogMessage::Type::INFO);
+    REQUIRE(logger.getMessage(1).getType() == LogMessage::Type::WARNING);
+    REQUIRE(logger.getMessage(2).getType() == LogMessage::Type::ERROR);
   }
 }
 
@@ -107,10 +107,10 @@ TEST_CASE("Mixed Types Test", "[Logger][types]") {
   logger.logError("err");
   logger.logInfo("info again");
 
-  REQUIRE(logger.getMessage(0).getType() == Message::Type::INFO);
-  REQUIRE(logger.getMessage(1).getType() == Message::Type::WARNING);
-  REQUIRE(logger.getMessage(2).getType() == Message::Type::ERROR);
-  REQUIRE(logger.getMessage(3).getType() == Message::Type::INFO);
+  REQUIRE(logger.getMessage(0).getType() == LogMessage::Type::INFO);
+  REQUIRE(logger.getMessage(1).getType() == LogMessage::Type::WARNING);
+  REQUIRE(logger.getMessage(2).getType() == LogMessage::Type::ERROR);
+  REQUIRE(logger.getMessage(3).getType() == LogMessage::Type::INFO);
 }
 
 // test getMessage edge cases of the Logger class
@@ -204,7 +204,7 @@ TEST_CASE("Stored Message Metadata Test", "[Logger][metadata]") {
     logger.logInfo("metadata");
     const std::time_t after = std::time(nullptr);
 
-    const Message message = logger.getMessage(0);
+    const LogMessage message = logger.getMessage(0);
     REQUIRE_FALSE(message.getId().empty());
     REQUIRE_NOTHROW(parseId(message));
     REQUIRE(message.getTimestamp() >= before);
@@ -293,7 +293,7 @@ TEST_CASE("Stream Output Edge Cases", "[Logger][ostream][edge]") {
   SECTION("stored message ids appear in output") {
     Logger logger;
     logger.logInfo("tracked");
-    const Message stored = logger.getMessage(0);
+    const LogMessage stored = logger.getMessage(0);
     REQUIRE(captureStream(logger).find("[Msg: " + stored.getId() + "]") != std::string::npos);
   }
 }
@@ -305,7 +305,7 @@ TEST_CASE("Independent Copies Test", "[Logger][copies]") {
 
   // test the mutating retrieved message content does not affect logger
   SECTION("mutating retrieved message content does not affect logger") {
-    Message retrieved = logger.getMessage(0);
+    LogMessage retrieved = logger.getMessage(0);
     retrieved.setMessage("mutated");
 
     REQUIRE(logger.getMessage(0).getMessage() == "original");
@@ -314,16 +314,16 @@ TEST_CASE("Independent Copies Test", "[Logger][copies]") {
 
   // test the mutating retrieved message type does not affect logger
   SECTION("mutating retrieved message type does not affect logger") {
-    Message retrieved = logger.getMessage(0);
-    retrieved.setType(Message::Type::ERROR);
+    LogMessage retrieved = logger.getMessage(0);
+    retrieved.setType(LogMessage::Type::ERROR);
 
-    REQUIRE(logger.getMessage(0).getType() == Message::Type::INFO);
-    REQUIRE(retrieved.getType() == Message::Type::ERROR);
+    REQUIRE(logger.getMessage(0).getType() == LogMessage::Type::INFO);
+    REQUIRE(retrieved.getType() == LogMessage::Type::ERROR);
   }
 
   // test the mutating retrieved message timestamp does not affect logger
   SECTION("mutating retrieved message timestamp does not affect logger") {
-    Message retrieved = logger.getMessage(0);
+    LogMessage retrieved = logger.getMessage(0);
     retrieved.setTimestamp(123);
 
     REQUIRE(logger.getMessage(0).getTimestamp() != 123);

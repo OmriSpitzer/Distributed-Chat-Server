@@ -1,0 +1,5 @@
+if(EXISTS "C:/GitProjects/Distributed-Chat-Server/build/log_message_test-b12d07c_tests.cmake")
+  include("C:/GitProjects/Distributed-Chat-Server/build/log_message_test-b12d07c_tests.cmake")
+else()
+  add_test(log_message_test_NOT_BUILT-b12d07c log_message_test_NOT_BUILT-b12d07c)
+endif()

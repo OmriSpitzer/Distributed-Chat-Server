@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 # Library
 add_library(utils
     src/utils/models/logger.cpp
+    src/utils/models/log_message.cpp
     src/utils/models/message.cpp
     src/utils/models/user.cpp
 )
@@ -23,14 +24,18 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(logger_test tests/class/logger_test.cpp)
 target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain)
 
-add_executable(message_test tests/class/message_test.cpp)
-target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(log_message_test tests/class/log_message_test.cpp)
+target_link_libraries(log_message_test PRIVATE utils Catch2::Catch2WithMain)
 
 add_executable(user_test tests/class/user_test.cpp)
 target_link_libraries(user_test PRIVATE utils Catch2::Catch2WithMain)
 
+add_executable(message_test tests/class/message_test.cpp)
+target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
+
 include(CTest)
 include(Catch)
 catch_discover_tests(logger_test)
-catch_discover_tests(message_test)
+catch_discover_tests(log_message_test)
 catch_discover_tests(user_test)
+catch_discover_tests(message_test)

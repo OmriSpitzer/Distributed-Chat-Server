@@ -52,6 +52,14 @@ build CMakeFiles/utils.dir/src/utils/models/logger.cpp.obj: CXX_COMPILER__utils_
   OBJECT_FILE_DIR = CMakeFiles\utils.dir\src\utils\models
   TARGET_SUPPORT_DIR = CMakeFiles\utils.dir
 
+build CMakeFiles/utils.dir/src/utils/models/log_message.cpp.obj: CXX_COMPILER__utils_unscanned_ C$:/GitProjects/Distributed-Chat-Server/src/utils/models/log_message.cpp || cmake_object_order_depends_target_utils
+  DEP_FILE = CMakeFiles\utils.dir\src\utils\models\log_message.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -IC:/GitProjects/Distributed-Chat-Server/include
+  OBJECT_DIR = CMakeFiles\utils.dir
+  OBJECT_FILE_DIR = CMakeFiles\utils.dir\src\utils\models
+  TARGET_SUPPORT_DIR = CMakeFiles\utils.dir
+
 build CMakeFiles/utils.dir/src/utils/models/message.cpp.obj: CXX_COMPILER__utils_unscanned_ C$:/GitProjects/Distributed-Chat-Server/src/utils/models/message.cpp || cmake_object_order_depends_target_utils
   DEP_FILE = CMakeFiles\utils.dir\src\utils\models\message.cpp.obj.d
   FLAGS = -std=gnu++17
@@ -76,7 +84,7 @@ build CMakeFiles/utils.dir/src/utils/models/user.cpp.obj: CXX_COMPILER__utils_un
 #############################################
 # Link the static library libutils.a
 
-build libutils.a: CXX_STATIC_LIBRARY_LINKER__utils_ CMakeFiles/utils.dir/src/utils/models/logger.cpp.obj CMakeFiles/utils.dir/src/utils/models/message.cpp.obj CMakeFiles/utils.dir/src/utils/models/user.cpp.obj
+build libutils.a: CXX_STATIC_LIBRARY_LINKER__utils_ CMakeFiles/utils.dir/src/utils/models/logger.cpp.obj CMakeFiles/utils.dir/src/utils/models/log_message.cpp.obj CMakeFiles/utils.dir/src/utils/models/message.cpp.obj CMakeFiles/utils.dir/src/utils/models/user.cpp.obj
   OBJECT_DIR = CMakeFiles\utils.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
@@ -121,40 +129,40 @@ build logger_test.exe logger_test-b12d07c_tests.cmake | ${cmake_ninja_workdir}lo
   TARGET_SUPPORT_DIR = CMakeFiles\logger_test.dir
 
 # =============================================================================
-# Object build statements for EXECUTABLE target message_test
+# Object build statements for EXECUTABLE target log_message_test
 
 
 #############################################
-# Order-only phony target for message_test
+# Order-only phony target for log_message_test
 
-build cmake_object_order_depends_target_message_test: phony || cmake_object_order_depends_target_Catch2 cmake_object_order_depends_target_Catch2WithMain cmake_object_order_depends_target_utils
+build cmake_object_order_depends_target_log_message_test: phony || cmake_object_order_depends_target_Catch2 cmake_object_order_depends_target_Catch2WithMain cmake_object_order_depends_target_utils
 
-build CMakeFiles/message_test.dir/tests/class/message_test.cpp.obj: CXX_COMPILER__message_test_unscanned_ C$:/GitProjects/Distributed-Chat-Server/tests/class/message_test.cpp || cmake_object_order_depends_target_message_test
-  DEP_FILE = CMakeFiles\message_test.dir\tests\class\message_test.cpp.obj.d
+build CMakeFiles/log_message_test.dir/tests/class/log_message_test.cpp.obj: CXX_COMPILER__log_message_test_unscanned_ C$:/GitProjects/Distributed-Chat-Server/tests/class/log_message_test.cpp || cmake_object_order_depends_target_log_message_test
+  DEP_FILE = CMakeFiles\log_message_test.dir\tests\class\log_message_test.cpp.obj.d
   FLAGS = -std=gnu++17
   INCLUDES = -IC:/GitProjects/Distributed-Chat-Server/include -IC:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src/src/catch2/.. -IC:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-build/generated-includes
-  OBJECT_DIR = CMakeFiles\message_test.dir
-  OBJECT_FILE_DIR = CMakeFiles\message_test.dir\tests\class
-  TARGET_SUPPORT_DIR = CMakeFiles\message_test.dir
+  OBJECT_DIR = CMakeFiles\log_message_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\log_message_test.dir\tests\class
+  TARGET_SUPPORT_DIR = CMakeFiles\log_message_test.dir
 
 
 # =============================================================================
-# Link build statements for EXECUTABLE target message_test
+# Link build statements for EXECUTABLE target log_message_test
 
 
 #############################################
-# Link the executable message_test.exe
+# Link the executable log_message_test.exe
 
-build message_test.exe message_test-b12d07c_tests.cmake | ${cmake_ninja_workdir}message_test-b12d07c_tests.cmake: CXX_EXECUTABLE_LINKER__message_test_ CMakeFiles/message_test.dir/tests/class/message_test.cpp.obj | libutils.a _deps/catch2-build/src/libCatch2Main.a _deps/catch2-build/src/libCatch2.a || _deps/catch2-build/src/libCatch2.a _deps/catch2-build/src/libCatch2Main.a libutils.a
+build log_message_test.exe log_message_test-b12d07c_tests.cmake | ${cmake_ninja_workdir}log_message_test-b12d07c_tests.cmake: CXX_EXECUTABLE_LINKER__log_message_test_ CMakeFiles/log_message_test.dir/tests/class/log_message_test.cpp.obj | libutils.a _deps/catch2-build/src/libCatch2Main.a _deps/catch2-build/src/libCatch2.a || _deps/catch2-build/src/libCatch2.a _deps/catch2-build/src/libCatch2Main.a libutils.a
   LINK_LIBRARIES = libutils.a  _deps/catch2-build/src/libCatch2Main.a  _deps/catch2-build/src/libCatch2.a  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
-  OBJECT_DIR = CMakeFiles\message_test.dir
-  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\GitProjects\Distributed-Chat-Server\build && C:\msys64\ucrt64\bin\cmake.exe -D TEST_TARGET=message_test -D TEST_EXECUTABLE=C:/GitProjects/Distributed-Chat-Server/build/message_test.exe -D TEST_EXECUTOR= -D TEST_WORKING_DIR=C:/GitProjects/Distributed-Chat-Server/build -D TEST_SPEC= -D TEST_EXTRA_ARGS= -D TEST_PROPERTIES= -D TEST_PREFIX= -D TEST_SUFFIX= -D TEST_LIST=message_test_TESTS -D TEST_REPORTER= -D TEST_OUTPUT_DIR= -D TEST_OUTPUT_PREFIX= -D TEST_OUTPUT_SUFFIX= -D TEST_DL_PATHS= -D CTEST_FILE=C:/GitProjects/Distributed-Chat-Server/build/message_test-b12d07c_tests.cmake -P C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src/extras/CatchAddTests.cmake"
+  OBJECT_DIR = CMakeFiles\log_message_test.dir
+  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\GitProjects\Distributed-Chat-Server\build && C:\msys64\ucrt64\bin\cmake.exe -D TEST_TARGET=log_message_test -D TEST_EXECUTABLE=C:/GitProjects/Distributed-Chat-Server/build/log_message_test.exe -D TEST_EXECUTOR= -D TEST_WORKING_DIR=C:/GitProjects/Distributed-Chat-Server/build -D TEST_SPEC= -D TEST_EXTRA_ARGS= -D TEST_PROPERTIES= -D TEST_PREFIX= -D TEST_SUFFIX= -D TEST_LIST=log_message_test_TESTS -D TEST_REPORTER= -D TEST_OUTPUT_DIR= -D TEST_OUTPUT_PREFIX= -D TEST_OUTPUT_SUFFIX= -D TEST_DL_PATHS= -D CTEST_FILE=C:/GitProjects/Distributed-Chat-Server/build/log_message_test-b12d07c_tests.cmake -P C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src/extras/CatchAddTests.cmake"
   PRE_LINK = cd .
   RESTAT = 1
-  TARGET_FILE = message_test.exe
-  TARGET_IMPLIB = libmessage_test.dll.a
-  TARGET_PDB = message_test.exe.dbg
-  TARGET_SUPPORT_DIR = CMakeFiles\message_test.dir
+  TARGET_FILE = log_message_test.exe
+  TARGET_IMPLIB = liblog_message_test.dll.a
+  TARGET_PDB = log_message_test.exe.dbg
+  TARGET_SUPPORT_DIR = CMakeFiles\log_message_test.dir
 
 # =============================================================================
 # Object build statements for EXECUTABLE target user_test
@@ -191,6 +199,42 @@ build user_test.exe user_test-b12d07c_tests.cmake | ${cmake_ninja_workdir}user_t
   TARGET_IMPLIB = libuser_test.dll.a
   TARGET_PDB = user_test.exe.dbg
   TARGET_SUPPORT_DIR = CMakeFiles\user_test.dir
+
+# =============================================================================
+# Object build statements for EXECUTABLE target message_test
+
+
+#############################################
+# Order-only phony target for message_test
+
+build cmake_object_order_depends_target_message_test: phony || cmake_object_order_depends_target_Catch2 cmake_object_order_depends_target_Catch2WithMain cmake_object_order_depends_target_utils
+
+build CMakeFiles/message_test.dir/tests/class/message_test.cpp.obj: CXX_COMPILER__message_test_unscanned_ C$:/GitProjects/Distributed-Chat-Server/tests/class/message_test.cpp || cmake_object_order_depends_target_message_test
+  DEP_FILE = CMakeFiles\message_test.dir\tests\class\message_test.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -IC:/GitProjects/Distributed-Chat-Server/include -IC:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src/src/catch2/.. -IC:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-build/generated-includes
+  OBJECT_DIR = CMakeFiles\message_test.dir
+  OBJECT_FILE_DIR = CMakeFiles\message_test.dir\tests\class
+  TARGET_SUPPORT_DIR = CMakeFiles\message_test.dir
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target message_test
+
+
+#############################################
+# Link the executable message_test.exe
+
+build message_test.exe message_test-b12d07c_tests.cmake | ${cmake_ninja_workdir}message_test-b12d07c_tests.cmake: CXX_EXECUTABLE_LINKER__message_test_ CMakeFiles/message_test.dir/tests/class/message_test.cpp.obj | libutils.a _deps/catch2-build/src/libCatch2Main.a _deps/catch2-build/src/libCatch2.a || _deps/catch2-build/src/libCatch2.a _deps/catch2-build/src/libCatch2Main.a libutils.a
+  LINK_LIBRARIES = libutils.a  _deps/catch2-build/src/libCatch2Main.a  _deps/catch2-build/src/libCatch2.a  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\message_test.dir
+  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\GitProjects\Distributed-Chat-Server\build && C:\msys64\ucrt64\bin\cmake.exe -D TEST_TARGET=message_test -D TEST_EXECUTABLE=C:/GitProjects/Distributed-Chat-Server/build/message_test.exe -D TEST_EXECUTOR= -D TEST_WORKING_DIR=C:/GitProjects/Distributed-Chat-Server/build -D TEST_SPEC= -D TEST_EXTRA_ARGS= -D TEST_PROPERTIES= -D TEST_PREFIX= -D TEST_SUFFIX= -D TEST_LIST=message_test_TESTS -D TEST_REPORTER= -D TEST_OUTPUT_DIR= -D TEST_OUTPUT_PREFIX= -D TEST_OUTPUT_SUFFIX= -D TEST_DL_PATHS= -D CTEST_FILE=C:/GitProjects/Distributed-Chat-Server/build/message_test-b12d07c_tests.cmake -P C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src/extras/CatchAddTests.cmake"
+  PRE_LINK = cd .
+  RESTAT = 1
+  TARGET_FILE = message_test.exe
+  TARGET_IMPLIB = libmessage_test.dll.a
+  TARGET_PDB = message_test.exe.dbg
+  TARGET_SUPPORT_DIR = CMakeFiles\message_test.dir
 
 
 #############################################
@@ -1617,6 +1661,8 @@ build libCatch2.a: phony _deps/catch2-build/src/libCatch2.a
 
 build libCatch2Main.a: phony _deps/catch2-build/src/libCatch2Main.a
 
+build log_message_test: phony log_message_test.exe
+
 build logger_test: phony logger_test.exe
 
 build message_test: phony message_test.exe
@@ -1633,7 +1679,7 @@ build utils: phony libutils.a
 #############################################
 # Folder: C:/GitProjects/Distributed-Chat-Server/build
 
-build all: phony libutils.a logger_test.exe message_test.exe user_test.exe _deps/catch2-build/all
+build all: phony libutils.a logger_test.exe log_message_test.exe user_test.exe message_test.exe _deps/catch2-build/all
 
 # =============================================================================
 

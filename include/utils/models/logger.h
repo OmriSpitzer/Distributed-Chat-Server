@@ -5,7 +5,7 @@
  */
 #pragma once
 
-#include "utils/models/message.h"
+#include "utils/models/log_message.h"
 #include <ostream>
 #include <string_view>
 #include <vector>
@@ -16,11 +16,11 @@ public:
   void logInfo(std::string_view message);
   void logWarning(std::string_view message);
   void logError(std::string_view message);
-  Message getMessage(int index) const;
+  LogMessage getMessage(int index) const;
   friend std::ostream &operator<<(std::ostream &out, const Logger &logger);
 
 private:
-  std::vector<Message> _messages;
+  std::vector<LogMessage> _messages;
   int _message_count;
-  void addMessage(std::string_view message, Message::Type type);
+  void addMessage(std::string_view message, LogMessage::Type type);
 };

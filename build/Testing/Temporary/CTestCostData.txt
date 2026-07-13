@@ -20,55 +20,94 @@ Message equality compares ids only 1 0.103797
 Message stream output format 3 0.0316635
 Message stream output edge cases 3 0.0321501
 Message getters return consistent values after updates 3 0.0319641
-Constructor Test 2 0.0834982
-Log Methods Test 4 0.0208772
-Ordering Test 4 0.0188352
-Mixed Types Test 4 0.0191366
-GetMessage Edge Cases 4 0.0203974
-Content Edge Cases 4 0.0211632
-String View Test 4 0.0205244
-Stored Message Metadata Test 4 0.0233034
-Stream Output Test 4 0.0224223
-Stream Output Type Labels 2 0.0464469
-Stream Output Edge Cases 2 0.0326266
-Independent Copies Test 4 0.0331769
-Repeated Logging Test 4 0.0315225
-Lifetime Test 4 0.0283605
-Constructor Test 2 0.0834982
-Constructor Edge Cases 2 0.0850369
-Metadata Test 4 0.0344765
-Setters Test 2 0.0856936
-Equality Test 2 0.0473729
-Stream Output Format 2 0.0510712
-Stream Output Type Labels 2 0.0464469
-Stream Output Edge Cases 2 0.0326266
-Getters Test 2 0.0426865
-Copy Semantics Test 2 0.0324716
-Constructor Test 2 0.0834982
-Stream Output Type Labels 2 0.0464469
-Stream Output Edge Cases 2 0.0326266
-Constructor Test 2 0.0834982
-Stream Output Type Labels 2 0.0464469
-Stream Output Edge Cases 2 0.0326266
-Constructor Test 2 0.0834982
-Constructor Edge Cases 2 0.0850369
-Setters Test 2 0.0856936
-Equality Test 2 0.0473729
-Stream Output Format 2 0.0510712
-Stream Output Type Labels 2 0.0464469
-Stream Output Edge Cases 2 0.0326266
-Getters Test 2 0.0426865
-Copy Semantics Test 2 0.0324716
-Constructor Test 1 0.090897
-Stream Output Type Labels 1 0.0813139
-Stream Output Edge Cases 1 0.155116
-Constructor Test 1 0.126682
-Constructor Edge Cases 1 0.118656
-Setters Test 1 0.163993
-Equality Test 1 0.159824
-Stream Output Format 1 0.16078
-Stream Output Type Labels 1 0.156605
-Stream Output Edge Cases 1 0.168147
-Getters Test 1 0.164571
-Copy Semantics Test 1 0.176451
+Constructor Test 2 0.0705836
+Log Methods Test 7 0.0116605
+Ordering Test 7 0.0129816
+Mixed Types Test 7 0.022547
+GetMessage Edge Cases 7 0.0130244
+Content Edge Cases 7 0.0112665
+String View Test 7 0.0196983
+Stored Message Metadata Test 7 0.0266421
+Stream Output Test 7 0.02548
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Independent Copies Test 7 0.0232534
+Repeated Logging Test 7 0.026457
+Lifetime Test 7 0.0219266
+Constructor Test 2 0.0705836
+Constructor Edge Cases 2 0.0683316
+Metadata Test 7 0.0205106
+Setters Test 2 0.0619429
+Equality Test 2 0.0559679
+Stream Output Format 2 0.0555444
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Getters Test 2 0.0574459
+Copy Semantics Test 2 0.0608433
+Constructor Test 2 0.0705836
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Constructor Test 2 0.0705836
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Constructor Test 2 0.0705836
+Constructor Edge Cases 2 0.0683316
+Setters Test 2 0.0619429
+Equality Test 2 0.0559679
+Stream Output Format 2 0.0555444
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Getters Test 2 0.0574459
+Copy Semantics Test 2 0.0608433
+Constructor Test 2 0.0705836
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Constructor Test 2 0.0705836
+Constructor Edge Cases 2 0.0683316
+Setters Test 2 0.0619429
+Equality Test 2 0.0559679
+Stream Output Format 2 0.0555444
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Getters Test 2 0.0574459
+Copy Semantics Test 2 0.0608433
+Constructor Test 2 0.0705836
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Constructor Test 2 0.0705836
+Constructor Edge Cases 2 0.0683316
+Setters Test 2 0.0619429
+Equality Test 2 0.0559679
+Stream Output Format 2 0.0555444
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Getters Test 2 0.0574459
+Copy Semantics Test 2 0.0608433
+Constructor Test 2 0.0705836
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Constructor Test 2 0.0705836
+Constructor Edge Cases 2 0.0683316
+Setters Test 2 0.0619429
+Equality Test 2 0.0559679
+Stream Output Format 2 0.0555444
+Stream Output Type Labels 2 0.0565404
+Stream Output Edge Cases 2 0.0573974
+Getters Test 2 0.0574459
+Copy Semantics Test 2 0.0608433
+Message constructor and stream output 1 0.129635
+Message equality 1 0.119984
+Message comparison 2 0.0606344
+Constructor Test 1 0.0727622
+Stream Output Type Labels 1 0.186164
+Stream Output Edge Cases 1 0.166107
+Constructor Test 1 0.12376
+Constructor Edge Cases 1 0.138996
+Setters Test 1 0.130587
+Equality Test 1 0.121964
+Stream Output Format 1 0.125269
+Stream Output Type Labels 1 0.16795
+Stream Output Edge Cases 1 0.15843
+Getters Test 1 0.153932
+Copy Semantics Test 1 0.162612
 ---

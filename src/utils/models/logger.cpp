@@ -11,16 +11,18 @@
 Logger::Logger() : _message_count(0) {}
 
 // log an info message
-void Logger::logInfo(std::string_view message) { addMessage(message, Message::Type::INFO); }
+void Logger::logInfo(std::string_view message) { addMessage(message, LogMessage::Type::INFO); }
 
 // log a warning message
-void Logger::logWarning(std::string_view message) { addMessage(message, Message::Type::WARNING); }
+void Logger::logWarning(std::string_view message) {
+  addMessage(message, LogMessage::Type::WARNING);
+}
 
 // log an error message
-void Logger::logError(std::string_view message) { addMessage(message, Message::Type::ERROR); }
+void Logger::logError(std::string_view message) { addMessage(message, LogMessage::Type::ERROR); }
 
 // get a message by index
-Message Logger::getMessage(int index) const {
+LogMessage Logger::getMessage(int index) const {
   return _messages.at(static_cast<std::size_t>(index));
 }
 
@@ -36,7 +38,7 @@ std::ostream &operator<<(std::ostream &out, const Logger &logger) {
 }
 
 // add a message to the logger
-void Logger::addMessage(std::string_view message, Message::Type type) {
+void Logger::addMessage(std::string_view message, LogMessage::Type type) {
   _messages.emplace_back(std::string(message), type);
   ++_message_count;
 }
