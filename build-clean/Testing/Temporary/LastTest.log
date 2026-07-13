@@ -1,0 +1,923 @@
+Start testing: Jul 13 23:27 שעון קיץ ירושלים
+----------------------------------------------------------
+1/46 Testing: Constructor Test
+1/46 Test: Constructor Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Constructor Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Constructor Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Constructor Test"
+Randomness seeded to: 3375539763
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"Constructor Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Constructor Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/46 Testing: Log Methods Test
+2/46 Test: Log Methods Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Log Methods Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Log Methods Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Log Methods Test"
+Randomness seeded to: 4209279805
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"Log Methods Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Log Methods Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/46 Testing: Ordering Test
+3/46 Test: Ordering Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Ordering Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Ordering Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Ordering Test"
+Randomness seeded to: 768400048
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"Ordering Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Ordering Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/46 Testing: Mixed Types Test
+4/46 Test: Mixed Types Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Mixed Types Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Mixed Types Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Mixed Types Test"
+Randomness seeded to: 3346533450
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"Mixed Types Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Mixed Types Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/46 Testing: GetMessage Edge Cases
+5/46 Test: GetMessage Edge Cases
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "GetMessage Edge Cases"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"GetMessage Edge Cases" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "GetMessage Edge Cases"
+Randomness seeded to: 1471478526
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"GetMessage Edge Cases" end time: Jul 13 23:27 שעון קיץ ירושלים
+"GetMessage Edge Cases" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/46 Testing: Content Edge Cases
+6/46 Test: Content Edge Cases
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Content Edge Cases"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Content Edge Cases" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Content Edge Cases"
+Randomness seeded to: 87618468
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Content Edge Cases" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Content Edge Cases" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/46 Testing: String View Test
+7/46 Test: String View Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "String View Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"String View Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "String View Test"
+Randomness seeded to: 1180291577
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"String View Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"String View Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/46 Testing: Stored Message Metadata Test
+8/46 Test: Stored Message Metadata Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Stored Message Metadata Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stored Message Metadata Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stored Message Metadata Test"
+Randomness seeded to: 2388781629
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Stored Message Metadata Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stored Message Metadata Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/46 Testing: Stream Output Test
+9/46 Test: Stream Output Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Stream Output Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Test"
+Randomness seeded to: 1851905691
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/46 Testing: Stream Output Type Labels
+10/46 Test: Stream Output Type Labels
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Stream Output Type Labels"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Type Labels" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Type Labels"
+Randomness seeded to: 2408172017
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Type Labels" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Type Labels" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/46 Testing: Stream Output Edge Cases
+11/46 Test: Stream Output Edge Cases
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Stream Output Edge Cases"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Edge Cases" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Edge Cases"
+Randomness seeded to: 3010288525
+===============================================================================
+All tests passed (9 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Edge Cases" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Edge Cases" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/46 Testing: Independent Copies Test
+12/46 Test: Independent Copies Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Independent Copies Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Independent Copies Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Independent Copies Test"
+Randomness seeded to: 38530204
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"Independent Copies Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Independent Copies Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/46 Testing: Repeated Logging Test
+13/46 Test: Repeated Logging Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Repeated Logging Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Repeated Logging Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Repeated Logging Test"
+Randomness seeded to: 480061962
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Repeated Logging Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Repeated Logging Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/46 Testing: Lifetime Test
+14/46 Test: Lifetime Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test.exe" "Lifetime Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Lifetime Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Lifetime Test"
+Randomness seeded to: 4025711276
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Lifetime Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Lifetime Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/46 Testing: Constructor Test
+15/46 Test: Constructor Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Constructor Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Constructor Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Constructor Test"
+Randomness seeded to: 4171532170
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Constructor Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Constructor Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+16/46 Testing: Constructor Edge Cases
+16/46 Test: Constructor Edge Cases
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Constructor Edge Cases"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Constructor Edge Cases" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Constructor Edge Cases"
+Randomness seeded to: 841327678
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Constructor Edge Cases" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Constructor Edge Cases" time elapsed: 00:00:00
+----------------------------------------------------------
+
+17/46 Testing: Metadata Test
+17/46 Test: Metadata Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Metadata Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Metadata Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Metadata Test"
+Randomness seeded to: 4051075590
+===============================================================================
+All tests passed (198 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Metadata Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Metadata Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+18/46 Testing: Setters Test
+18/46 Test: Setters Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Setters Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Setters Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Setters Test"
+Randomness seeded to: 108251283
+===============================================================================
+All tests passed (10 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Setters Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Setters Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+19/46 Testing: Equality Test
+19/46 Test: Equality Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Equality Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Equality Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Equality Test"
+Randomness seeded to: 2576876585
+===============================================================================
+All tests passed (18 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Equality Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Equality Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/46 Testing: Stream Output Format
+20/46 Test: Stream Output Format
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Stream Output Format"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Format" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Format"
+Randomness seeded to: 3534738414
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Format" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Format" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/46 Testing: Stream Output Type Labels
+21/46 Test: Stream Output Type Labels
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Stream Output Type Labels"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Type Labels" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Type Labels"
+Randomness seeded to: 1071710213
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Type Labels" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Type Labels" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/46 Testing: Stream Output Edge Cases
+22/46 Test: Stream Output Edge Cases
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Stream Output Edge Cases"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Edge Cases" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Edge Cases"
+Randomness seeded to: 1842213411
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Edge Cases" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Edge Cases" time elapsed: 00:00:00
+----------------------------------------------------------
+
+23/46 Testing: Getters Test
+23/46 Test: Getters Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Getters Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Getters Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Getters Test"
+Randomness seeded to: 3641832840
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Getters Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Getters Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+24/46 Testing: Copy Semantics Test
+24/46 Test: Copy Semantics Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/log_message_test.exe" "Copy Semantics Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Copy Semantics Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Copy Semantics Test"
+Randomness seeded to: 2072030875
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Copy Semantics Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Copy Semantics Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+25/46 Testing: Constructor Test
+25/46 Test: Constructor Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Constructor Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Constructor Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Constructor Test"
+Randomness seeded to: 3291556592
+===============================================================================
+All tests passed (9 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Constructor Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Constructor Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+26/46 Testing: Constructor Edge Cases
+26/46 Test: Constructor Edge Cases
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Constructor Edge Cases"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Constructor Edge Cases" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Constructor Edge Cases"
+Randomness seeded to: 1589454253
+===============================================================================
+All tests passed (13 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Constructor Edge Cases" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Constructor Edge Cases" time elapsed: 00:00:00
+----------------------------------------------------------
+
+27/46 Testing: Setters Test
+27/46 Test: Setters Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Setters Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Setters Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Setters Test"
+Randomness seeded to: 3425493740
+===============================================================================
+All tests passed (15 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Setters Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Setters Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+28/46 Testing: Getters Test
+28/46 Test: Getters Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Getters Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Getters Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Getters Test"
+Randomness seeded to: 810005484
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Getters Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Getters Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+29/46 Testing: Equality Test
+29/46 Test: Equality Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Equality Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Equality Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Equality Test"
+Randomness seeded to: 1946678654
+===============================================================================
+All tests passed (27 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Equality Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Equality Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+30/46 Testing: Stream Output Format
+30/46 Test: Stream Output Format
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Stream Output Format"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Format" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Format"
+Randomness seeded to: 1573780259
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Format" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Format" time elapsed: 00:00:00
+----------------------------------------------------------
+
+31/46 Testing: Stream Output Type Labels
+31/46 Test: Stream Output Type Labels
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Stream Output Type Labels"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Type Labels" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Type Labels"
+Randomness seeded to: 2009406760
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Type Labels" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Type Labels" time elapsed: 00:00:00
+----------------------------------------------------------
+
+32/46 Testing: Stream Output Edge Cases
+32/46 Test: Stream Output Edge Cases
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Stream Output Edge Cases"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Stream Output Edge Cases" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Stream Output Edge Cases"
+Randomness seeded to: 4179742118
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Stream Output Edge Cases" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Stream Output Edge Cases" time elapsed: 00:00:00
+----------------------------------------------------------
+
+33/46 Testing: Copy Semantics Test
+33/46 Test: Copy Semantics Test
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/user_test.exe" "Copy Semantics Test"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Copy Semantics Test" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Copy Semantics Test"
+Randomness seeded to: 499089114
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Copy Semantics Test" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Copy Semantics Test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+34/46 Testing: Message constructor and stream output
+34/46 Test: Message constructor and stream output
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/message_test.exe" "Message constructor and stream output"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Message constructor and stream output" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Message constructor and stream output"
+Randomness seeded to: 3475074094
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Message constructor and stream output" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Message constructor and stream output" time elapsed: 00:00:00
+----------------------------------------------------------
+
+35/46 Testing: Message equality
+35/46 Test: Message equality
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/message_test.exe" "Message equality"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Message equality" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Message equality"
+Randomness seeded to: 1361168535
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Message equality" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Message equality" time elapsed: 00:00:00
+----------------------------------------------------------
+
+36/46 Testing: Message comparison
+36/46 Test: Message comparison
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/message_test.exe" "Message comparison"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Message comparison" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Message comparison"
+Randomness seeded to: 4242922057
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Message comparison" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Message comparison" time elapsed: 00:00:00
+----------------------------------------------------------
+
+37/46 Testing: Room constructor defaults
+37/46 Test: Room constructor defaults
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room constructor defaults"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room constructor defaults" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room constructor defaults"
+Randomness seeded to: 2800292473
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Room constructor defaults" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room constructor defaults" time elapsed: 00:00:00
+----------------------------------------------------------
+
+38/46 Testing: Room constructor with type and privacy
+38/46 Test: Room constructor with type and privacy
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room constructor with type and privacy"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room constructor with type and privacy" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room constructor with type and privacy"
+Randomness seeded to: 4162446284
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Room constructor with type and privacy" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room constructor with type and privacy" time elapsed: 00:00:00
+----------------------------------------------------------
+
+39/46 Testing: Room type labels
+39/46 Test: Room type labels
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room type labels"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room type labels" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room type labels"
+Randomness seeded to: 3600308684
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Room type labels" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room type labels" time elapsed: 00:00:00
+----------------------------------------------------------
+
+40/46 Testing: Room stream output
+40/46 Test: Room stream output
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room stream output"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room stream output" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room stream output"
+Randomness seeded to: 435621071
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Room stream output" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room stream output" time elapsed: 00:00:00
+----------------------------------------------------------
+
+41/46 Testing: Room addUser and getUser
+41/46 Test: Room addUser and getUser
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room addUser and getUser"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room addUser and getUser" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room addUser and getUser"
+Randomness seeded to: 365502762
+===============================================================================
+All tests passed (9 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Room addUser and getUser" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room addUser and getUser" time elapsed: 00:00:00
+----------------------------------------------------------
+
+42/46 Testing: Room rejects duplicate user email
+42/46 Test: Room rejects duplicate user email
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room rejects duplicate user email"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room rejects duplicate user email" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room rejects duplicate user email"
+Randomness seeded to: 1905551811
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"Room rejects duplicate user email" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room rejects duplicate user email" time elapsed: 00:00:00
+----------------------------------------------------------
+
+43/46 Testing: Room rejects users beyond capacity
+43/46 Test: Room rejects users beyond capacity
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room rejects users beyond capacity"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room rejects users beyond capacity" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room rejects users beyond capacity"
+Randomness seeded to: 2167863225
+===============================================================================
+All tests passed (23 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Room rejects users beyond capacity" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room rejects users beyond capacity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+44/46 Testing: Room removeUser
+44/46 Test: Room removeUser
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room removeUser"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room removeUser" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room removeUser"
+Randomness seeded to: 53601536
+===============================================================================
+All tests passed (10 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Room removeUser" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room removeUser" time elapsed: 00:00:00
+----------------------------------------------------------
+
+45/46 Testing: Room addMessage updates count in stream
+45/46 Test: Room addMessage updates count in stream
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room addMessage updates count in stream"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room addMessage updates count in stream" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room addMessage updates count in stream"
+Randomness seeded to: 2509710541
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Room addMessage updates count in stream" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room addMessage updates count in stream" time elapsed: 00:00:00
+----------------------------------------------------------
+
+46/46 Testing: Room ping reflects occupancy
+46/46 Test: Room ping reflects occupancy
+Command: "C:/GitProjects/Distributed-Chat-Server/build-clean/room_test.exe" "Room ping reflects occupancy"
+Directory: C:/GitProjects/Distributed-Chat-Server/build-clean
+"Room ping reflects occupancy" start time: Jul 13 23:27 שעון קיץ ירושלים
+Output:
+----------------------------------------------------------
+Filters: "Room ping reflects occupancy"
+Randomness seeded to: 401319536
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"Room ping reflects occupancy" end time: Jul 13 23:27 שעון קיץ ירושלים
+"Room ping reflects occupancy" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Jul 13 23:27 שעון קיץ ירושלים

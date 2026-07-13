@@ -9,7 +9,7 @@
 
 // constructor
 User::User(std::string_view username, std::string_view email, User::UserType user_type)
-    : _username(username), _email(email), _user_type(user_type) {}
+    : username(username), email(email), user_type(user_type) {}
 
 // stream output operator
 std::ostream &operator<<(std::ostream &out, const User &user) {
@@ -19,13 +19,13 @@ std::ostream &operator<<(std::ostream &out, const User &user) {
 }
 
 // equality operator
-bool User::operator==(const User &other) const { return _email == other._email; }
-bool User::operator!=(const User &other) const { return _email != other._email; }
+bool User::operator==(const User &other) const { return this->email == other.email; }
+bool User::operator!=(const User &other) const { return this->email != other.email; }
 
 // getters
-std::string User::getUsername() const { return _username; }
-std::string User::getEmail() const { return _email; }
-User::UserType User::getUserType() const { return _user_type; }
+std::string User::getUsername() const { return this->username; }
+std::string User::getEmail() const { return this->email; }
+User::UserType User::getUserType() const { return this->user_type; }
 
 std::string User::typeToString(User::UserType user_type) {
   switch (user_type) {
@@ -40,6 +40,6 @@ std::string User::typeToString(User::UserType user_type) {
 }
 
 // setters
-void User::setUsername(std::string_view username) { _username = username; }
-void User::setEmail(std::string_view email) { _email = email; }
-void User::setUserType(User::UserType user_type) { _user_type = user_type; }
+void User::setUsername(std::string_view username) { this->username = username; }
+void User::setEmail(std::string_view email) { this->email = email; }
+void User::setUserType(User::UserType user_type) { this->user_type = user_type; }

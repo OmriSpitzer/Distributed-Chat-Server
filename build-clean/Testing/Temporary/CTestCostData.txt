@@ -1,0 +1,47 @@
+Constructor Test 1 0.0644875
+Log Methods Test 1 0.0618653
+Ordering Test 1 0.0561289
+Mixed Types Test 1 0.0636769
+GetMessage Edge Cases 1 0.0519066
+Content Edge Cases 1 0.0454987
+String View Test 1 0.0464563
+Stored Message Metadata Test 1 0.0491111
+Stream Output Test 1 0.046485
+Stream Output Type Labels 1 0.0460144
+Stream Output Edge Cases 1 0.0436736
+Independent Copies Test 1 0.0614941
+Repeated Logging Test 1 0.043648
+Lifetime Test 1 0.0506445
+Constructor Test 1 0.0476527
+Constructor Edge Cases 1 0.0510716
+Metadata Test 1 0.0484041
+Setters Test 1 0.0457054
+Equality Test 1 0.0458338
+Stream Output Format 1 0.0426105
+Stream Output Type Labels 1 0.0475055
+Stream Output Edge Cases 1 0.0442762
+Getters Test 1 0.0433886
+Copy Semantics Test 1 0.0433568
+Constructor Test 1 0.043017
+Constructor Edge Cases 1 0.0458557
+Setters Test 1 0.04838
+Getters Test 1 0.0495691
+Equality Test 1 0.0544105
+Stream Output Format 1 0.0494631
+Stream Output Type Labels 1 0.0455471
+Stream Output Edge Cases 1 0.0481813
+Copy Semantics Test 1 0.0436791
+Message constructor and stream output 1 0.0477695
+Message equality 1 0.0469574
+Message comparison 1 0.0430955
+Room constructor defaults 1 0.0420699
+Room constructor with type and privacy 1 0.042806
+Room type labels 1 0.0439173
+Room stream output 1 0.0439063
+Room addUser and getUser 1 0.0485897
+Room rejects duplicate user email 1 0.048744
+Room rejects users beyond capacity 1 0.0404685
+Room removeUser 1 0.0442018
+Room addMessage updates count in stream 1 0.0415407
+Room ping reflects occupancy 1 0.0416004
+---

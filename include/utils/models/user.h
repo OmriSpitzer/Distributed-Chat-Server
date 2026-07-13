@@ -37,8 +37,8 @@ public:
   bool operator!=(const User &other) const;
 
 private:
-  std::string _username;     // username
-  std::string _email;        // email
-  User::UserType _user_type; // user type
+  std::string username;     // username
+  std::string email;        // email
+  User::UserType user_type; // user type
   static std::string typeToString(User::UserType user_type);
 };

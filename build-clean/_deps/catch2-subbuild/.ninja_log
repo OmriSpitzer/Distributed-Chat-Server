@@ -1,0 +1,21 @@
+# ninja log v7
+3	103	8056775918468780	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-mkdir	511ede5d8d68e40d
+3	103	8056775918468780	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-mkdir	511ede5d8d68e40d
+103	2816	8056775945580570	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-download	b42bd748d16e5e9d
+103	2816	8056775945580570	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-download	b42bd748d16e5e9d
+2818	2929	8056775946742071	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-update	99349f06084b2dfa
+2818	2929	8056775946742071	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-update	99349f06084b2dfa
+2929	3030	8056775947728384	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-patch	5ecbc5e4b218d755
+2929	3030	8056775947728384	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-patch	5ecbc5e4b218d755
+3030	3130	8056775948740446	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-configure	bc0048c601cf0671
+3030	3130	8056775948740446	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-configure	bc0048c601cf0671
+3130	3237	8056775949790610	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-build	4b8a1490d761564d
+3130	3237	8056775949790610	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-build	4b8a1490d761564d
+3237	3340	8056775950844059	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-install	86730d7247b59050
+3237	3340	8056775950844059	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-install	86730d7247b59050
+3340	3438	8056775951828738	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-test	50e2efff0f4825ba
+3340	3438	8056775951828738	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-test	50e2efff0f4825ba
+3438	3576	8056775953187443	CMakeFiles/catch2-populate-complete	9bf7a513da0d74be
+3438	3576	8056775953187443	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-done	9bf7a513da0d74be
+3438	3576	8056775953187443	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/CMakeFiles/catch2-populate-complete	9bf7a513da0d74be
+3438	3576	8056775953187443	C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-done	9bf7a513da0d74be
