@@ -5,8 +5,8 @@ cmake_minimum_required(VERSION ${CMAKE_VERSION}) # this file comes with cmake
 
 # Make file names absolute:
 #
-get_filename_component(filename "C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-subbuild/catch2-populate-prefix/src/v3.5.4.tar.gz" ABSOLUTE)
-get_filename_component(directory "C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-src" ABSOLUTE)
+get_filename_component(filename "C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-subbuild/catch2-populate-prefix/src/v3.5.4.tar.gz" ABSOLUTE)
+get_filename_component(directory "C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src" ABSOLUTE)
 
 message(VERBOSE "extracting...
      src='${filename}'

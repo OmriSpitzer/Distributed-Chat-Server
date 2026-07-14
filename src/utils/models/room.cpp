@@ -139,3 +139,8 @@ std::string Room::privacyToString() {
     return "OTHER";
   }
 }
+
+std::string Room::getId() const { return this->id; }
+std::string Room::getName() const { return this->name; }
+Room::RoomType Room::getType() const { return this->type; }
+Room::Privacy Room::getPrivacy() const { return this->privacy; }

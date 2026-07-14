@@ -16,34 +16,24 @@ std::atomic<uint64_t> next_message_id{0};
 }
 
 // constructor
-LogMessage::LogMessage(std::string_view message, Type type) {
-  _id = std::to_string(++next_message_id);
-  _message = message;
-  _type = type;
-  _timestamp = std::time(nullptr);
+LogMessage::LogMessage(std::string_view source, std::string_view message, LogMessage::Type type) {
+  id = std::to_string(++next_message_id);
+  this->source = source;
+  this->message = message;
+  this->type = type;
+  timestamp = std::time(nullptr);
 }
-
-// getters
-std::string LogMessage::getId() const { return _id; }
-std::string LogMessage::getMessage() const { return _message; }
-std::time_t LogMessage::getTimestamp() const { return _timestamp; }
-LogMessage::Type LogMessage::getType() const { return _type; }
-
-// setters
-void LogMessage::setMessage(std::string_view message) { _message = message; }
-void LogMessage::setType(LogMessage::Type type) { _type = type; }
-void LogMessage::setTimestamp(std::time_t timestamp) { _timestamp = timestamp; }
 
 // print
 std::ostream &operator<<(std::ostream &out, const LogMessage &s) {
-  out << "[Msg: " << s.getId() << "] (" << LogMessage::typeToString(s.getType()) << ", "
-      << s.getTimestamp() << ")\n";
-  out << "Message: " << s.getMessage() << '\n';
+  out << "[Msg: " << s.id << "] (" << LogMessage::typeToString(s.type) << ", " << s.timestamp
+      << ")\n";
+  out << "Message from " << s.source << ": " << s.message << '\n';
   return out;
 }
 
 // equals
-bool LogMessage::operator==(const LogMessage &other) const { return _id == other._id; }
+bool LogMessage::operator==(const LogMessage &other) const { return id == other.id; }
 
 std::string LogMessage::typeToString(LogMessage::Type type) {
   switch (type) {

@@ -23,7 +23,7 @@ rule CUSTOM_COMMAND
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = C:\msys64\ucrt64\bin\cmake.exe --regenerate-during-build -SC:\GitProjects\Distributed-Chat-Server\build-clean\_deps\catch2-subbuild -BC:\GitProjects\Distributed-Chat-Server\build-clean\_deps\catch2-subbuild
+  command = C:\msys64\ucrt64\bin\cmake.exe --regenerate-during-build -SC:\GitProjects\Distributed-Chat-Server\build\_deps\catch2-subbuild -BC:\GitProjects\Distributed-Chat-Server\build\_deps\catch2-subbuild
   description = Re-running CMake...
   generator = 1
 

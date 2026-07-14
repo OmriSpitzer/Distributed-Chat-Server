@@ -17,6 +17,13 @@ public:
   // constructor
   Message(User &from, User &to, std::string_view message);
 
+  // getters
+  const User &getFrom() const;
+  const User &getTo() const;
+  std::string getContent() const;
+  std::time_t getTimestamp() const;
+  std::string getId() const;
+
   // print operator
   friend std::ostream &operator<<(std::ostream &out, const Message &msg);
 

@@ -17,6 +17,13 @@ Message::Message(User &from, User &to, std::string_view message)
     : from(from), to(to), content(message), timestamp(std::time(nullptr)),
       id(std::to_string(++next_message_id)) {}
 
+// getters
+const User &Message::getFrom() const { return this->from; }
+const User &Message::getTo() const { return this->to; }
+std::string Message::getContent() const { return this->content; }
+std::time_t Message::getTimestamp() const { return this->timestamp; }
+std::string Message::getId() const { return this->id; }
+
 // print operator
 std::ostream &operator<<(std::ostream &out, const Message &msg) {
   out << "Message from " << msg.from.getUsername() << " to " << msg.to.getUsername()

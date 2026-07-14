@@ -20,8 +20,8 @@ project(catch2-populate NONE)
 include(ExternalProject)
 ExternalProject_Add(catch2-populate
                      "UPDATE_DISCONNECTED" "False" "DOWNLOAD_EXTRACT_TIMESTAMP" "TRUE" "EXTERNALPROJECT_INTERNAL_ARGUMENT_SEPARATOR" "URL" "https://github.com/catchorg/Catch2/archive/refs/tags/v3.5.4.tar.gz" "URL_HASH" "SHA256=b7754b711242c167d8f60b890695347f90a1ebc95949a045385114165d606dbb"
-                    SOURCE_DIR          "C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-src"
-                    BINARY_DIR          "C:/GitProjects/Distributed-Chat-Server/build-clean/_deps/catch2-build"
+                    SOURCE_DIR          "C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-src"
+                    BINARY_DIR          "C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-build"
                     CONFIGURE_COMMAND   ""
                     BUILD_COMMAND       ""
                     INSTALL_COMMAND     ""

@@ -5,7 +5,7 @@
 
 # Configuration directories and files
 SourceDirectory: C:/GitProjects/Distributed-Chat-Server
-BuildDirectory: C:/GitProjects/Distributed-Chat-Server/build-clean
+BuildDirectory: C:/GitProjects/Distributed-Chat-Server/build
 
 # Where to place the cost data store
 CostDataFile: 

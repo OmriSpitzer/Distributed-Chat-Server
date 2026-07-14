@@ -60,6 +60,10 @@ public:
   // getters
   std::string roomTypeToString();
   std::string privacyToString();
+  std::string getId() const;
+  std::string getName() const;
+  Room::RoomType getType() const;
+  Room::Privacy getPrivacy() const;
 
 private:
   std::string id;                    // room id

@@ -1,5 +1,5 @@
-if(EXISTS "C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test-b12d07c_tests.cmake")
-  include("C:/GitProjects/Distributed-Chat-Server/build-clean/logger_test-b12d07c_tests.cmake")
+if(EXISTS "C:/GitProjects/Distributed-Chat-Server/build/logger_test-b12d07c_tests.cmake")
+  include("C:/GitProjects/Distributed-Chat-Server/build/logger_test-b12d07c_tests.cmake")
 else()
   add_test(logger_test_NOT_BUILT-b12d07c logger_test_NOT_BUILT-b12d07c)
 endif()

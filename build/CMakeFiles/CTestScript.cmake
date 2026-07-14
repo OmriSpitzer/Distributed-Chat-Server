@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 4.3.4)
 
 # CTest Start Step
 set(CTEST_SOURCE_DIRECTORY "C:/GitProjects/Distributed-Chat-Server")
-set(CTEST_BINARY_DIRECTORY "C:/GitProjects/Distributed-Chat-Server/build-clean")
+set(CTEST_BINARY_DIRECTORY "C:/GitProjects/Distributed-Chat-Server/build")
 
 # CTest Update Step
 set(CTEST_UPDATE_COMMAND "C:/Program Files/Git/cmd/git.exe")
