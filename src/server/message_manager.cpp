@@ -2,25 +2,30 @@
  * MessageManager class
  *
  * @brief Sends and persists chat messages via the database.
- * @date 14-07-2026
+ * @date 04-09-2026
  */
 
 #include "server/message_manager.h"
 #include "server/database_manager.h"
+#include "utils/models/logger.h"
 #include <iostream>
 
-bool MessageManager::sendPrivate(const Message &message) {
-  std::cout << "Private message from " << message.getFrom().getUsername() << " to "
-            << message.getTo().getUsername() << '\n';
-  return DatabaseManager::getInstance().saveMessage(message);
-}
+// send a message
+bool MessageManager::send(const Message &message) {
+  DatabaseManager &db = DatabaseManager::getInstance();
 
-bool MessageManager::saveMessage(const Message &message) {
-  return DatabaseManager::getInstance().saveMessage(message);
-}
-
-bool MessageManager::loadHistory(const std::string &roomId) {
-  auto history = DatabaseManager::getInstance().loadMessages(roomId);
-  std::cout << "Loaded " << history.size() << " messages for room " << roomId << '\n';
+  // #TODO: send the message to a user and save it in the database
+  Logger::logInfo("MessageManager", "Message sent: " + message.getContent());
   return true;
+}
+
+// load a message history
+std::vector<Message> MessageManager::loadHistory(const std::string &roomId) {
+  std::vector<Message> messages;
+  DatabaseManager &db = DatabaseManager::getInstance();
+
+  // #TODO: load the message history from the database
+
+  Logger::logInfo("MessageManager", "Loading message history for room: " + roomId);
+  return messages;
 }

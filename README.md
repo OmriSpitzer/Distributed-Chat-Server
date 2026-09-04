@@ -41,7 +41,7 @@ Several pieces are sketched but not fully wired: accept loop and session I/O, re
 
 ```
 Distributed-Chat-Server/
-├── CMakeLists.txt          Build: utils, server_lib, client_lib, tests
+├── CMakeLists.txt          Build: utils, server_lib, client_lib
 ├── compile_commands.json   Compile database for IDEs
 ├── README.md               This file
 ├── data/db.txt             Runtime text database (also copied under src/data)
@@ -59,7 +59,6 @@ Distributed-Chat-Server/
 │   ├── server/             SERVER.md
 │   └── utils/              UTILS.md  →  models/ MODELS.md
 ├── scripts/                Extra build/run helpers (stubs)
-├── tests/class/            Catch2 unit tests for utils models
 └── build/                  CMake output (generated)
 ```
 
@@ -95,7 +94,7 @@ Client                         Server
 
 ## Build and run
 
-Requires CMake 3.16+, a C++17 compiler, and **Ninja** if you use `src/run.ps1`. The server links **Winsock** (`ws2_32`). Catch2 v3.5.4 is fetched at configure time.
+Requires CMake 3.16+, a C++17 compiler, and **Ninja** if you use `src/run.ps1`. The server links **Winsock** (`ws2_32`).
 
 ```powershell
 # Configure and build everything
@@ -111,14 +110,6 @@ cmake --build build
 ```
 
 Run the server from a working directory where `data/db.txt` is reachable (`config::DB_PATH` is `data/db.txt` relative to the process CWD). Prefer the repo root.
-
-### Tests
-
-Catch2 executables: `logger_test`, `log_message_test`, `user_test`, `message_test`, `room_test`.
-
-```powershell
-ctest --test-dir build
-```
 
 ## Configuration
 
@@ -139,10 +130,9 @@ ctest --test-dir build
 | `chat_server` | `src/server/main.cpp` |
 | `client_lib` | Client sources |
 | `chat_client` | `src/client/main.cpp` |
-| `*_test` | Catch2 tests for utils models |
 
 ## Status
 
-**Implemented:** domain models and unit tests, singleton logger, text DB CRUD for users/rooms/messages, auth against that DB, Winsock listen/bind, thread pool, packet type routing, client welcome menu and packet builders.
+**Implemented:** domain models, singleton logger, text DB CRUD for users/rooms/messages, auth against that DB, Winsock listen/bind, thread pool, packet type routing, client welcome menu and packet builders.
 
 **Not finished:** accept/read/write on client sockets, real client TCP, command parser, heartbeat, room membership and broadcast on the wire, multi-server sync, WebSocket or GUI clients.

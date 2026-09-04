@@ -1,14 +1,14 @@
 /**
  * ConsoleUI header file class
  *
- * @date 14-07-2026
+ * @date 04-09-2026
  */
 #pragma once
 
 class ConsoleUI {
 public:
   // showing the welcome screen
-  static void showWelcome();
+  static int showWelcome();
 
   // showing the login screen
   static void showLogin();

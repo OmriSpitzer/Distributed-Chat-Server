@@ -2,12 +2,13 @@
  * Client class
  *
  * @brief Wires together the client components and runs a basic login flow.
- * @date 14-07-2026
+ * @date 04-09-2026
  */
 
 #include "client/client.h"
 #include "client/console_ui.h"
 #include "client/packet_builder.h"
+#include "utils/models/logger.h"
 #include <atomic>
 #include <cstdint>
 #include <iostream>

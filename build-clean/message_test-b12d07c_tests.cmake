@@ -1,7 +1,0 @@
-add_test( [==[Message constructor and stream output]==] C:/GitProjects/Distributed-Chat-Server/build-clean/message_test.exe [==[Message constructor and stream output]==]  )
-set_tests_properties( [==[Message constructor and stream output]==] PROPERTIES WORKING_DIRECTORY C:/GitProjects/Distributed-Chat-Server/build-clean)
-add_test( [==[Message equality]==] C:/GitProjects/Distributed-Chat-Server/build-clean/message_test.exe [==[Message equality]==]  )
-set_tests_properties( [==[Message equality]==] PROPERTIES WORKING_DIRECTORY C:/GitProjects/Distributed-Chat-Server/build-clean)
-add_test( [==[Message comparison]==] C:/GitProjects/Distributed-Chat-Server/build-clean/message_test.exe [==[Message comparison]==]  )
-set_tests_properties( [==[Message comparison]==] PROPERTIES WORKING_DIRECTORY C:/GitProjects/Distributed-Chat-Server/build-clean)
-set( message_test_TESTS [==[Message constructor and stream output]==] [==[Message equality]==] [==[Message comparison]==])

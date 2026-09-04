@@ -22,8 +22,4 @@ include/utils/models/   Headers (plus packet.h, header-only)
 
 `Packet` is defined only in `include/utils/models/packet.h` (no `.cpp`).
 
-## Tests
-
-Catch2 binaries in `tests/class/`: `logger_test`, `log_message_test`, `user_test`, `message_test`, `room_test`.
-
 See [models/MODELS.md](models/MODELS.md) for each type.

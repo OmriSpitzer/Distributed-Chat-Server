@@ -1,20 +1,18 @@
 /**
  * MessageManager header file class
  *
- * @date 14-07-2026
+ * @date 04-09-2026
  */
 #pragma once
 #include "utils/models/message.h"
 #include <string>
+#include <vector>
 
 class MessageManager {
 public:
-  // send a private message
-  bool sendPrivate(const Message &message);
-
-  // save a message
-  bool saveMessage(const Message &message);
+  // send a message
+  bool send(const Message &message);
 
   // load a message history
-  bool loadHistory(const std::string &roomId);
+  std::vector<Message> loadHistory(const std::string &roomId);
 };

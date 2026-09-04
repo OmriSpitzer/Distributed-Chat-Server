@@ -1,15 +1,15 @@
 /**
  * Packet class
  *
- * @date 03-09-2026
+ * @date 04-09-2026
  */
 
 #include "utils/models/packet.h"
 #include <ctime>
 
 // constructor
-Packet::Packet(std::string sender, std::string receiver, PacketType type = PacketType::NONE,
-               std::string room = "", std::string message = "") {
+Packet::Packet(std::string sender, std::string receiver, PacketType type, std::string room,
+               std::string message) {
   this->type = type;
   this->sender = sender;
   this->receiver = receiver;

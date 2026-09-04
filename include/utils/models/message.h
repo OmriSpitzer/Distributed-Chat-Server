@@ -15,7 +15,7 @@
 class Message {
 public:
   // constructor
-  Message(User &from, User &to, std::string_view message);
+  Message(const User &from, const User &to, std::string_view message);
 
   // getters
   const User &getFrom() const;
@@ -38,8 +38,8 @@ public:
   bool operator>=(const Message &other) const;
 
 private:
-  User &from;            // sender
-  User &to;              // receiver
+  User from;             // sender
+  User to;               // receiver
   std::string content;   // message content
   std::time_t timestamp; // message timestamp
   std::string id;        // message id
