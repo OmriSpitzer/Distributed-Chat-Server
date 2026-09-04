@@ -7,6 +7,9 @@
 
 class ConsoleUI {
 public:
+  // showing the welcome screen
+  static void showWelcome();
+
   // showing the login screen
   static void showLogin();
 

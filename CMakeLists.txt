@@ -28,10 +28,7 @@ add_library(server_lib
     src/auth/authentication.cpp
 )
 target_include_directories(server_lib PUBLIC include)
-target_link_libraries(server_lib PUBLIC utils)
-if(WIN32)
-  target_link_libraries(server_lib PUBLIC ws2_32)
-endif()
+target_link_libraries(server_lib PUBLIC utils ws2_32)
 
 add_executable(chat_server src/server/main.cpp)
 target_link_libraries(chat_server PRIVATE server_lib)

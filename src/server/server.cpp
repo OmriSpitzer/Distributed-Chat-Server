@@ -2,7 +2,7 @@
  * Server class
  *
  * @brief Wires together the server components and owns the listen lifecycle.
- * @date 14-07-2026
+ * @date 03-09-2026
  */
 
 #include "server/server.h"
@@ -10,55 +10,38 @@
 #include "utils/models/logger.h"
 #include <iostream>
 
-#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
-#endif
-
-namespace {
-
-bool initSockets() {
-#ifdef _WIN32
-  WSADATA data;
-  if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
-    Logger::logError("Server", "WSAStartup failed");
-    return false;
-  }
-#endif
-  return true;
-}
-
-void cleanupSockets() {
-#ifdef _WIN32
-  WSACleanup();
-#endif
-}
-
-} // namespace
 
 // start the server
 void Server::start() {
+  Logger::logInfo("Server", "Starting server");
+
   // check if the server is already running
   if (running) {
     Logger::logInfo("Server", "Server is already running");
     return;
   }
 
-  if (!initSockets()) {
+  // initialize winsock 2.2
+  WSADATA data;
+  if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
+    Logger::logError("Server", "WSAStartup failed");
     return;
   }
 
+  // start listening on the port
   if (!connectionManager.startListening(config::PORT)) {
-    cleanupSockets();
+    Logger::logError("Server", "Failed to start listening on port " + std::to_string(config::PORT));
+    WSACleanup();
     return;
   }
 
   running = true;
-  Logger::logInfo("Server", "Starting on port " + std::to_string(config::PORT) + " with " +
+  Logger::logInfo("Server", "Started on port " + std::to_string(config::PORT) + " with " +
                                 std::to_string(config::THREAD_COUNT) + " worker threads");
-  // TODO: accept connections and dispatch packets through the processor.
 }
 
 // stop the server
@@ -70,9 +53,12 @@ void Server::stop() {
   }
 
   running = false;
+
+  // stop listening and shutdown thread pool
   connectionManager.stopListening();
   threadPool.shutdown();
-  cleanupSockets();
+
+  WSACleanup();
   Logger::logInfo("Server", "Server stopped");
 }
 

@@ -1,7 +1,7 @@
 /**
  * Packet header file class
  *
- * @date 14-07-2026
+ * @date 03-09-2026
  */
 #pragma once
 #include <cstdint>
@@ -9,6 +9,10 @@
 
 class Packet {
 public:
+  // constructor
+  Packet(std::string sender, std::string receiver, PacketType type = PacketType::NONE,
+         std::string room = "", std::string message = "");
+
   // packet type enum
   enum class PacketType {
     LOGIN,
@@ -35,4 +39,8 @@ public:
 
   // timestamp of the packet
   uint64_t timestamp;
+
+private:
+  // copy the packet
+  Packet copy() const;
 };

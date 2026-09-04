@@ -44,4 +44,14 @@ Room rejects users beyond capacity 1 0.106369
 Room removeUser 1 0.0856572
 Room addMessage updates count in stream 1 0.104291
 Room ping reflects occupancy 1 0.0873714
+logger_test_NOT_BUILT-b12d07c 0 0
+log_message_test_NOT_BUILT-b12d07c 0 0
+user_test_NOT_BUILT-b12d07c 0 0
+message_test_NOT_BUILT-b12d07c 0 0
+room_test_NOT_BUILT-b12d07c 0 0
 ---
+logger_test_NOT_BUILT-b12d07c
+log_message_test_NOT_BUILT-b12d07c
+user_test_NOT_BUILT-b12d07c
+message_test_NOT_BUILT-b12d07c
+room_test_NOT_BUILT-b12d07c

@@ -2,37 +2,54 @@
  * Authentication class
  *
  * @brief Basic username/password authentication backed by the text database.
- * @date 14-07-2026
+ * @date 03-09-2026
  */
 
 #include "auth/authentication.h"
 #include "server/database_manager.h"
+#include "utils/models/logger.h"
 #include <iostream>
 #include <stdexcept>
 
+// register a user
 User Authentication::registerUser(const std::string &username, const std::string &password) {
+  // create a user
   User user(username, username + "@chat.local", User::UserType::USER);
-  if (!DatabaseManager::getInstance().createUser(user, password)) {
-    throw std::runtime_error("User already exists: " + username);
-  }
+
+  // #TODO: create the user in the database
+
+  Logger::logInfo("Authentication", "User created: " + username);
   return user;
 }
 
+// login a user
 User Authentication::login(const std::string &username, const std::string &password) {
+  // verify the password
   if (!verifyPassword(username, password)) {
     throw std::runtime_error("Invalid credentials for: " + username);
   }
-  return DatabaseManager::getInstance().findUser(username);
+
+  // find the user and return it
+  DatabaseManager &db = DatabaseManager::getInstance();
+  User user = db.findUser(username);
+
+  // #TODO: verify the user is not already logged in or exists
+
+  Logger::logInfo("Authentication", "User logged in: " + username);
+  return user;
 }
 
+// logout a user
 void Authentication::logout(const std::string &username) {
-  std::cout << "User logged out: " << username << '\n';
+  // #TODO: logout the user from the database
+
+  Logger::logInfo("Authentication", "User logged out: " + username);
 }
 
 bool Authentication::verifyPassword(const std::string &username, const std::string &password) {
-  auto &db = DatabaseManager::getInstance();
-  if (!db.userExists(username)) {
-    return false;
-  }
-  return db.getPassword(username) == password;
+  DatabaseManager &db = DatabaseManager::getInstance();
+
+  // #TODO: verify the password is correct
+
+  return true;
 }

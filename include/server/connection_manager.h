@@ -1,7 +1,7 @@
 /**
  * ConnectionManager header file class
  *
- * @date 14-07-2026
+ * @date 03-09-2026
  */
 #pragma once
 #include "server/client_session.h"
@@ -12,7 +12,10 @@
 
 class ConnectionManager {
 public:
+  // constructor
   ConnectionManager();
+
+  // destructor
   ~ConnectionManager();
 
   // create, bind, and listen on the given port
@@ -22,7 +25,7 @@ public:
   void stopListening();
 
   // getters
-  std::uintptr_t getListeningSocket() const;
+  int getListeningSocket() const;
   bool isListening() const;
 
   // delete copy
@@ -30,15 +33,7 @@ public:
   ConnectionManager &operator=(const ConnectionManager &) = delete;
 
 private:
-  // listening socket (platform SOCKET / fd stored as integer)
-  std::uintptr_t listeningSocket;
-
-  // sessions
-  std::unordered_map<int, std::shared_ptr<ClientSession>> sessions;
-
-  // session mutex
-  std::mutex sessionMutex;
-
-  // is the server listening
-  bool running;
+  int listeningSocket; // listening socket file descriptor
+  std::unordered_map<int, std::shared_ptr<ClientSession>> sessions; // sessions
+  bool listening;                                                   // is the server listening
 };

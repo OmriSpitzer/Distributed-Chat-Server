@@ -9,43 +9,27 @@
 #include "utils/models/logger.h"
 #include <string>
 
-#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#else
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-using SOCKET = int;
-#ifndef INVALID_SOCKET
-#define INVALID_SOCKET (-1)
-#endif
-static int closesocket(int fd) { return ::close(fd); }
-#endif
 
-namespace {
+// constructor
+ConnectionManager::ConnectionManager() : listeningSocket(-1), listening(false) {}
 
-SOCKET asSocket(std::uintptr_t handle) { return static_cast<SOCKET>(handle); }
-
-std::uintptr_t fromSocket(SOCKET socket) { return static_cast<std::uintptr_t>(socket); }
-
-} // namespace
-
-ConnectionManager::ConnectionManager()
-    : listeningSocket(fromSocket(INVALID_SOCKET)), running(false) {}
-
+// destructor
 ConnectionManager::~ConnectionManager() { stopListening(); }
 
+// start listening on given port
 bool ConnectionManager::startListening(std::uint16_t port) {
-  if (running) {
+  // check if already listening
+  if (listening) {
     Logger::logWarning("ConnectionManager", "Already listening");
     return false;
   }
 
+  // create socket and check if successful
   SOCKET socketFd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (socketFd == INVALID_SOCKET) {
     Logger::logError("ConnectionManager", "Failed to create socket");
@@ -59,38 +43,49 @@ bool ConnectionManager::startListening(std::uint16_t port) {
     Logger::logWarning("ConnectionManager", "setsockopt(SO_REUSEADDR) failed");
   }
 
+  // bind socket to port
   sockaddr_in address{};
-  address.sin_family = AF_INET;
-  address.sin_addr.s_addr = htonl(INADDR_ANY);
-  address.sin_port = htons(port);
+  address.sin_family = AF_INET;                // set address family
+  address.sin_addr.s_addr = htonl(INADDR_ANY); // bind to all interfaces
+  address.sin_port = htons(port);              // bind to port
 
+  // bind socket to port and check if successful
   if (bind(socketFd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
     Logger::logError("ConnectionManager", "Failed to bind port " + std::to_string(port));
     closesocket(socketFd);
     return false;
   }
 
+  // listen for connections and check if successful
   if (listen(socketFd, SOMAXCONN) != 0) {
     Logger::logError("ConnectionManager", "Failed to listen on port " + std::to_string(port));
     closesocket(socketFd);
     return false;
   }
 
-  listeningSocket = fromSocket(socketFd);
-  running = true;
+  // set listening socket and mark as listening
+  listeningSocket = static_cast<int>(socketFd);
+  listening = true;
   Logger::logInfo("ConnectionManager", "Listening on port " + std::to_string(port));
   return true;
 }
 
+// stop listening
 void ConnectionManager::stopListening() {
-  SOCKET socketFd = asSocket(listeningSocket);
-  if (socketFd != INVALID_SOCKET) {
-    closesocket(socketFd);
-    listeningSocket = fromSocket(INVALID_SOCKET);
+  // check if listening
+  if (!listening) {
+    Logger::logWarning("ConnectionManager", "Not listening");
+    return;
   }
-  running = false;
+
+  // close socket
+  closesocket(static_cast<SOCKET>(listeningSocket));
+  listeningSocket = -1;
+  listening = false;
 }
 
-std::uintptr_t ConnectionManager::getListeningSocket() const { return listeningSocket; }
+// get listening socket
+int ConnectionManager::getListeningSocket() const { return listeningSocket; }
 
-bool ConnectionManager::isListening() const { return running; }
+// check if listening
+bool ConnectionManager::isListening() const { return listening; }

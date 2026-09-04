@@ -2,7 +2,7 @@
  * LogMessage class
  *
  * @brief LogMessage class to store a message and its metadata (id, message, type, timestamp)
- * @date 12-07-2026
+ * @date 03-09-2026
  */
 
 #include "utils/models/log_message.h"
@@ -28,7 +28,7 @@ LogMessage::LogMessage(std::string_view source, std::string_view message, LogMes
 std::ostream &operator<<(std::ostream &out, const LogMessage &s) {
   out << "[Msg: " << s.id << "] (" << LogMessage::typeToString(s.type) << ", " << s.timestamp
       << ")\n";
-  out << "Message from " << s.source << ": " << s.message << '\n';
+  out << s.source << ": " << s.message << '\n';
   return out;
 }
 

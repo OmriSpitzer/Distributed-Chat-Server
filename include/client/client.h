@@ -9,7 +9,7 @@
 #include "client/network.h"
 #include "client/packet_builder.h"
 #include "client/packet_handler.h"
-
+#include <string>
 
 class Client {
 public:
@@ -20,9 +20,10 @@ public:
   void stop();
 
 private:
-  Network network; // network class
-  ConsoleUI ui;    // console UI class
-  // CommandParser parser;  // command parser class
+  std::string id;        // client id
+  Network network;       // network class
+  ConsoleUI ui;          // console UI class
   PacketHandler handler; // packet handler class
   PacketBuilder builder; // packet builder class
+  // CommandParser parser;  // command parser class
 };

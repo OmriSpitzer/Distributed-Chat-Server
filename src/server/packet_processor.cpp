@@ -2,22 +2,24 @@
  * PacketProcessor class
  *
  * @brief Routes incoming packets to the appropriate manager and builds a response.
- * @date 14-07-2026
+ * @date 03-09-2026
  */
 
 #include "server/packet_processor.h"
-#include <ctime>
+#include "auth/authentication.h"
 #include <exception>
 
+// process a packet
 Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &session) {
-  Packet response;
+  // create a response packet
+  Packet response = packet.copy();
   response.sender = "server";
   response.receiver = packet.sender;
-  response.room = packet.room;
-  response.timestamp = static_cast<uint64_t>(std::time(nullptr));
-  response.type = packet.type;
 
+  // process the packet
   switch (packet.type) {
+
+    // login packet
   case Packet::PacketType::LOGIN: {
     try {
       User user = Authentication::login(packet.sender, packet.message);
@@ -29,20 +31,29 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
     break;
   }
+
+    // logout packet
   case Packet::PacketType::LOGOUT: {
     Authentication::logout(packet.sender);
     session.setAuthenticated(false);
     response.message = "logout ok";
     break;
   }
+
+    // message packet
   case Packet::PacketType::MESSAGE: {
+
     response.message = session.isAuthenticated() ? "message delivered" : "not authenticated";
     break;
   }
+
+    // room join packet
   case Packet::PacketType::ROOM_JOIN: {
     response.message = "joined " + packet.room;
     break;
   }
+
+    // room leave packet
   case Packet::PacketType::ROOM_LEAVE: {
     response.message = "left " + packet.room;
     break;
