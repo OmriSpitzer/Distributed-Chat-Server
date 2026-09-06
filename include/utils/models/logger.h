@@ -1,7 +1,7 @@
 /**
  * Logger header file class
  *
- * @date 12-07-2026
+ * @date 04-09-2026
  */
 #pragma once
 
@@ -22,6 +22,7 @@ public:
   static void logInfo(std::string_view source, std::string_view message);
   static void logWarning(std::string_view source, std::string_view message);
   static void logError(std::string_view source, std::string_view message);
+  static void logHeartbeat(std::string_view source, std::string_view message);
 
   // get a message by index
   LogMessage getMessage(int index) const;

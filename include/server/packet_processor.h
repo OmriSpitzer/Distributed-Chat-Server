@@ -1,7 +1,7 @@
 /**
  * PacketProcessor header file class
  *
- * @date 14-07-2026
+ * @date 04-09-2026
  */
 #pragma once
 #include "auth/authentication.h"
@@ -14,7 +14,10 @@
 class PacketProcessor {
 public:
   // process a packet
-  Packet processPacket(const Packet &packet, ClientSession &session);
+  static Packet processPacket(const Packet &packet, ClientSession &session);
+
+  // process a heartbeat packet
+  static Packet processHeartbeatPacket(const Packet &packet);
 
 private:
   // authentication

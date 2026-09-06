@@ -17,12 +17,20 @@ public:
     ROOM_JOIN,
     ROOM_LEAVE,
     DEFAULT,
+    HEARTBEAT,
+    REGISTER,
   };
 
   // constructors
-  Packet() : type(PacketType::DEFAULT), timestamp(0) {}
+  Packet();
   Packet(std::string sender, std::string receiver, PacketType type = PacketType::DEFAULT,
          std::string room = "", std::string message = "");
+
+  // serialize
+  std::string serialize() const;
+
+  // deserialize
+  static Packet deserialize(const std::string &data);
 
   // packet type
   PacketType type;
@@ -44,4 +52,8 @@ public:
 
   // copy the packet
   Packet copy() const;
+
+private:
+  static std::string packetTypeToString(PacketType type);
+  static PacketType stringToPacketType(const std::string &type);
 };

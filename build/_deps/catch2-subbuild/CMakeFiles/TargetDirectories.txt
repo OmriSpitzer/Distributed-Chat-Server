@@ -1,0 +1,3 @@
+C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-subbuild/CMakeFiles/catch2-populate.dir
+C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-subbuild/CMakeFiles/edit_cache.dir
+C:/GitProjects/Distributed-Chat-Server/build/_deps/catch2-subbuild/CMakeFiles/rebuild_cache.dir

@@ -1,7 +1,7 @@
 /**
  * Network header file class
  *
- * @date 14-07-2026
+ * @date 04-09-2026
  */
 #pragma once
 #include "utils/models/packet.h"
@@ -19,4 +19,10 @@ public:
 
   // receiving a packet from the server
   Packet receivePacket();
+
+  // check if the network is connected
+  bool isConnected() const;
+
+private:
+  bool connected = false; // whether the network is connected
 };

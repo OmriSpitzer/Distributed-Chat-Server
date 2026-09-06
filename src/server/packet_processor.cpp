@@ -34,7 +34,6 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
     // logout packet
   case Packet::PacketType::LOGOUT: {
-    Authentication::logout(packet.sender);
     session.setAuthenticated(false);
     response.message = "logout ok";
     break;
@@ -58,7 +57,20 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     response.message = "left " + packet.room;
     break;
   }
+
+  case Packet::PacketType::HEARTBEAT:
+    return processHeartbeatPacket(packet);
   }
 
+  return response;
+}
+
+// process a heartbeat packet
+Packet PacketProcessor::processHeartbeatPacket(const Packet &packet) {
+  // create a response packet
+  Packet response = packet.copy();
+  response.sender = "server";
+  response.receiver = packet.sender;
+  response.message = "pong";
   return response;
 }

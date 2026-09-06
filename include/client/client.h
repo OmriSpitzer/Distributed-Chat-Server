@@ -1,7 +1,7 @@
 /**
  * Client header file class
  *
- * @date 14-07-2026
+ * @date 04-09-2026
  */
 
 #pragma once
@@ -14,10 +14,16 @@
 class Client {
 public:
   // starting the client
-  void start();
+  bool start();
 
   // stopping the client
   void stop();
+
+  // check if the client is alive
+  bool isAlive() const;
+
+  // showing the dashboard
+  void showDashboard();
 
 private:
   std::string id;        // client id
@@ -25,5 +31,4 @@ private:
   ConsoleUI ui;          // console UI class
   PacketHandler handler; // packet handler class
   PacketBuilder builder; // packet builder class
-  // CommandParser parser;  // command parser class
 };

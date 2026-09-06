@@ -1,7 +1,7 @@
 /**
  * LogMessage header file class
  *
- * @date 13-07-2026
+ * @date 04-09-2026
  */
 #pragma once
 
@@ -13,7 +13,7 @@
 class LogMessage {
 public:
   // message type enum class
-  enum class Type { INFO, WARNING, ERROR };
+  enum class Type { INFO, WARNING, ERROR, HEARTBEAT };
 
   // constructor
   LogMessage(std::string_view source, std::string_view message, LogMessage::Type type);

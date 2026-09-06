@@ -41,7 +41,7 @@ Several pieces are sketched but not fully wired: accept loop and session I/O, re
 
 ```
 Distributed-Chat-Server/
-├── CMakeLists.txt          Build: utils, server_lib, client_lib
+├── CMakeLists.txt          Build: utils, server_lib, client_lib, tests
 ├── compile_commands.json   Compile database for IDEs
 ├── README.md               This file
 ├── data/db.txt             Runtime text database (also copied under src/data)
@@ -52,13 +52,15 @@ Distributed-Chat-Server/
 │   ├── server/
 │   └── utils/models/
 ├── src/
-│   ├── run.ps1             Configure, build, and run chat_server
+│   ├── server.ps1          Configure, build, and run chat_server
+│   ├── client.ps1          Configure, build, and run chat_client
 │   ├── auth/               AUTH.md
 │   ├── client/             CLIENT.md
 │   ├── data/               DATA.md
 │   ├── server/             SERVER.md
 │   └── utils/              UTILS.md  →  models/ MODELS.md
 ├── scripts/                Extra build/run helpers (stubs)
+├── tests/class/            Catch2 unit tests for utils models
 └── build/                  CMake output (generated)
 ```
 
@@ -94,15 +96,19 @@ Client                         Server
 
 ## Build and run
 
-Requires CMake 3.16+, a C++17 compiler, and **Ninja** if you use `src/run.ps1`. The server links **Winsock** (`ws2_32`).
+Requires CMake 3.16+, a C++17 compiler, and **Ninja** if you use `src/server.ps1` or `src/client.ps1`. The server links **Winsock** (`ws2_32`). Catch2 v3.5.4 is fetched at configure time.
 
 ```powershell
 # Configure and build everything
 cmake -B build -S . -G "Ninja" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build
 
-# Server only (also builds dependencies)
-.\src\run.ps1
+# Server or client (also builds that target and its dependencies)
+.\src\server.ps1
+.\src\client.ps1
+
+# run all registered tests
+ctest --test-dir build --output-on-failure
 
 # Or run binaries from the build directory
 .\build\chat_server.exe
@@ -130,9 +136,10 @@ Run the server from a working directory where `data/db.txt` is reachable (`confi
 | `chat_server` | `src/server/main.cpp` |
 | `client_lib` | Client sources |
 | `chat_client` | `src/client/main.cpp` |
+| `*_test` | Catch2 tests for utils models |
 
 ## Status
 
-**Implemented:** domain models, singleton logger, text DB CRUD for users/rooms/messages, auth against that DB, Winsock listen/bind, thread pool, packet type routing, client welcome menu and packet builders.
+**Implemented:** domain models and unit tests, singleton logger, text DB CRUD for users/rooms/messages, auth against that DB, Winsock listen/bind, thread pool, packet type routing, client welcome menu and packet builders.
 
 **Not finished:** accept/read/write on client sockets, real client TCP, command parser, heartbeat, room membership and broadcast on the wire, multi-server sync, WebSocket or GUI clients.

@@ -2,54 +2,59 @@
  * Authentication class
  *
  * @brief Basic username/password authentication backed by the text database.
- * @date 03-09-2026
+ * @date 06-09-2026
  */
 
 #include "auth/authentication.h"
-#include "server/database_manager.h"
-#include "utils/models/logger.h"
-#include <iostream>
-#include <stdexcept>
+#include "utils/models/user.h"
+#include <string>
 
 // register a user
-User Authentication::registerUser(const std::string &username, const std::string &password) {
-  // create a user
-  User user(username, username + "@chat.local", User::UserType::USER);
-
-  // #TODO: create the user in the database
-
-  Logger::logInfo("Authentication", "User created: " + username);
-  return user;
+User Authentication::registerUser(const std::string &username, const std::string &password,
+                                  const std::string &email) {
+  if (!verifyUsername(username)) {
+    throw std::invalid_argument("Invalid username");
+  }
+  if (!verifyPassword(password)) {
+    throw std::invalid_argument("Invalid password");
+  }
+  if (!verifyEmail(email)) {
+    throw std::invalid_argument("Invalid email");
+  }
+  return User(username, email, User::UserType::USER);
 }
 
 // login a user
 User Authentication::login(const std::string &username, const std::string &password) {
-  // verify the password
-  if (!verifyPassword(username, password)) {
-    throw std::runtime_error("Invalid credentials for: " + username);
+  if (!verifyUsername(username)) {
+    throw std::invalid_argument("Invalid username");
   }
-
-  // find the user and return it
-  DatabaseManager &db = DatabaseManager::getInstance();
-  User user = db.findUser(username);
-
-  // #TODO: verify the user is not already logged in or exists
-
-  Logger::logInfo("Authentication", "User logged in: " + username);
-  return user;
+  if (!verifyPassword(password)) {
+    throw std::invalid_argument("Invalid password");
+  }
+  return User(username, "", User::UserType::USER);
 }
 
-// logout a user
-void Authentication::logout(const std::string &username) {
-  // #TODO: logout the user from the database
-
-  Logger::logInfo("Authentication", "User logged out: " + username);
+// verify a password
+bool Authentication::verifyPassword(const std::string &password) {
+  if (password.empty()) {
+    return false;
+  }
+  return true;
 }
 
-bool Authentication::verifyPassword(const std::string &username, const std::string &password) {
-  DatabaseManager &db = DatabaseManager::getInstance();
+// verify an email
+bool Authentication::verifyEmail(const std::string &email) {
+  if (email.empty()) {
+    return false;
+  }
+  return true;
+}
 
-  // #TODO: verify the password is correct
-
+// verify a username
+bool Authentication::verifyUsername(const std::string &username) {
+  if (username.empty()) {
+    return false;
+  }
   return true;
 }

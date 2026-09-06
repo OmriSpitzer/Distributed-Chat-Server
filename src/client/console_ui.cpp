@@ -2,12 +2,18 @@
  * ConsoleUI class
  *
  * @brief Simple stdout-based user interface.
- * @date 04-09-2026
+ * @date 06-09-2026
  */
 
 #include "client/console_ui.h"
+#include "auth/authentication.h"
+#include "client/packet_builder.h"
+#include "utils/models/packet.h"
 #include <cstdlib>
 #include <iostream>
+#include <limits>
+#include <optional>
+#include <string>
 
 // showing the welcome screen
 int ConsoleUI::showWelcome() {
@@ -25,6 +31,7 @@ int ConsoleUI::showWelcome() {
     std::cout << "--------------------------------\n";
     std::cout << "Enter your choice: ";
     std::cin >> input;
+    std::cout << std::endl;
 
     answer = std::stoi(input);
     if (answer < 1 || answer > 3) {
@@ -35,19 +42,88 @@ int ConsoleUI::showWelcome() {
 }
 
 // showing the login screen
-void ConsoleUI::showLogin() { std::cout << "Please log in.\n"; }
+std::optional<Packet> ConsoleUI::showLogin() {
+  std::string username;
+  std::string password;
 
-// showing the rooms screen
-void ConsoleUI::showRooms() { std::cout << "Available rooms:\n"; }
+  // drop the leftover '\n' from the previous cin >> in showWelcome
+  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-// printing a message
-void ConsoleUI::printMessage() { std::cout << "<message>\n"; }
+  do {
+    std::cout << ">> Please login:\n";
+    std::cout << ">> Username (insert 'exit' to go back): ";
+    std::getline(std::cin, username);
+    std::cout << std::endl;
 
-// clearing the screen
-void ConsoleUI::clearScreen() {
-#ifdef _WIN32
-  std::system("cls");
-#else
-  std::system("clear");
-#endif
+    if (username == "exit") {
+      return std::nullopt;
+    }
+    if (!Authentication::verifyUsername(username)) {
+      continue;
+    }
+
+    std::cout << ">> Password (insert 'exit' to go back): ";
+    std::getline(std::cin, password);
+    std::cout << std::endl;
+
+    if (password == "exit") {
+      return std::nullopt;
+    }
+    if (!Authentication::verifyPassword(password)) {
+      continue;
+    }
+    break;
+  } while (true);
+
+  return PacketBuilder::buildLogin(username, password);
+}
+
+// showing the register screen
+std::optional<Packet> ConsoleUI::showRegister() {
+  std::string username;
+  std::string password;
+  std::string email;
+
+  // drop the leftover '\n' from the previous cin >> in showWelcome
+  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+  do {
+    std::cout << ">> Please register:\n";
+    std::cout << ">> New username (insert 'exit' to go back): ";
+    std::getline(std::cin, username);
+    std::cout << std::endl;
+
+    if (username == "exit") {
+      return std::nullopt;
+    }
+    if (!Authentication::verifyUsername(username)) {
+      continue;
+    }
+
+    std::cout << ">> New password (insert 'exit' to go back): ";
+    std::getline(std::cin, password);
+    std::cout << std::endl;
+
+    if (password == "exit") {
+      return std::nullopt;
+    }
+    if (!Authentication::verifyPassword(password)) {
+      continue;
+    }
+
+    std::cout << ">> New email (insert 'exit' to go back): ";
+    std::getline(std::cin, email);
+    std::cout << std::endl;
+
+    if (email == "exit") {
+      return std::nullopt;
+    }
+    if (!Authentication::verifyEmail(email)) {
+      continue;
+    }
+
+    break;
+  } while (true);
+
+  return PacketBuilder::buildRegister(username, password, email);
 }

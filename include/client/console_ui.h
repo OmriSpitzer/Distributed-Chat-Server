@@ -5,23 +5,18 @@
  */
 #pragma once
 
+#include "utils/models/packet.h"
+#include <optional>
+#include <string>
+
 class ConsoleUI {
 public:
   // showing the welcome screen
   static int showWelcome();
 
-  // showing the login screen
-  static void showLogin();
+  // showing the login screen; empty optional means the user went back
+  static std::optional<Packet> showLogin();
 
-  // showing the rooms screen
-  static void showRooms();
-
-  // printing a message
-  static void printMessage();
-
-  // showing an error
-  static void showError();
-
-  // clearing the screen
-  static void clearScreen();
+  // showing the register screen
+  static std::optional<Packet> showRegister();
 };

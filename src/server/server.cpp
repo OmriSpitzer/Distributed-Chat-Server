@@ -7,6 +7,7 @@
 
 #include "server/server.h"
 #include "config/config.h"
+#include "server/heartbeat.h"
 #include "utils/models/logger.h"
 #include <iostream>
 
@@ -40,6 +41,7 @@ void Server::start() {
   }
 
   running = true;
+  heartbeat.start();
   Logger::logInfo("Server", "Started on port " + std::to_string(config::PORT) + " with " +
                                 std::to_string(config::THREAD_COUNT) + " worker threads");
 }
@@ -55,6 +57,7 @@ void Server::stop() {
   running = false;
 
   // stop listening and shutdown thread pool
+  heartbeat.stop();
   connectionManager.stopListening();
   threadPool.shutdown();
 

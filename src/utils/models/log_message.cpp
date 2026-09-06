@@ -2,7 +2,7 @@
  * LogMessage class
  *
  * @brief LogMessage class to store a message and its metadata (id, message, type, timestamp)
- * @date 03-09-2026
+ * @date 04-09-2026
  */
 
 #include "utils/models/log_message.h"
@@ -17,7 +17,10 @@ std::atomic<uint64_t> next_message_id{0};
 
 // constructor
 LogMessage::LogMessage(std::string_view source, std::string_view message, LogMessage::Type type) {
-  id = std::to_string(++next_message_id);
+  if (type != LogMessage::Type::HEARTBEAT) {
+    id = std::to_string(++next_message_id);
+  }
+
   this->source = source;
   this->message = message;
   this->type = type;
@@ -43,6 +46,8 @@ std::string LogMessage::typeToString(LogMessage::Type type) {
     return "WARNING";
   case LogMessage::Type::ERROR:
     return "ERROR";
+  case LogMessage::Type::HEARTBEAT:
+    return "HEARTBEAT";
   }
   return "UNKNOWN";
 }
