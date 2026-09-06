@@ -186,7 +186,7 @@ void ConnectionManager::handleClient(int clientSocket) {
   while (listening) {
     std::optional<Packet> packet = readPacket(sock);
     if (!packet) {
-      break; // client hung up or bad frame
+      break;
     }
 
     std::shared_ptr<ClientSession> session;
@@ -199,7 +199,10 @@ void ConnectionManager::handleClient(int clientSocket) {
       session = it->second;
     }
 
+    // process the packet
     Packet response = PacketProcessor::processPacket(*packet, *session);
+
+    // generate a response packet
     std::string framed = Serializer::serialize(response);
     if (framed.empty() || !sendExact(sock, framed.data(), static_cast<int>(framed.size()))) {
       break;

@@ -94,8 +94,6 @@ bool Network::sendPacket(const Packet &packet, std::string_view message) {
     return false;
   }
 
-  std::cout << "Sending packet to the server: " << serialized << std::endl;
-
   {
     std::lock_guard<std::mutex> lock(mutex);
     if (!connected) {
@@ -118,9 +116,12 @@ std::optional<Packet> Network::receivePacket(const std::string &serializedPacket
   std::optional<Packet> packet = Serializer::deserialize(serializedPacket);
 
   if (!packet) {
-    std::cout << "Failed to deserialize packet\n";
+    Logger::logError("Network", "Failed to deserialize packet");
     return std::nullopt;
   }
+
+  std::cout << "Received packet from the server: " << Serializer::serialize(*packet) << std::endl;
+
   return packet;
 }
 

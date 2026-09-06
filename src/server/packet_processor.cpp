@@ -24,9 +24,14 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     // login packet
   case Packet::PacketType::LOGIN: {
     try {
+      // check user authentication
       User user = Authentication::login(packet.sender, packet.message);
+
+      // TODO: check user in database
+
       session.setUser(user);
       session.setAuthenticated(true);
+
       response.message = "login ok";
     } catch (const std::exception &e) {
       response.message = std::string("login failed: ") + e.what();
