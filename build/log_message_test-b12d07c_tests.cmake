@@ -1,7 +1,0 @@
-add_test( [==[LogMessage stream output includes source, message, and type]==] C:/GitProjects/Distributed-Chat-Server/build/log_message_test.exe [==[LogMessage stream output includes source\, message\, and type]==]  )
-set_tests_properties( [==[LogMessage stream output includes source, message, and type]==] PROPERTIES WORKING_DIRECTORY C:/GitProjects/Distributed-Chat-Server/build SKIP_RETURN_CODE 4)
-add_test( [==[Successive log messages are not equal]==] C:/GitProjects/Distributed-Chat-Server/build/log_message_test.exe [==[Successive log messages are not equal]==]  )
-set_tests_properties( [==[Successive log messages are not equal]==] PROPERTIES WORKING_DIRECTORY C:/GitProjects/Distributed-Chat-Server/build SKIP_RETURN_CODE 4)
-add_test( [==[A log message compares equal only to itself]==] C:/GitProjects/Distributed-Chat-Server/build/log_message_test.exe [==[A log message compares equal only to itself]==]  )
-set_tests_properties( [==[A log message compares equal only to itself]==] PROPERTIES WORKING_DIRECTORY C:/GitProjects/Distributed-Chat-Server/build SKIP_RETURN_CODE 4)
-set( log_message_test_TESTS [==[LogMessage stream output includes source, message, and type]==] [==[Successive log messages are not equal]==] [==[A log message compares equal only to itself]==])

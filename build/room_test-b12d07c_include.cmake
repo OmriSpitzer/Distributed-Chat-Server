@@ -1,5 +1,0 @@
-if(EXISTS "C:/GitProjects/Distributed-Chat-Server/build/room_test-b12d07c_tests.cmake")
-  include("C:/GitProjects/Distributed-Chat-Server/build/room_test-b12d07c_tests.cmake")
-else()
-  add_test(room_test_NOT_BUILT-b12d07c room_test_NOT_BUILT-b12d07c)
-endif()
