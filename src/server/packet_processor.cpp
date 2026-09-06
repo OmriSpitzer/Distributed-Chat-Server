@@ -7,7 +7,9 @@
 
 #include "server/packet_processor.h"
 #include "auth/authentication.h"
+#include "server/connection_manager.h"
 #include <exception>
+#include <string>
 
 // process a packet
 Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &session) {
@@ -59,18 +61,28 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
   }
 
   case Packet::PacketType::HEARTBEAT:
-    return processHeartbeatPacket(packet);
+    response.message = "pong";
+    break;
   }
 
   return response;
 }
 
 // process a heartbeat packet
-Packet PacketProcessor::processHeartbeatPacket(const Packet &packet) {
-  // create a response packet
+Packet PacketProcessor::processHeartbeatPacket(const Packet &packet,
+                                               ConnectionManager &connections) {
+  auto sessions = connections.getSessions();
+
+  std::string message = "sessions: ";
+  for (const auto &entry : sessions) {
+    const ClientSession &session = *entry.second;
+    message += "[" + session.getUser().getUsername() + "," + session.getRoom().getName() + "] ";
+  }
+  message += "total: " + std::to_string(sessions.size());
+
   Packet response = packet.copy();
   response.sender = "server";
   response.receiver = packet.sender;
-  response.message = "pong";
+  response.message = message;
   return response;
 }

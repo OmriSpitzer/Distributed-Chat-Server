@@ -2,16 +2,17 @@
  * Heartbeat class
  *
  * @brief Periodic liveness signal (stub for this pass).
- * @date 04-09-2026
+ * @date 06-09-2026
  */
 
 #include "server/heartbeat.h"
+#include "server/connection_manager.h"
 #include "server/packet_processor.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
 
 // constructor
-Heartbeat::Heartbeat(PacketProcessor &processor) : processor(processor) {}
+Heartbeat::Heartbeat(ConnectionManager &connections) : connections(connections) {}
 
 // destructor
 Heartbeat::~Heartbeat() { stop(); }
@@ -40,7 +41,7 @@ void Heartbeat::start() {
       lock.unlock();
 
       Packet tick("heartbeat", "server", Packet::PacketType::HEARTBEAT, "", "ping");
-      Packet response = processor.processHeartbeatPacket(tick);
+      Packet response = PacketProcessor::processHeartbeatPacket(tick, connections);
       Logger::logHeartbeat("Heartbeat", response.message);
 
       lock.lock();

@@ -42,6 +42,10 @@ void Server::start() {
 
   running = true;
   heartbeat.start();
+
+  // start the accept loop
+  acceptThread = std::thread([this] { connectionManager.acceptLoop(); });
+
   Logger::logInfo("Server", "Started on port " + std::to_string(config::PORT) + " with " +
                                 std::to_string(config::THREAD_COUNT) + " worker threads");
 }
@@ -59,6 +63,9 @@ void Server::stop() {
   // stop listening and shutdown thread pool
   heartbeat.stop();
   connectionManager.stopListening();
+  if (acceptThread.joinable()) {
+    acceptThread.join();
+  }
   threadPool.shutdown();
 
   WSACleanup();

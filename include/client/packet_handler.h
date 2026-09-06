@@ -8,11 +8,17 @@
 
 class PacketHandler {
 public:
+  // dispatch a packet to the matching handler
+  void handlePacket(const Packet &packet);
+
   // handling a packet
   void handleMessage(const Packet &packet);
 
   // handling a login packet
   void handleLogin(const Packet &packet);
+
+  // handling a register packet
+  void handleRegister(const Packet &packet);
 
   // handling a room list packet
   void handleRoomList(const Packet &packet);

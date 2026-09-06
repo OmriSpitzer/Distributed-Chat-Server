@@ -13,27 +13,41 @@
 #include <iostream>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <string>
 
 // showing the welcome screen
-int ConsoleUI::showWelcome() {
+int ConsoleUI::showWelcome(const std::string_view username) {
   int answer = -1;
   std::string input = "-1";
 
   // show the welcome screen until the user enters a valid choice
   do {
     std::cout << "=== Distributed Chat Application ===\n";
-    std::cout << "Welcome to the distributed chat application.\n";
+    if (username.empty()) {
+      std::cout << "Welcome to the distributed chat application.\n";
+    } else {
+      std::cout << "Welcome " << username << " to the distributed chat application.\n";
+    }
     std::cout << "Please enter an action:\n";
     std::cout << "1. Login\n";
     std::cout << "2. Register\n";
     std::cout << "3. Exit\n";
     std::cout << "--------------------------------\n";
     std::cout << "Enter your choice: ";
-    std::cin >> input;
+    if (!(std::cin >> input)) {
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      std::cout << "\nInvalid choice. Please enter a valid choice.\n\n";
+      continue;
+    }
     std::cout << std::endl;
 
-    answer = std::stoi(input);
+    try {
+      answer = std::stoi(input);
+    } catch (const std::exception &) {
+      answer = -1;
+    }
     if (answer < 1 || answer > 3) {
       std::cout << "\nInvalid choice. Please enter a valid choice.\n\n";
     }

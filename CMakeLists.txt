@@ -11,8 +11,12 @@ add_library(utils
     src/utils/models/user.cpp
     src/utils/models/room.cpp
     src/utils/models/packet.cpp
+    src/utils/serializer.cpp
 )
 target_include_directories(utils PUBLIC include)
+target_link_libraries(utils PUBLIC ws2_32)
+
+find_package(Threads REQUIRED)
 
 # Server library
 add_library(server_lib
@@ -55,8 +59,8 @@ add_library(auth
 target_link_libraries(auth PUBLIC utils)
 
 target_include_directories(auth PUBLIC include)
-target_link_libraries(server_lib PUBLIC utils auth ws2_32)
-target_link_libraries(client_lib PUBLIC utils auth)
+target_link_libraries(server_lib PUBLIC utils auth ws2_32 Threads::Threads)
+target_link_libraries(client_lib PUBLIC utils auth ws2_32 Threads::Threads)
 
 # Tests
 include(CTest)

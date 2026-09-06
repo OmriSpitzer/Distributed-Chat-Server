@@ -1,7 +1,7 @@
 /**
  * RoomManager header file class
  *
- * @date 04-09-2026
+ * @date 06-09-2026
  */
 #pragma once
 #include "utils/models/room.h"
@@ -27,4 +27,7 @@ public:
 
   // broadcast a message to all rooms
   bool broadcastAll(const std::string &message);
+
+  // Lobby room
+  static const Room LOBBY;
 };

@@ -1,12 +1,11 @@
 /**
  * ClientSession header file class
  *
- * @date 14-07-2026
+ * @date 06-09-2026
  */
 #pragma once
 #include "utils/models/room.h"
 #include "utils/models/user.h"
-#include <string>
 
 class ClientSession {
 public:
@@ -16,10 +15,12 @@ public:
   // getters
   int getSocket() const;
   const User &getUser() const;
+  const Room &getRoom() const;
   bool isAuthenticated() const;
 
   // setters
   void setUser(const User &user);
+  void setRoom(const Room &room);
   void setAuthenticated(bool value);
 
 private:

@@ -10,9 +10,9 @@
 #include "client/packet_builder.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
+#include "utils/models/user.h"
 #include <atomic>
 #include <cstdint>
-#include <iostream>
 #include <optional>
 #include <string>
 
@@ -41,14 +41,23 @@ bool Client::isAlive() const { return network.isConnected(); }
 
 // showing the dashboard
 void Client::showDashboard() {
-  int answer = ui.showWelcome();
+  std::string username;
+  if (state.user) {
+    username = state.user->getUsername();
+  }
+
+  int answer = ui.showWelcome(username);
   switch (answer) {
   case 1: {
     std::optional<Packet> loginPacket = ui.showLogin();
     if (!loginPacket) {
       return;
     }
-    std::cout << loginPacket->serialize() << std::endl;
+    if (!network.sendPacket(*loginPacket, "Login request")) {
+      break;
+    }
+    state.user = User(loginPacket->sender, "", User::UserType::USER);
+    state.loggedIn = true;
     break;
   }
   case 2: {
@@ -56,7 +65,7 @@ void Client::showDashboard() {
     if (!registerPacket) {
       return;
     }
-    std::cout << registerPacket->serialize() << std::endl;
+    network.sendPacket(*registerPacket, "Register request");
     break;
   }
   case 3: {

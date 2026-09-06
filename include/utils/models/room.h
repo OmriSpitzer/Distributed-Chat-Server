@@ -1,7 +1,7 @@
 /**
  * Room header file class
  *
- * @date 13-07-2026
+ * @date 06-09-2026
  */
 
 #pragma once
@@ -31,7 +31,8 @@ public:
     FINANCE,
     LEGAL,
     CUSTOMER_SUPPORT,
-    OTHER
+    OTHER,
+    LOBBY
   };
 
   // constructor

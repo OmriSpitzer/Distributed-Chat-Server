@@ -2,7 +2,7 @@
  * User header file class
  *
  * @brief User class to store a user and its metadata (username, email, user_type)
- * @date 12-07-2026
+ * @date 06-09-2026
  */
 
 #pragma once
@@ -36,9 +36,13 @@ public:
   bool operator==(const User &other) const;
   bool operator!=(const User &other) const;
 
+  // anonymous user
+  static User anonymousUser();
+
 private:
   std::string username;     // username
   std::string email;        // email
   User::UserType user_type; // user type
-  static std::string typeToString(User::UserType user_type);
+
+  static std::string typeToString(User::UserType user_type); // type to string
 };

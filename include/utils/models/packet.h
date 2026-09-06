@@ -26,12 +26,6 @@ public:
   Packet(std::string sender, std::string receiver, PacketType type = PacketType::DEFAULT,
          std::string room = "", std::string message = "");
 
-  // serialize
-  std::string serialize() const;
-
-  // deserialize
-  static Packet deserialize(const std::string &data);
-
   // packet type
   PacketType type;
 

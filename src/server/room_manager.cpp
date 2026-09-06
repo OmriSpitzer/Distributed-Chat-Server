@@ -2,7 +2,7 @@
  * RoomManager class
  *
  * @brief Basic room lifecycle operations backed by the database.
- * @date 04-09-2026
+ * @date 06-09-2026
  */
 
 #include "server/room_manager.h"
@@ -66,3 +66,6 @@ bool RoomManager::broadcastAll(const std::string &message) {
   Logger::logInfo("RoomManager", "Message broadcasted to all rooms: " + message);
   return true;
 }
+
+// Lobby room
+const Room RoomManager::LOBBY = Room("Lobby", Room::RoomType::LOBBY);

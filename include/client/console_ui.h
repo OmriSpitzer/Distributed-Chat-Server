@@ -7,12 +7,12 @@
 
 #include "utils/models/packet.h"
 #include <optional>
-#include <string>
+#include <string_view>
 
 class ConsoleUI {
 public:
   // showing the welcome screen
-  static int showWelcome();
+  static int showWelcome(const std::string_view username);
 
   // showing the login screen; empty optional means the user went back
   static std::optional<Packet> showLogin();

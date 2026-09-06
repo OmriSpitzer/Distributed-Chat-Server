@@ -1,10 +1,11 @@
 /**
  * Client header file class
  *
- * @date 04-09-2026
+ * @date 06-09-2026
  */
 
 #pragma once
+#include "client/client_state.h"
 #include "client/console_ui.h"
 #include "client/network.h"
 #include "client/packet_builder.h"
@@ -31,4 +32,5 @@ private:
   ConsoleUI ui;          // console UI class
   PacketHandler handler; // packet handler class
   PacketBuilder builder; // packet builder class
+  ClientState state;     // client state class
 };

@@ -2,18 +2,83 @@
  * ConnectionManager class
  *
  * @brief Owns the listening socket and client sessions.
- * @date 14-07-2026
+ * @date 06-09-2026
  */
 
 #include "server/connection_manager.h"
+#include "server/packet_processor.h"
+#include "server/room_manager.h"
 #include "utils/models/logger.h"
+#include "utils/models/packet.h"
+#include "utils/serializer.h"
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
+#include <thread>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
-#include <ws2tcpip.h>
+
+namespace {
+constexpr std::uint32_t kMaxPayloadBytes = 1024 * 1024; // same as Serializer
+
+bool recvExact(SOCKET socket, char *buffer, int bytes) {
+  int received = 0;
+  while (received < bytes) {
+    int n = recv(socket, buffer + received, bytes - received, 0);
+    if (n <= 0) {
+      return false; // disconnect or error
+    }
+    received += n;
+  }
+  return true;
+}
+
+bool sendExact(SOCKET socket, const char *buffer, int bytes) {
+  int sent = 0;
+  while (sent < bytes) {
+    int n = send(socket, buffer + sent, bytes - sent, 0);
+    if (n == SOCKET_ERROR) {
+      return false;
+    }
+    sent += n;
+  }
+  return true;
+}
+
+std::optional<Packet> readPacket(SOCKET socket) {
+  char sizeBuf[4];
+  if (!recvExact(socket, sizeBuf, 4)) {
+    return std::nullopt;
+  }
+
+  std::uint32_t payloadSize =
+      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[0])) << 24) |
+      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[1])) << 16) |
+      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[2])) << 8) |
+      static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[3]));
+
+  if (payloadSize == 0 || payloadSize > kMaxPayloadBytes) {
+    return std::nullopt;
+  }
+
+  std::string framed(4 + payloadSize, '\0');
+  framed[0] = sizeBuf[0];
+  framed[1] = sizeBuf[1];
+  framed[2] = sizeBuf[2];
+  framed[3] = sizeBuf[3];
+
+  if (!recvExact(socket, framed.data() + 4, static_cast<int>(payloadSize))) {
+    return std::nullopt;
+  }
+
+  return Serializer::deserialize(framed);
+}
+} // namespace
 
 // constructor
 ConnectionManager::ConnectionManager() : listeningSocket(-1), listening(false) {}
@@ -89,3 +154,72 @@ int ConnectionManager::getListeningSocket() const { return listeningSocket; }
 
 // check if listening
 bool ConnectionManager::isListening() const { return listening; }
+
+// get sessions
+std::unordered_map<int, std::shared_ptr<ClientSession>> ConnectionManager::getSessions() const {
+  std::lock_guard<std::mutex> lock(sessionsMutex);
+  return sessions;
+}
+
+// accept loop
+void ConnectionManager::acceptLoop() {
+  while (listening) {
+    SOCKET client = accept(static_cast<SOCKET>(listeningSocket), nullptr, nullptr);
+    if (client == INVALID_SOCKET) {
+      break; // stopListening() closed the socket
+    }
+
+    int fd = static_cast<int>(client);
+    Logger::logInfo("ConnectionManager", "New client connected socket " + std::to_string(fd));
+
+    addSession(fd, std::make_shared<ClientSession>(fd, User::anonymousUser(), RoomManager::LOBBY));
+
+    // one blocking read-loop per client
+    std::thread([this, fd] { handleClient(fd); }).detach();
+  }
+}
+
+// handle the client
+void ConnectionManager::handleClient(int clientSocket) {
+  SOCKET sock = static_cast<SOCKET>(clientSocket);
+
+  while (listening) {
+    std::optional<Packet> packet = readPacket(sock);
+    if (!packet) {
+      break; // client hung up or bad frame
+    }
+
+    std::shared_ptr<ClientSession> session;
+    {
+      std::lock_guard<std::mutex> lock(sessionsMutex);
+      auto it = sessions.find(clientSocket);
+      if (it == sessions.end()) {
+        break;
+      }
+      session = it->second;
+    }
+
+    Packet response = PacketProcessor::processPacket(*packet, *session);
+    std::string framed = Serializer::serialize(response);
+    if (framed.empty() || !sendExact(sock, framed.data(), static_cast<int>(framed.size()))) {
+      break;
+    }
+  }
+
+  closesocket(sock);
+  removeSession(clientSocket);
+  Logger::logInfo("ConnectionManager",
+                  "Client disconnected, socket " + std::to_string(clientSocket));
+}
+
+// add new session
+void ConnectionManager::addSession(int socket, std::shared_ptr<ClientSession> session) {
+  std::lock_guard<std::mutex> lock(sessionsMutex);
+  sessions[socket] = std::move(session);
+}
+
+// remove session
+void ConnectionManager::removeSession(int socket) {
+  std::lock_guard<std::mutex> lock(sessionsMutex);
+  sessions.erase(socket);
+}

@@ -10,6 +10,7 @@
 #include "server/heartbeat.h"
 #include "server/packet_processor.h"
 #include "server/thread_pool.h"
+#include <thread>
 
 class Server {
 public:
@@ -26,9 +27,10 @@ public:
   int dashboard();
 
 private:
-  ThreadPool threadPool{config::THREAD_COUNT}; // worker threads
-  ConnectionManager connectionManager;         // client connections
-  PacketProcessor processor;                   // request routing
-  bool running = false;                        // running flag
-  Heartbeat heartbeat = Heartbeat(processor);  // heartbeat
+  ThreadPool threadPool{config::THREAD_COUNT};        // worker threads
+  ConnectionManager connectionManager;                // client connections
+  PacketProcessor processor;                          // request routing
+  bool running = false;                               // running flag
+  Heartbeat heartbeat = Heartbeat(connectionManager); // heartbeat
+  std::thread acceptThread;                           // accept thread
 };

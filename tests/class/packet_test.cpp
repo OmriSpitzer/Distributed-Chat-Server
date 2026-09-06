@@ -7,7 +7,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ctime>
-#include <stdexcept>
 #include <string>
 
 TEST_CASE("Default Packet has DEFAULT type and empty fields", "[packet][ctor]") {
@@ -59,6 +58,33 @@ TEST_CASE("Packet stores sender, receiver, type, room, and message", "[packet][c
     const Packet packet("alice", "server", Packet::PacketType::ROOM_LEAVE, "general");
     REQUIRE(packet.type == Packet::PacketType::ROOM_LEAVE);
     REQUIRE(packet.room == "general");
+  }
+
+  SECTION("HEARTBEAT") {
+    const Packet packet("heartbeat", "server", Packet::PacketType::HEARTBEAT, "", "ping");
+    REQUIRE(packet.type == Packet::PacketType::HEARTBEAT);
+    REQUIRE(packet.sender == "heartbeat");
+    REQUIRE(packet.receiver == "server");
+    REQUIRE(packet.room.empty());
+    REQUIRE(packet.message == "ping");
+  }
+
+  SECTION("REGISTER") {
+    const Packet packet("alice", "server", Packet::PacketType::REGISTER, "", "secret");
+    REQUIRE(packet.type == Packet::PacketType::REGISTER);
+    REQUIRE(packet.sender == "alice");
+    REQUIRE(packet.receiver == "server");
+    REQUIRE(packet.room.empty());
+    REQUIRE(packet.message == "secret");
+  }
+
+  SECTION("default type when omitted") {
+    const Packet packet("alice", "bob");
+    REQUIRE(packet.type == Packet::PacketType::DEFAULT);
+    REQUIRE(packet.sender == "alice");
+    REQUIRE(packet.receiver == "bob");
+    REQUIRE(packet.room.empty());
+    REQUIRE(packet.message.empty());
   }
 
   SECTION("empty fields") {
@@ -113,63 +139,13 @@ TEST_CASE("Packet copy preserves type and text fields", "[packet][copy]") {
     const Packet copied = original.copy();
     REQUIRE(copied.timestamp == original.timestamp);
   }
-}
 
-TEST_CASE("Packet serialize/deserialize round-trips fields", "[packet][serialize]") {
-  SECTION("LOGIN with empty room") {
-    Packet original("alice", "server", Packet::PacketType::LOGIN, "", "secret");
-    const Packet restored = Packet::deserialize(original.serialize());
-
-    REQUIRE(restored.type == original.type);
-    REQUIRE(restored.sender == original.sender);
-    REQUIRE(restored.receiver == original.receiver);
-    REQUIRE(restored.room.empty());
-    REQUIRE(restored.message == original.message);
-    REQUIRE(restored.timestamp == original.timestamp);
-  }
-
-  SECTION("REGISTER") {
-    Packet original("alice", "server", Packet::PacketType::REGISTER, "", "secret");
-    const Packet restored = Packet::deserialize(original.serialize());
-
-    REQUIRE(restored.type == Packet::PacketType::REGISTER);
-    REQUIRE(restored.sender == "alice");
-    REQUIRE(restored.message == "secret");
-  }
-
-  SECTION("MESSAGE with pipes, backslashes, and brackets") {
-    Packet original("alice", "bob", Packet::PacketType::MESSAGE, "general", "see [this]|and\\that");
-    const Packet restored = Packet::deserialize(original.serialize());
-
-    REQUIRE(restored.type == Packet::PacketType::MESSAGE);
-    REQUIRE(restored.room == "general");
-    REQUIRE(restored.message == "see [this]|and\\that");
-    REQUIRE(restored.timestamp == original.timestamp);
-  }
-
-  SECTION("multiline message") {
-    Packet original("alice", "bob", Packet::PacketType::MESSAGE, "general", "line1\nline2");
-    const Packet restored = Packet::deserialize(original.serialize());
-    REQUIRE(restored.message == "line1\nline2");
-  }
-}
-
-TEST_CASE("Packet deserialize rejects invalid payloads", "[packet][deserialize]") {
-  SECTION("empty payload") { REQUIRE_THROWS_AS(Packet::deserialize(""), std::invalid_argument); }
-
-  SECTION("wrong field count") {
-    REQUIRE_THROWS_AS(Packet::deserialize("LOGIN|alice|server"), std::invalid_argument);
-  }
-
-  SECTION("unknown type") {
-    REQUIRE_THROWS_AS(Packet::deserialize("NOPE|a|b|c|d|1"), std::invalid_argument);
-  }
-
-  SECTION("invalid timestamp") {
-    REQUIRE_THROWS_AS(Packet::deserialize("LOGIN|a|b|c|d|not-a-number"), std::invalid_argument);
-  }
-
-  SECTION("dangling escape") {
-    REQUIRE_THROWS_AS(Packet::deserialize("LOGIN|a|b|c|d\\"), std::invalid_argument);
+  SECTION("copy is independent of original") {
+    Packet original("alice", "bob", Packet::PacketType::MESSAGE, "general", "hello");
+    Packet copied = original.copy();
+    original.sender = "changed";
+    original.message = "mutated";
+    REQUIRE(copied.sender == "alice");
+    REQUIRE(copied.message == "hello");
   }
 }

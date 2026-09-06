@@ -1,13 +1,16 @@
 /**
  * Configuration file for the server
  *
- * @date 14-07-2026
+ * @date 06-09-2026
  */
 #pragma once
 #include <cstdint>
 #include <string>
 
 namespace config {
+
+// server host
+inline const std::string SERVER_HOST = "127.0.0.1";
 
 // TCP port the server listens on
 inline constexpr std::uint16_t PORT = 5555;

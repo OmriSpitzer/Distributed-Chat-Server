@@ -1,24 +1,24 @@
 /**
  * ClientState header file class
  *
- * @date 14-07-2026
+ * @date 06-09-2026
  */
 #pragma once
 #include "utils/models/room.h"
 #include "utils/models/user.h"
-#include <string>
+#include <optional>
 
 class ClientState {
 public:
   // user
-  User user;
+  std::optional<User> user;
 
   // current room
-  Room currentRoom;
+  std::optional<Room> currentRoom;
 
   // connected
-  bool connected;
+  bool connected = false;
 
   // logged in
-  bool loggedIn;
+  bool loggedIn = false;
 };
