@@ -12,6 +12,7 @@
 #include "utils/RESPONSE_CODES.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
+#include "utils/models/room.h"
 #include "utils/models/user.h"
 #include <any>
 #include <atomic>
@@ -60,13 +61,15 @@ void Client::showDashboard() {
       std::optional<Packet> response;
       do {
         response = network.receivePacket();
-      } while (response && response->type == Packet::PacketType::HEARTBEAT);
+      } while (response && (response->type == Packet::PacketType::HEARTBEAT ||
+                            response->type == Packet::PacketType::MESSAGE));
 
       if (response && response->type == Packet::PacketType::LOGIN) {
         std::optional<std::any> result = handler.handlePacket(*response);
         if (result) {
           state.user = std::any_cast<User>(*result);
           state.loggedIn = true;
+          state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
         }
       }
 
@@ -85,13 +88,15 @@ void Client::showDashboard() {
       std::optional<Packet> response;
       do {
         response = network.receivePacket();
-      } while (response && response->type == Packet::PacketType::HEARTBEAT);
+      } while (response && (response->type == Packet::PacketType::HEARTBEAT ||
+                            response->type == Packet::PacketType::MESSAGE));
 
       if (response && response->type == Packet::PacketType::REGISTER) {
         std::optional<std::any> result = handler.handlePacket(*response);
         if (result) {
           state.user = std::any_cast<User>(*result);
           state.loggedIn = true;
+          state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
         }
       }
 
@@ -112,6 +117,42 @@ void Client::showDashboard() {
       break;
     }
     case 2: {
+      std::optional<Packet> joinRoomPacket = ui.showJoinRoom(*state.user);
+
+      if (!joinRoomPacket) {
+        break;
+      }
+
+      // send the join room request
+      if (!network.sendPacket(*joinRoomPacket, "Join room request")) {
+        break;
+      }
+
+      // receive the join room response, skipping heartbeat packets
+      std::optional<Packet> response;
+      do {
+        response = network.receivePacket();
+      } while (response && (response->type == Packet::PacketType::HEARTBEAT ||
+                            response->type == Packet::PacketType::MESSAGE));
+
+      if (response && response->type == Packet::PacketType::ROOM_JOIN) {
+        if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+          state.currentRoom = Room(response->room);
+
+          // TODO: change visuals
+        }
+      }
+      break;
+    }
+    case 3: {
+      // TODO: leave room
+      break;
+    }
+    case 4: {
+      // TODO: send message
+      break;
+    }
+    case 5: {
       std::optional<Packet> logout = PacketBuilder::buildLogout(*state.user);
 
       if (!network.sendPacket(*logout, "Logout request")) {
@@ -122,7 +163,8 @@ void Client::showDashboard() {
       std::optional<Packet> response;
       do {
         response = network.receivePacket();
-      } while (response && response->type == Packet::PacketType::HEARTBEAT);
+      } while (response && (response->type == Packet::PacketType::HEARTBEAT ||
+                            response->type == Packet::PacketType::MESSAGE));
 
       if (response && response->type == Packet::PacketType::LOGOUT) {
         if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {

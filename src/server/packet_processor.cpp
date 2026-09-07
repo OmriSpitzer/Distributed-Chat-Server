@@ -103,10 +103,44 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // message packet
+  // message packet
   case Packet::PacketType::MESSAGE: {
+    // check if the session is authenticated
+    if (!session.isAuthenticated()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "not authenticated";
+      break;
+    }
 
-    response.message = session.isAuthenticated() ? "message delivered" : "not authenticated";
+    // check if the message is not empty
+    if (packet.message.empty()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "empty message";
+      break;
+    }
+
+    // get the room
+    const Room &room = session.getRoom();
+
+    Message stored(session.getUser(), User::anonymousUser(), packet.message);
+
+    // TODO: save the message to the database
+
+    // create a push packet
+    Packet push = packet.copy();
+    push.sender = session.getUser().getUsername();
+    push.receiver = "";
+    push.room = room.getName();
+    push.message = packet.message;
+    push.type = Packet::PacketType::MESSAGE;
+    push.responseCode = 0;
+
+    // broadcast the message to the room
+    RoomManager::getInstance().broadcast(room, push, connections, session.getSocket());
+
+    // ack only
+    response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+    response.message = "ok";
     break;
   }
 

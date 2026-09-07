@@ -98,7 +98,7 @@ Today `ROOM_JOIN` only sets `response.message = "joined " + packet.room`. Change
 
 `RoomManager::broadcast` must talk to live sessions, not the database.
 
-### Step 1.2 — Handle `MESSAGE` for real
+### Done : Step 1.2 — Handle `MESSAGE` for real
 
 **File:** `src/server/packet_processor.cpp` (`case PacketType::MESSAGE`)
 

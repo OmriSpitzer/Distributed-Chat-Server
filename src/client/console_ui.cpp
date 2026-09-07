@@ -60,13 +60,15 @@ int ConsoleUI::showUserDashboard(const ClientState &state) {
 
   int answer = -1;
   std::string input = "-1";
-
   // show the user dashboard
   do {
     std::cout << "=== User Dashboard ===\n";
     std::cout << "Welcome " << state.user->getUsername() << ".\n";
     std::cout << "1. Update Profile\n";
-    std::cout << "2. Logout\n";
+    std::cout << "2. Join Room\n";
+    std::cout << "3. Leave Room\n";
+    std::cout << "4. Send Message\n";
+    std::cout << "5. Logout\n";
     std::cout << "--------------------------------\n";
     std::cout << "Enter your choice: ";
     if (!(std::cin >> input)) {
@@ -82,10 +84,10 @@ int ConsoleUI::showUserDashboard(const ClientState &state) {
     } catch (const std::exception &) {
       answer = -1;
     }
-    if (answer < 1 || answer > 2) {
+    if (answer < 1 || answer > 5) {
       std::cout << "\nInvalid choice. Please enter a valid choice.\n\n";
     }
-  } while (answer < 1 || answer > 2);
+  } while (answer < 1 || answer > 5);
   return answer;
 }
 
@@ -175,3 +177,32 @@ std::optional<Packet> ConsoleUI::showRegister() {
 
   return PacketBuilder::buildRegister(username, password, email);
 }
+
+// showing the join room screen
+std::optional<Packet> ConsoleUI::showJoinRoom(const User &user) {
+  std::string roomName;
+
+  // drop the leftover '\n' from the previous cin >> in showUserDashboard
+  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+  do {
+    std::cout << ">> Which room do you want to join? (type 'exit' to go back): ";
+
+    // TODO: show the list of available rooms
+
+    std::getline(std::cin, roomName);
+    std::cout << std::endl;
+
+    if (roomName == "exit") {
+      return std::nullopt;
+    }
+
+    // TODO: check if the room exists
+    break;
+  } while (true);
+
+  return PacketBuilder::buildJoinRoom(user.getUsername(), roomName);
+}
+
+// showing the leave room screen
+std::optional<Packet> ConsoleUI::showLeaveRoom() { return std::nullopt; }

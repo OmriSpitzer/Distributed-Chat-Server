@@ -7,6 +7,7 @@
 
 #include "client/client_state.h"
 #include "utils/models/packet.h"
+#include "utils/models/user.h"
 #include <optional>
 #include <string_view>
 
@@ -23,4 +24,10 @@ public:
 
   // showing the register screen
   static std::optional<Packet> showRegister();
+
+  // showing the join room screen
+  static std::optional<Packet> showJoinRoom(const User &user);
+
+  // showing the leave room screen
+  static std::optional<Packet> showLeaveRoom();
 };
