@@ -27,3 +27,18 @@ std::any DatabaseManager::getUser(const std::string_view &username,
   }
   return std::string("User not found");
 }
+
+// create user
+User DatabaseManager::createUser(const std::string_view &username, const std::string_view &password,
+                                 const std::string_view &email) {
+  std::map<std::string, std::string> row{
+      {"username", std::string(username)},
+      {"password", std::string(password)},
+      {"email", std::string(email)},
+      {"type", User::typeToString(User::UserType::USER)},
+  };
+  data.users.push_back(row);
+
+  User user(username, email, User::UserType::USER);
+  return user;
+}

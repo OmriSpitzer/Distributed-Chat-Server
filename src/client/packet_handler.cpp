@@ -17,33 +17,17 @@
 std::optional<std::any> PacketHandler::handlePacket(const Packet &packet) {
   std::optional<std::any> result = std::nullopt;
   switch (packet.type) {
-  case Packet::PacketType::MESSAGE:
-    handleMessage(packet);
-    break;
   case Packet::PacketType::LOGIN:
+  case Packet::PacketType::REGISTER:
     if (auto user = handleLogin(packet)) {
       result = std::any{*user};
     }
-    break;
-  case Packet::PacketType::REGISTER:
-    handleRegister(packet);
-    break;
-  case Packet::PacketType::ROOM_JOIN:
-    handleRoomJoin(packet);
-    break;
-  case Packet::PacketType::ROOM_LEAVE:
-    handleRoomLeave(packet);
     break;
   default:
     break;
   }
 
   return result;
-}
-
-// handling a message packet
-void PacketHandler::handleMessage(const Packet &packet) {
-  std::cout << packet.sender << ": " << packet.message << '\n';
 }
 
 // handling a login packet
@@ -59,19 +43,4 @@ std::optional<User> PacketHandler::handleLogin(const Packet &packet) {
     std::cout << "Login failed: " << e.what() << '\n';
     return std::nullopt;
   }
-}
-
-// handling a register packet
-void PacketHandler::handleRegister(const Packet &packet) {
-  std::cout << "Register response: " << packet.message << '\n';
-}
-
-// handling a room leave packet
-void PacketHandler::handleRoomLeave(const Packet &packet) {
-  std::cout << "Left room: " << packet.message << '\n';
-}
-
-// handling a room join packet
-void PacketHandler::handleRoomJoin(const Packet &packet) {
-  std::cout << "Joined room: " << packet.message << '\n';
 }

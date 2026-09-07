@@ -76,7 +76,24 @@ void Client::showDashboard() {
       if (!registerPacket) {
         return;
       }
-      network.sendPacket(*registerPacket, "Register request");
+      if (!network.sendPacket(*registerPacket, "Register request")) {
+        break;
+      }
+
+      // receive the login response, skipping heartbeat packets
+      std::optional<Packet> response;
+      do {
+        response = network.receivePacket();
+      } while (response && response->type == Packet::PacketType::HEARTBEAT);
+
+      if (response && response->type == Packet::PacketType::REGISTER) {
+        std::optional<std::any> result = handler.handlePacket(*response);
+        if (result) {
+          state.user = std::any_cast<User>(*result);
+          state.loggedIn = true;
+        }
+      }
+
       break;
     }
     case 3: {
@@ -94,9 +111,25 @@ void Client::showDashboard() {
       break;
     }
     case 2: {
-      state.user.reset();
-      state.currentRoom.reset();
-      state.loggedIn = false;
+      std::optional<Packet> logout = PacketBuilder::buildLogout(*state.user);
+
+      if (!network.sendPacket(*logout, "Logout request")) {
+        break;
+      }
+
+      // receive the login response, skipping heartbeat packets
+      std::optional<Packet> response;
+      do {
+        response = network.receivePacket();
+      } while (response && response->type == Packet::PacketType::HEARTBEAT);
+
+      if (response && response->type == Packet::PacketType::LOGOUT) {
+        if (response->responseCode == 200) {
+          state.user.reset();
+          state.loggedIn = false;
+          state.currentRoom.reset();
+        }
+      }
       break;
     }
     default:

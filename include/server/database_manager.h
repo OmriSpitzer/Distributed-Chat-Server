@@ -5,6 +5,7 @@
  */
 #pragma once
 #include "data/data.h"
+#include "utils/models/user.h"
 #include <any>
 #include <string>
 #include <string_view>
@@ -19,6 +20,10 @@ public:
 
   // get user
   std::any getUser(const std::string_view &username, const std::string_view &password);
+
+  // create user
+  User createUser(const std::string_view &username, const std::string_view &password,
+                  const std::string_view &email);
 
   // delete copy constructor and assignment operator
   DatabaseManager(const DatabaseManager &) = delete;

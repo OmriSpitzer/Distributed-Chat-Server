@@ -20,11 +20,23 @@ Packet PacketBuilder::buildLogin(const std::string &username, const std::string 
   return packet;
 }
 
+// build a register packet
+Packet PacketBuilder::buildRegister(const std::string &username, const std::string &password,
+                                    const std::string &email) {
+  Packet packet;
+  packet.type = Packet::PacketType::REGISTER;
+  packet.sender = username;
+  packet.message = password + "|" + email;
+  packet.timestamp = static_cast<uint64_t>(std::time(nullptr));
+  return packet;
+}
+
 // build a logout packet
-Packet PacketBuilder::buildLogout(const std::string &username) {
+Packet PacketBuilder::buildLogout(const User &user) {
   Packet packet;
   packet.type = Packet::PacketType::LOGOUT;
-  packet.sender = username;
+  packet.sender = user.getUsername();
+  packet.message = user.getEmail();
   packet.timestamp = static_cast<uint64_t>(std::time(nullptr));
   return packet;
 }
@@ -56,17 +68,6 @@ Packet PacketBuilder::buildLeaveRoom(const std::string &username, const std::str
   packet.type = Packet::PacketType::ROOM_LEAVE;
   packet.sender = username;
   packet.room = room;
-  packet.timestamp = static_cast<uint64_t>(std::time(nullptr));
-  return packet;
-}
-
-// build a register packet
-Packet PacketBuilder::buildRegister(const std::string &username, const std::string &password,
-                                    const std::string &email) {
-  Packet packet;
-  packet.type = Packet::PacketType::REGISTER;
-  packet.sender = username;
-  packet.message = password + " " + email;
   packet.timestamp = static_cast<uint64_t>(std::time(nullptr));
   return packet;
 }
