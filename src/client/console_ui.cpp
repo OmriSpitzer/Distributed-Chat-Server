@@ -2,33 +2,30 @@
  * ConsoleUI class
  *
  * @brief Simple stdout-based user interface.
- * @date 06-09-2026
+ * @date 07-09-2026
  */
 
 #include "client/console_ui.h"
 #include "auth/authentication.h"
+#include "client/client_state.h"
 #include "client/packet_builder.h"
 #include "utils/models/packet.h"
-#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
 
-// showing the welcome screen
-int ConsoleUI::showWelcome(const std::string_view username) {
+// showing the home screen
+int ConsoleUI::showHomeScreen() {
   int answer = -1;
   std::string input = "-1";
 
-  // show the welcome screen until the user enters a valid choice
+  // show the home screen
   do {
     std::cout << "=== Distributed Chat Application ===\n";
-    if (username.empty()) {
-      std::cout << "Welcome to the distributed chat application.\n";
-    } else {
-      std::cout << "Welcome " << username << " to the distributed chat application.\n";
-    }
+    std::cout << "Welcome to the distributed chat application.\n";
+
     std::cout << "Please enter an action:\n";
     std::cout << "1. Login\n";
     std::cout << "2. Register\n";
@@ -55,12 +52,49 @@ int ConsoleUI::showWelcome(const std::string_view username) {
   return answer;
 }
 
+// showing the user dashboard
+int ConsoleUI::showUserDashboard(const ClientState &state) {
+  if (!state.user) {
+    return -1;
+  }
+
+  int answer = -1;
+  std::string input = "-1";
+
+  // show the user dashboard
+  do {
+    std::cout << "=== User Dashboard ===\n";
+    std::cout << "Welcome " << state.user->getUsername() << ".\n";
+    std::cout << "1. Update Profile\n";
+    std::cout << "2. Logout\n";
+    std::cout << "--------------------------------\n";
+    std::cout << "Enter your choice: ";
+    if (!(std::cin >> input)) {
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      std::cout << "\nInvalid choice. Please enter a valid choice.\n\n";
+      continue;
+    }
+    std::cout << std::endl;
+
+    try {
+      answer = std::stoi(input);
+    } catch (const std::exception &) {
+      answer = -1;
+    }
+    if (answer < 1 || answer > 2) {
+      std::cout << "\nInvalid choice. Please enter a valid choice.\n\n";
+    }
+  } while (answer < 1 || answer > 2);
+  return answer;
+}
+
 // showing the login screen
 std::optional<Packet> ConsoleUI::showLogin() {
   std::string username;
   std::string password;
 
-  // drop the leftover '\n' from the previous cin >> in showWelcome
+  // drop the leftover '\n' from the previous cin >> in showHomeScreen
   std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
   do {
@@ -98,7 +132,7 @@ std::optional<Packet> ConsoleUI::showRegister() {
   std::string password;
   std::string email;
 
-  // drop the leftover '\n' from the previous cin >> in showWelcome
+  // drop the leftover '\n' from the previous cin >> in showHomeScreen
   std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
   do {

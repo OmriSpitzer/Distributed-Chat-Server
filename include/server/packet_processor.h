@@ -16,7 +16,8 @@ class ConnectionManager; // forward declaration
 class PacketProcessor {
 public:
   // process a packet
-  static Packet processPacket(const Packet &packet, ClientSession &session);
+  static Packet processPacket(const Packet &packet, ClientSession &session,
+                              ConnectionManager &connections);
 
   // process a heartbeat packet
   static Packet processHeartbeatPacket(const Packet &packet, ConnectionManager &connections);

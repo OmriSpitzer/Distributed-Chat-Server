@@ -200,7 +200,7 @@ void ConnectionManager::handleClient(int clientSocket) {
     }
 
     // process the packet
-    Packet response = PacketProcessor::processPacket(*packet, *session);
+    Packet response = PacketProcessor::processPacket(*packet, *session, *this);
 
     // generate a response packet
     std::string framed = Serializer::serialize(response);
@@ -225,4 +225,16 @@ void ConnectionManager::addSession(int socket, std::shared_ptr<ClientSession> se
 void ConnectionManager::removeSession(int socket) {
   std::lock_guard<std::mutex> lock(sessionsMutex);
   sessions.erase(socket);
+}
+
+// does the user have a session
+bool ConnectionManager::hasSession(const User &user) const {
+  std::lock_guard<std::mutex> lock(sessionsMutex);
+  for (const auto &entry : sessions) {
+    const ClientSession &session = *entry.second;
+    if (session.getUser() == user) {
+      return true;
+    }
+  }
+  return false;
 }

@@ -43,51 +43,64 @@ bool Client::isAlive() const { return network.isConnected(); }
 
 // showing the dashboard
 void Client::showDashboard() {
-  std::string username;
-  if (state.user) {
-    username = state.user->getUsername();
-  }
+  if (!state.loggedIn || !state.user) {
+    int answer = ui.showHomeScreen();
+    switch (answer) {
+    case 1: {
+      std::optional<Packet> loginPacket = ui.showLogin();
+      if (!loginPacket) {
+        return;
+      }
+      if (!network.sendPacket(*loginPacket, "Login request")) {
+        break;
+      }
 
-  int answer = ui.showWelcome(username);
-  switch (answer) {
-  case 1: {
-    std::optional<Packet> loginPacket = ui.showLogin();
-    if (!loginPacket) {
-      return;
-    }
-    if (!network.sendPacket(*loginPacket, "Login request")) {
+      // receive the login response, skipping heartbeat packets
+      std::optional<Packet> response;
+      do {
+        response = network.receivePacket();
+      } while (response && response->type == Packet::PacketType::HEARTBEAT);
+
+      if (response && response->type == Packet::PacketType::LOGIN) {
+        std::optional<std::any> result = handler.handlePacket(*response);
+        if (result) {
+          state.user = std::any_cast<User>(*result);
+          state.loggedIn = true;
+        }
+      }
+
       break;
     }
-
-    // receive the login response, skipping heartbeat packets
-    std::optional<Packet> response;
-    do {
-      response = network.receivePacket();
-    } while (response && response->type == Packet::PacketType::HEARTBEAT);
-
-    if (response && response->type == Packet::PacketType::LOGIN) {
-      std::optional<std::any> result = handler.handlePacket(*response);
-      if (result) {
-        state.user = std::any_cast<User>(*result);
-        state.loggedIn = true;
+    case 2: {
+      std::optional<Packet> registerPacket = ui.showRegister();
+      if (!registerPacket) {
+        return;
       }
+      network.sendPacket(*registerPacket, "Register request");
+      break;
     }
-
-    break;
-  }
-  case 2: {
-    std::optional<Packet> registerPacket = ui.showRegister();
-    if (!registerPacket) {
-      return;
+    case 3: {
+      stop();
+      break;
     }
-    network.sendPacket(*registerPacket, "Register request");
-    break;
-  }
-  case 3: {
-    stop();
-    break;
-  }
-  default:
-    break;
+    default:
+      break;
+    }
+  } else {
+    int answer = ui.showUserDashboard(state);
+    switch (answer) {
+    case 1: {
+      // TODO: update profile
+      break;
+    }
+    case 2: {
+      state.user.reset();
+      state.currentRoom.reset();
+      state.loggedIn = false;
+      break;
+    }
+    default:
+      break;
+    }
   }
 }

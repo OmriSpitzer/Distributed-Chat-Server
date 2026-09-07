@@ -14,7 +14,8 @@
 #include <string>
 
 // process a packet
-Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &session) {
+Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &session,
+                                      ConnectionManager &connections) {
   // create a response packet
   Packet response = packet.copy();
   response.sender = "server";
@@ -35,6 +36,14 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       }
 
       User user = std::any_cast<User>(dbResult);
+
+      // check if there is a session of the same user
+      if (connections.hasSession(user)) {
+        response.responseCode = 401;
+        response.message = "user already logged in";
+        break;
+      }
+
       session.setUser(user);
       session.setAuthenticated(true);
 

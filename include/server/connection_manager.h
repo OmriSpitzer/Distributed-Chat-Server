@@ -39,6 +39,9 @@ public:
   // stop accepting packets
   void stopAccepting();
 
+  // does the user have a session
+  bool hasSession(const User &user) const;
+
 private:
   int listeningSocket; // listening socket file descriptor
   std::unordered_map<int, std::shared_ptr<ClientSession>> sessions; // sessions
