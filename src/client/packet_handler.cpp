@@ -6,6 +6,7 @@
  */
 
 #include "client/packet_handler.h"
+#include "utils/RESPONSE_CODES.h"
 #include "utils/models/packet.h"
 #include "utils/models/user.h"
 #include <any>
@@ -32,7 +33,7 @@ std::optional<std::any> PacketHandler::handlePacket(const Packet &packet) {
 
 // handling a login packet
 std::optional<User> PacketHandler::handleLogin(const Packet &packet) {
-  if (packet.responseCode != 200) {
+  if (packet.responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
     std::cout << "Login failed: " << packet.message << '\n';
     return std::nullopt;
   }

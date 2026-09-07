@@ -2,21 +2,28 @@
  * Message class
  *
  * @brief Message class to store a message and its metadata (from, to, content, timestamp, id)
- * @date 04-09-2026
+ * @date 07-09-2026
  */
 
 #include "utils/models/message.h"
+#include "config/config.h"
 #include <atomic>
+#include <ctime>
 
 // unique message id generator
 namespace {
+// message id : <nodeId>-<unix_time>-<local_counter>
+// local counter
 std::atomic<uint64_t> next_message_id{0};
-}
+
+// id prefix
+std::string idPrefix = config::NODE_ID + "-" + std::to_string(std::time(nullptr)) + "-";
+} // namespace
 
 // constructor
 Message::Message(const User &from, const User &to, std::string_view message)
     : from(from), to(to), content(message), timestamp(std::time(nullptr)),
-      id(std::to_string(++next_message_id)) {}
+      id(idPrefix + std::to_string(++next_message_id)) {}
 
 // getters
 const User &Message::getFrom() const { return this->from; }

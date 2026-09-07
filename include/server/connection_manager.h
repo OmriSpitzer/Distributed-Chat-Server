@@ -5,6 +5,7 @@
  */
 #pragma once
 #include "server/client_session.h"
+#include "utils/models/packet.h"
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -42,11 +43,18 @@ public:
   // does the user have a session
   bool hasSession(const User &user) const;
 
+  // send a packet to a connected client
+  bool sendPacket(int socket, const Packet &packet);
+
+  // close a client socket so its read loop exits
+  void closeClient(int socket);
+
 private:
   int listeningSocket; // listening socket file descriptor
   std::unordered_map<int, std::shared_ptr<ClientSession>> sessions; // sessions
   bool listening;                                                   // is the server listening
   mutable std::mutex sessionsMutex;                                 // sessions mutex
+  std::mutex sendMutex;                                             // guards socket sends
 
   // handle the client
   void handleClient(int clientSocket);

@@ -9,6 +9,7 @@
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
 #include "server/room_manager.h"
+#include "utils/RESPONSE_CODES.h"
 #include "utils/models/user.h"
 #include <any>
 #include <exception>
@@ -31,7 +32,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       // get the user from the database
       std::any dbResult = DatabaseManager::getInstance().getUser(packet.sender, packet.message);
       if (const auto *error = std::any_cast<std::string>(&dbResult)) {
-        response.responseCode = 401;
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = *error;
         break;
       }
@@ -40,7 +41,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
       // check if there is a session of the same user
       if (connections.hasSession(user)) {
-        response.responseCode = 401;
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "user already logged in";
         break;
       }
@@ -48,10 +49,10 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       session.setUser(user);
       session.setAuthenticated(true);
 
-      response.responseCode = 200;
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
     } catch (const std::exception &e) {
-      response.responseCode = 500;
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
       response.message = std::string("login failed: ") + e.what();
     }
     break;
@@ -63,7 +64,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       // get the user from the database
       std::any dbResult = DatabaseManager::getInstance().getUser(packet.sender, packet.message);
       if (const auto *user = std::any_cast<User>(&dbResult)) {
-        response.responseCode = 401;
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "user already exists";
         break;
       }
@@ -80,10 +81,10 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       session.setUser(user);
       session.setAuthenticated(true);
 
-      response.responseCode = 200;
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
     } catch (const std::exception &e) {
-      response.responseCode = 500;
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
       response.message = std::string("register failed: ") + e.what();
     }
     break;
@@ -96,7 +97,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     session.setUser(User::anonymousUser());
     session.setRoom(RoomManager::LOBBY);
 
-    response.responseCode = 200;
+    response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
     response.message = "logged out";
     break;
   }

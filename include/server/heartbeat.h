@@ -1,9 +1,8 @@
 /**
  * Heartbeat header file class
  *
- * @date 06-09-2026
+ * @date 07-09-2026
  */
-
 #pragma once
 #include "server/connection_manager.h"
 #include <atomic>
@@ -36,5 +35,4 @@ private:
   std::mutex heartbeat_mutex;                 // heartbeat mutex
   std::condition_variable condition_variable; // heartbeat condition variable
   std::atomic<bool> stopped{true};            // stopped
-  static constexpr int INTERVAL = 5000;       // interval in milliseconds
 };

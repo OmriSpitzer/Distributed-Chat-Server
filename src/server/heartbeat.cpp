@@ -1,11 +1,12 @@
 /**
  * Heartbeat class
  *
- * @brief Periodic liveness signal (stub for this pass).
- * @date 06-09-2026
+ * @brief Periodic keepalive: ping live clients and drop silent sockets.
+ * @date 07-09-2026
  */
 
 #include "server/heartbeat.h"
+#include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/packet_processor.h"
 #include "utils/models/logger.h"
@@ -32,7 +33,7 @@ void Heartbeat::start() {
     std::unique_lock lock(heartbeat_mutex);
 
     while (!stopped) {
-      if (condition_variable.wait_for(lock, std::chrono::milliseconds(INTERVAL),
+      if (condition_variable.wait_for(lock, std::chrono::milliseconds(config::HEARTBEAT_INTERVAL),
                                       [this] { return stopped.load(); })) {
         break;
       }
@@ -40,9 +41,20 @@ void Heartbeat::start() {
       // in mutex create a new packet and process it
       lock.unlock();
 
+      auto sessions = connections.getSessions();
+      Packet ping("server", "", Packet::PacketType::HEARTBEAT, "", "ping");
+      for (const auto &entry : sessions) {
+        const ClientSession &session = *entry.second;
+        if (!session.isAlive()) {
+          connections.closeClient(session.getSocket());
+          continue;
+        }
+        connections.sendPacket(session.getSocket(), ping);
+      }
+
       Packet tick("heartbeat", "server", Packet::PacketType::HEARTBEAT, "", "ping");
-      Packet response = PacketProcessor::processHeartbeatPacket(tick, connections);
-      Logger::logHeartbeat("Heartbeat", response.message);
+      Packet summary = PacketProcessor::processHeartbeatPacket(tick, connections);
+      Logger::logHeartbeat("Heartbeat", summary.message);
 
       lock.lock();
     }

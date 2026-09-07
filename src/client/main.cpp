@@ -5,8 +5,13 @@
  */
 
 #include "client/client.h"
+#include "config/config.h"
 
-int main() {
+int main(int argc, char *argv[]) {
+  if (!config::parseArgs(argc, argv)) {
+    return 1;
+  }
+
   Client client;
   // start the client
   if (!client.start()) {

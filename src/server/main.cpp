@@ -4,9 +4,14 @@
  * @date 14-07-2026
  */
 
+#include "config/config.h"
 #include "server/server.h"
 
-int main() {
+int main(int argc, char *argv[]) {
+  if (!config::parseArgs(argc, argv)) {
+    return 1;
+  }
+
   Server server;
 
   // Starting server

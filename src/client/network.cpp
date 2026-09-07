@@ -34,6 +34,47 @@ bool recvExact(SOCKET socket, char *buffer, int bytes) {
   }
   return true;
 }
+
+bool sendExact(SOCKET socket, const char *buffer, int bytes) {
+  int sent = 0;
+  while (sent < bytes) {
+    int n = send(socket, buffer + sent, bytes - sent, 0);
+    if (n == SOCKET_ERROR) {
+      return false;
+    }
+    sent += n;
+  }
+  return true;
+}
+
+std::optional<Packet> readPacket(SOCKET socket) {
+  char sizeBuf[4];
+  if (!recvExact(socket, sizeBuf, 4)) {
+    return std::nullopt;
+  }
+
+  std::uint32_t payloadSize =
+      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[0])) << 24) |
+      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[1])) << 16) |
+      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[2])) << 8) |
+      static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[3]));
+
+  if (payloadSize == 0 || payloadSize > kMaxPayloadBytes) {
+    return std::nullopt;
+  }
+
+  std::string framed(4 + payloadSize, '\0');
+  framed[0] = sizeBuf[0];
+  framed[1] = sizeBuf[1];
+  framed[2] = sizeBuf[2];
+  framed[3] = sizeBuf[3];
+
+  if (!recvExact(socket, framed.data() + 4, static_cast<int>(payloadSize))) {
+    return std::nullopt;
+  }
+
+  return Serializer::deserialize(framed);
+}
 } // namespace
 
 // destructor
@@ -83,45 +124,64 @@ bool Network::connect() {
 
   clientSocket = static_cast<int>(socketFd);
   connected = true;
+  readerThread = std::thread([this] { readerLoop(); });
   return true;
 }
 
 // disconnecting from the server
 void Network::disconnect() {
-  if (clientSocket != -1) {
-    closesocket(static_cast<SOCKET>(clientSocket));
+  const bool wasConnected = connected.exchange(false);
+  incomingCv.notify_all();
+
+  int fd = -1;
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    fd = clientSocket;
     clientSocket = -1;
   }
+  if (fd != -1) {
+    closesocket(static_cast<SOCKET>(fd));
+  }
+
+  if (readerThread.joinable()) {
+    readerThread.join();
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    while (!incoming.empty()) {
+      incoming.pop();
+    }
+  }
+
   if (winsockStarted) {
     WSACleanup();
     winsockStarted = false;
   }
-  if (connected) {
+  if (wasConnected) {
     Logger::logInfo("Network", "Disconnected from server");
   }
-  connected = false;
 }
 
 // sending a packet to the server
 bool Network::sendPacket(const Packet &packet, std::string_view message) {
+  (void)message;
   std::string serialized = Serializer::serialize(packet);
   if (serialized.empty()) {
     Logger::logError("Network", "Failed to serialize packet");
     return false;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(mutex);
-    if (!connected) {
-      std::cout << "Not connected to the server\n";
-      return false;
-    }
+  std::lock_guard<std::mutex> lock(mutex);
+  if (!connected || clientSocket == -1) {
+    std::cout << "Not connected to the server\n";
+    return false;
+  }
 
-    if (send(clientSocket, serialized.c_str(), static_cast<int>(serialized.size()), 0) ==
-        SOCKET_ERROR) {
-      Logger::logError("Network", "Failed to send packet to the server");
-      return false;
-    }
+  if (!sendExact(static_cast<SOCKET>(clientSocket), serialized.c_str(),
+                 static_cast<int>(serialized.size()))) {
+    Logger::logError("Network", "Failed to send packet to the server");
+    return false;
   }
 
   return true;
@@ -129,51 +189,50 @@ bool Network::sendPacket(const Packet &packet, std::string_view message) {
 
 // receiving a packet from the server
 std::optional<Packet> Network::receivePacket() {
-  std::string framed;
-  {
-    std::lock_guard<std::mutex> lock(mutex);
-    if (!connected || clientSocket == -1) {
-      Logger::logError("Network", "Not connected to the server");
-      return std::nullopt;
-    }
-
-    SOCKET sock = static_cast<SOCKET>(clientSocket);
-    char sizeBuf[4];
-    if (!recvExact(sock, sizeBuf, 4)) {
-      Logger::logError("Network", "Failed to receive packet size");
-      return std::nullopt;
-    }
-
-    std::uint32_t payloadSize =
-        (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[0])) << 24) |
-        (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[1])) << 16) |
-        (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[2])) << 8) |
-        static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[3]));
-
-    if (payloadSize == 0 || payloadSize > kMaxPayloadBytes) {
-      Logger::logError("Network", "Invalid packet size");
-      return std::nullopt;
-    }
-
-    framed.assign(4 + payloadSize, '\0');
-    framed[0] = sizeBuf[0];
-    framed[1] = sizeBuf[1];
-    framed[2] = sizeBuf[2];
-    framed[3] = sizeBuf[3];
-
-    if (!recvExact(sock, framed.data() + 4, static_cast<int>(payloadSize))) {
-      Logger::logError("Network", "Failed to receive packet payload");
-      return std::nullopt;
-    }
-  }
-
-  std::optional<Packet> packet = Serializer::deserialize(framed);
-  if (!packet) {
-    Logger::logError("Network", "Failed to deserialize packet");
+  std::unique_lock<std::mutex> lock(mutex);
+  incomingCv.wait(lock, [this] { return !incoming.empty() || !connected; });
+  if (incoming.empty()) {
     return std::nullopt;
   }
 
+  Packet packet = incoming.front();
+  incoming.pop();
   return packet;
+}
+
+// read loop: pong heartbeats, queue everything else
+void Network::readerLoop() {
+  while (connected) {
+    int fd = -1;
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      fd = clientSocket;
+    }
+    if (fd == -1) {
+      break;
+    }
+
+    std::optional<Packet> packet = readPacket(static_cast<SOCKET>(fd));
+    if (!packet) {
+      connected = false;
+      incomingCv.notify_all();
+      break;
+    }
+
+    if (packet->type == Packet::PacketType::HEARTBEAT) {
+      if (packet->message == "ping") {
+        Packet pong("client", "server", Packet::PacketType::HEARTBEAT, "", "pong");
+        sendPacket(pong, "Heartbeat pong");
+      }
+      continue;
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      incoming.push(*packet);
+    }
+    incomingCv.notify_one();
+  }
 }
 
 // check if the network is connected

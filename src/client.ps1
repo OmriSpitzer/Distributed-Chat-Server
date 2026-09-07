@@ -20,5 +20,5 @@ $clientExe = Join-Path $buildDir "chat_client.exe"
 if (-not (Test-Path $clientExe)) {
     $clientExe = Join-Path $buildDir "chat_client"
 }
-& $clientExe
+& $clientExe @args
 exit $LASTEXITCODE

@@ -77,8 +77,22 @@ int Server::dashboard() {
   std::cout << "--------------------------------" << std::endl;
   std::cout << "Server dashboard" << std::endl;
   std::cout << "--------------------------------" << std::endl;
-  std::cout << "Port: " << config::PORT << " Thread count: " << config::THREAD_COUNT << std::endl;
+  std::cout << "Node id: " << config::NODE_ID << std::endl;
+  std::cout << "Port: " << config::PORT << " Peer port: " << config::PEER_PORT
+            << " Thread count: " << config::THREAD_COUNT << std::endl;
   std::cout << "Database path: " << config::DB_PATH << std::endl;
+  std::cout << "Peers: ";
+  if (config::PEERS.empty()) {
+    std::cout << "(none)";
+  } else {
+    for (std::size_t i = 0; i < config::PEERS.size(); ++i) {
+      if (i > 0) {
+        std::cout << ", ";
+      }
+      std::cout << config::PEERS[i];
+    }
+  }
+  std::cout << std::endl;
   std::cout << "Listening: " << (connectionManager.isListening() ? "yes" : "no") << std::endl;
   std::cout << "--------------------------------\n" << std::endl;
   return 0;

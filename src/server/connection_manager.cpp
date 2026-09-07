@@ -198,13 +198,17 @@ void ConnectionManager::handleClient(int clientSocket) {
       }
       session = it->second;
     }
+    session->touch();
+
+    // client pong (or other non-ping heartbeat) only refreshes liveness
+    if (packet->type == Packet::PacketType::HEARTBEAT && packet->message != "ping") {
+      continue;
+    }
 
     // process the packet
     Packet response = PacketProcessor::processPacket(*packet, *session, *this);
 
-    // generate a response packet
-    std::string framed = Serializer::serialize(response);
-    if (framed.empty() || !sendExact(sock, framed.data(), static_cast<int>(framed.size()))) {
+    if (!sendPacket(clientSocket, response)) {
       break;
     }
   }
@@ -232,9 +236,23 @@ bool ConnectionManager::hasSession(const User &user) const {
   std::lock_guard<std::mutex> lock(sessionsMutex);
   for (const auto &entry : sessions) {
     const ClientSession &session = *entry.second;
-    if (session.getUser() == user) {
+    if (session.isAuthenticated() && session.getUser() == user) {
       return true;
     }
   }
   return false;
 }
+
+// send a packet to a connected client
+bool ConnectionManager::sendPacket(int socket, const Packet &packet) {
+  std::string framed = Serializer::serialize(packet);
+  if (framed.empty()) {
+    return false;
+  }
+
+  std::lock_guard<std::mutex> lock(sendMutex);
+  return sendExact(static_cast<SOCKET>(socket), framed.data(), static_cast<int>(framed.size()));
+}
+
+// close a client socket so its read loop exits
+void ConnectionManager::closeClient(int socket) { closesocket(static_cast<SOCKET>(socket)); }

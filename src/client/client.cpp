@@ -9,6 +9,7 @@
 #include "client/console_ui.h"
 #include "client/packet_builder.h"
 #include "client/packet_handler.h"
+#include "utils/RESPONSE_CODES.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
 #include "utils/models/user.h"
@@ -124,7 +125,7 @@ void Client::showDashboard() {
       } while (response && response->type == Packet::PacketType::HEARTBEAT);
 
       if (response && response->type == Packet::PacketType::LOGOUT) {
-        if (response->responseCode == 200) {
+        if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
           state.user.reset();
           state.loggedIn = false;
           state.currentRoom.reset();
