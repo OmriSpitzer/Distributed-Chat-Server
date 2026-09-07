@@ -7,7 +7,6 @@
 #include "auth/authentication.h"
 #include "server/client_session.h"
 #include "server/message_manager.h"
-#include "server/room_manager.h"
 #include "server/user_manager.h"
 #include "utils/models/packet.h"
 
@@ -25,9 +24,6 @@ public:
 private:
   // authentication
   Authentication authentication;
-
-  // room manager
-  RoomManager roomManager;
 
   // message manager
   MessageManager messageManager;

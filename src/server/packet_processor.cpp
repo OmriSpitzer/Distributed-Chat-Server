@@ -48,6 +48,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
       session.setUser(user);
       session.setAuthenticated(true);
+      RoomManager::getInstance().joinRoom("Lobby", session);
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
@@ -80,6 +81,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       // set the session
       session.setUser(user);
       session.setAuthenticated(true);
+      RoomManager::getInstance().joinRoom("Lobby", session);
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
@@ -92,10 +94,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
     // logout packet
   case Packet::PacketType::LOGOUT: {
-    // initialize the session
     session.setAuthenticated(false);
     session.setUser(User::anonymousUser());
-    session.setRoom(RoomManager::LOBBY);
+    RoomManager::getInstance().leaveAll(session);
 
     response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
     response.message = "logged out";
@@ -111,13 +112,48 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
     // room join packet
   case Packet::PacketType::ROOM_JOIN: {
-    response.message = "joined " + packet.room;
+    if (!session.isAuthenticated()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "not authenticated";
+      break;
+    }
+
+    const std::string &roomName = packet.room.empty() ? "Lobby" : packet.room;
+    if (!RoomManager::getInstance().getRoom(roomName)) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
+      response.message = "unknown room: " + roomName;
+      break;
+    }
+
+    if (!RoomManager::getInstance().joinRoom(roomName, session)) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "failed to join " + roomName;
+      break;
+    }
+
+    response.room = roomName;
+    response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+    response.message = "joined " + roomName;
     break;
   }
 
     // room leave packet
   case Packet::PacketType::ROOM_LEAVE: {
-    response.message = "left " + packet.room;
+    if (!session.isAuthenticated()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "not authenticated";
+      break;
+    }
+
+    if (!RoomManager::getInstance().joinRoom("Lobby", session)) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "failed to leave room";
+      break;
+    }
+
+    response.room = "Lobby";
+    response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+    response.message = "left room, back in Lobby";
     break;
   }
 

@@ -227,8 +227,18 @@ void ConnectionManager::addSession(int socket, std::shared_ptr<ClientSession> se
 
 // remove session
 void ConnectionManager::removeSession(int socket) {
-  std::lock_guard<std::mutex> lock(sessionsMutex);
-  sessions.erase(socket);
+  std::shared_ptr<ClientSession> session;
+  {
+    std::lock_guard<std::mutex> lock(sessionsMutex);
+    auto it = sessions.find(socket);
+    if (it != sessions.end()) {
+      session = it->second;
+      sessions.erase(it);
+    }
+  }
+  if (session) {
+    RoomManager::getInstance().leaveAll(*session);
+  }
 }
 
 // does the user have a session

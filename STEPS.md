@@ -83,7 +83,7 @@ Gossip dedupes on this string. Without it, node 2 treats the same chat line as a
 
 Until this works, gossip has nothing useful to copy.
 
-### Step 1.1 — Room membership is session state
+### Done : Step 1.1 — Room membership is session state
 
 **Files:** `src/server/packet_processor.cpp`, `src/server/room_manager.cpp`, `include/server/room_manager.h`, `include/server/client_session.h`, `src/server/connection_manager.cpp`
 
