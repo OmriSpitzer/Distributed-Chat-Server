@@ -6,8 +6,10 @@
  */
 
 #include "server/packet_processor.h"
-#include "auth/authentication.h"
 #include "server/connection_manager.h"
+#include "server/database_manager.h"
+#include "utils/models/user.h"
+#include <any>
 #include <exception>
 #include <string>
 
@@ -24,16 +26,22 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     // login packet
   case Packet::PacketType::LOGIN: {
     try {
-      // check user authentication
-      User user = Authentication::login(packet.sender, packet.message);
+      // get the user from the database
+      std::any dbResult = DatabaseManager::getInstance().getUser(packet.sender, packet.message);
+      if (const auto *error = std::any_cast<std::string>(&dbResult)) {
+        response.responseCode = 401;
+        response.message = *error;
+        break;
+      }
 
-      // TODO: check user in database
-
+      User user = std::any_cast<User>(dbResult);
       session.setUser(user);
       session.setAuthenticated(true);
 
-      response.message = "login ok";
+      response.responseCode = 200;
+      response.message = user.serialize();
     } catch (const std::exception &e) {
+      response.responseCode = 500;
       response.message = std::string("login failed: ") + e.what();
     }
     break;

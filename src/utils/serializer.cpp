@@ -2,10 +2,10 @@
  * Length-prefixed TCP packet framing.
  *
  * Wire format: [4-byte big-endian payload size][serialized Packet bytes]
- * Payload: [u8 type][u64 BE timestamp] then sender, receiver, room, message
- * each as [u32 BE byte length][bytes].
+ * Payload: [u8 type][u64 BE timestamp][u32 BE responseCode]
+ * then sender, receiver, room, message each as [u32 BE byte length][bytes].
  *
- * @date 06-09-2026
+ * @date 07-09-2026
  */
 
 #include "utils/serializer.h"
@@ -107,6 +107,7 @@ std::string Serializer::serialize(const Packet &packet) {
   std::string payload;
   appendU8(payload, static_cast<std::uint8_t>(packet.type));
   appendU64BE(payload, packet.timestamp);
+  appendU32BE(payload, static_cast<std::uint32_t>(packet.responseCode));
   appendLenPrefixed(payload, packet.sender);
   appendLenPrefixed(payload, packet.receiver);
   appendLenPrefixed(payload, packet.room);
@@ -154,6 +155,11 @@ std::optional<Packet> Serializer::deserialize(const std::string &serializedPacke
   if (!readU64BE(serializedPacket, offset, packet.timestamp)) {
     return std::nullopt;
   }
+  std::uint32_t responseCode = 0;
+  if (!readU32BE(serializedPacket, offset, responseCode)) {
+    return std::nullopt;
+  }
+  packet.responseCode = static_cast<int>(responseCode);
   if (!readLenPrefixed(serializedPacket, offset, packet.sender)) {
     return std::nullopt;
   }

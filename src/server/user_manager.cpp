@@ -1,20 +1,18 @@
 /**
  * UserManager class
  *
- * @brief Tracks online users in memory and persists them to the database.
- * @date 14-07-2026
+ * @brief Tracks online users in memory.
+ * @date 07-09-2026
  */
 
 #include "server/user_manager.h"
-#include "server/database_manager.h"
-#include <iostream>
+#include <stdexcept>
 
 bool UserManager::addUser(const User &user) {
   if (users.find(user.getUsername()) != users.end()) {
     return false;
   }
   users.insert({user.getUsername(), user});
-  DatabaseManager::getInstance().createUser(user);
   return true;
 }
 
@@ -25,10 +23,10 @@ User UserManager::findUser(const std::string &username) {
   if (it != users.end()) {
     return it->second;
   }
-  return DatabaseManager::getInstance().findUser(username);
+  throw std::runtime_error("User not found: " + username);
 }
 
 bool UserManager::setStatus(const User &user, const std::string &status) {
-  std::cout << "Status for " << user.getUsername() << ": " << status << '\n';
-  return true;
+  (void)status;
+  return users.find(user.getUsername()) != users.end();
 }

@@ -1,15 +1,13 @@
 /**
  * DatabaseManager header file class
  *
- * @date 14-07-2026
+ * @date 07-09-2026
  */
 #pragma once
-#include "utils/models/message.h"
-#include "utils/models/room.h"
-#include "utils/models/user.h"
-#include <memory>
+#include "data/data.h"
+#include <any>
 #include <string>
-#include <vector>
+#include <string_view>
 
 class DatabaseManager {
 public:
@@ -19,40 +17,16 @@ public:
     return instance;
   }
 
-  // create a user (also stores the password)
-  bool createUser(const User &user, const std::string &password = "");
-
-  // find a user by username; throws std::runtime_error if not found
-  User findUser(const std::string &username);
-
-  // check whether a user exists
-  bool userExists(const std::string &username);
-
-  // return the stored password for a user (empty if none/not found)
-  std::string getPassword(const std::string &username);
-
-  // save a message
-  bool saveMessage(const Message &message, const std::string &roomId = "");
-
-  // load messages for a room
-  std::vector<Message> loadMessages(const std::string &roomId);
-
-  // create a room
-  bool createRoom(const Room &room);
+  // get user
+  std::any getUser(const std::string_view &username, const std::string_view &password);
 
   // delete copy constructor and assignment operator
   DatabaseManager(const DatabaseManager &) = delete;
   DatabaseManager &operator=(const DatabaseManager &) = delete;
 
 private:
-  std::string dbPath; // path to the text database file
-
-  // keeps loaded users alive so Message references stay valid
-  std::vector<std::unique_ptr<User>> userPool;
-
   // constructor
   DatabaseManager();
 
-  // ensures the database file (and its directory) exists
-  void ensureFile();
+  Data data = Data(); // the data of the database
 };

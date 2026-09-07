@@ -1,7 +1,7 @@
 /**
  * Packet class
  *
- * @date 04-09-2026
+ * @date 07-09-2026
  */
 
 #include "utils/models/packet.h"
@@ -10,15 +10,16 @@
 #include <string>
 
 // constructor
-Packet::Packet() : type(PacketType::DEFAULT), timestamp(0) {}
+Packet::Packet() : type(PacketType::DEFAULT), timestamp(0), responseCode(0) {}
 Packet::Packet(std::string sender, std::string receiver, PacketType type, std::string room,
-               std::string message) {
+               std::string message, int responseCode) {
   this->type = type;
   this->sender = sender;
   this->receiver = receiver;
   this->room = room;
   this->message = message;
   this->timestamp = static_cast<uint64_t>(std::time(nullptr));
+  this->responseCode = responseCode;
 }
 
 // convert packet type to string
@@ -75,7 +76,7 @@ Packet::PacketType Packet::stringToPacketType(const std::string &type) {
 
 // copy the packet
 Packet Packet::copy() const {
-  Packet packet(sender, receiver, type, room, message);
+  Packet packet(sender, receiver, type, room, message, responseCode);
   packet.timestamp = timestamp;
   return packet;
 }

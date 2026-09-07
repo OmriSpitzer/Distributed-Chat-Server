@@ -33,7 +33,7 @@ public:
   bool sendPacket(const Packet &packet, std::string_view message);
 
   // receiving a packet from the server
-  std::optional<Packet> receivePacket(const std::string &serializedPacket);
+  std::optional<Packet> receivePacket();
 
   // check if the network is connected
   bool isConnected() const;

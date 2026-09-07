@@ -20,6 +20,7 @@ find_package(Threads REQUIRED)
 
 # Server library
 add_library(server_lib
+    src/data/data.cpp
     src/server/database_manager.cpp
     src/server/user_manager.cpp
     src/server/room_manager.cpp

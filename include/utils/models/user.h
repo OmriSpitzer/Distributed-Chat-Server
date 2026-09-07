@@ -39,10 +39,20 @@ public:
   // anonymous user
   static User anonymousUser();
 
+  // type to string
+  static std::string typeToString(User::UserType user_type);
+
+  // string to type
+  static User::UserType stringToType(const std::string_view &type);
+
+  // serialize
+  std::string serialize() const;
+
+  // deserialize
+  static User deserialize(const std::string &serialized);
+
 private:
   std::string username;     // username
   std::string email;        // email
   User::UserType user_type; // user type
-
-  static std::string typeToString(User::UserType user_type); // type to string
 };

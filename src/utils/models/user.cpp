@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 
 // constructor
 User::User(std::string_view username, std::string_view email, User::UserType user_type)
@@ -36,10 +37,9 @@ std::string User::typeToString(User::UserType user_type) {
     return "ADMIN";
   case User::UserType::USER:
     return "USER";
-  case User::UserType::GUEST:
+  default:
     return "GUEST";
   }
-  return "UNKNOWN";
 }
 
 // setters
@@ -62,4 +62,42 @@ User User::anonymousUser() {
   const std::string genUsername = "anon" + suffix;
 
   return User(genUsername, genUsername + "@local", User::UserType::GUEST);
+}
+
+// string to type
+User::UserType User::stringToType(const std::string_view &type) {
+  if (type == "ADMIN") {
+    return User::UserType::ADMIN;
+  }
+  if (type == "USER") {
+    return User::UserType::USER;
+  }
+  return User::UserType::GUEST;
+}
+
+// serialize
+std::string User::serialize() const {
+  return "user(" + this->username + "|" + this->email + "|" + User::typeToString(this->user_type) +
+         ")";
+}
+
+// deserialize
+User User::deserialize(const std::string &serialized) {
+  static const std::string prefix = "user(";
+  if (serialized.size() < prefix.size() + 1 || serialized.compare(0, prefix.size(), prefix) != 0 ||
+      serialized.back() != ')') {
+    throw std::invalid_argument("Invalid serialized user");
+  }
+
+  const std::string body = serialized.substr(prefix.size(), serialized.size() - prefix.size() - 1);
+  const std::size_t first = body.find('|');
+  const std::size_t second = (first == std::string::npos) ? std::string::npos : body.find('|', first + 1);
+  if (first == std::string::npos || second == std::string::npos) {
+    throw std::invalid_argument("Invalid serialized user");
+  }
+
+  const std::string username = body.substr(0, first);
+  const std::string email = body.substr(first + 1, second - first - 1);
+  const std::string userType = body.substr(second + 1);
+  return User(username, email, User::stringToType(userType));
 }
