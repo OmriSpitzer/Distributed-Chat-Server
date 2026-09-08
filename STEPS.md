@@ -110,7 +110,7 @@ Today `ROOM_JOIN` only sets `response.message = "joined " + packet.room`. Change
 
 Do not leave the handler as `response.message = "message delivered"`.
 
-### Step 1.3 — Client UI after login
+### Done : Step 1.3 — Client UI after login
 
 **Files:** `src/client/console_ui.cpp`, `src/client/client.cpp`, `src/client/packet_handler.cpp`, `src/client/packet_builder.cpp`
 
@@ -122,7 +122,7 @@ Dashboard must be able to:
 
 `handlePacket` today is login-oriented. Incoming chat is a different path: print `sender` + `message` and do not `any_cast<User>`.
 
-### Step 1.4 — Phase 1 done when
+### Done : Step 1.4 — Phase 1 done when
 
 Two `chat_client`s on **one** server, same room, typing is visible on both.
 
@@ -132,7 +132,7 @@ Two `chat_client`s on **one** server, same room, typing is visible on both.
 
 Replace `Data::users` / maps. Each node gets its own file.
 
-### Step 2.1 — Library and CMake
+### Step Done : 2.1 — Library and CMake
 
 **File:** `CMakeLists.txt`
 
@@ -140,7 +140,7 @@ On Windows, add SQLite to the server (amalgamation `sqlite3.c` / `sqlite3.h` in 
 
 Compile `sqlite3.c` into `server_lib`, or `find_package(SQLite3)` and `target_link_libraries(server_lib PRIVATE SQLite::SQLite3)`. Only the server needs it.
 
-### Step 2.2 — Open the DB
+### Done : Step 2.2 — Open the DB
 
 **Files:** `include/server/database_manager.h`, `src/server/database_manager.cpp`
 
@@ -156,7 +156,7 @@ Wrap writes in `BEGIN IMMEDIATE; … COMMIT;` so a gossip insert and a login can
 
 The SQLite C API is not freely concurrent on one connection. Use **one** `sqlite3*` and **one** `dbMutex` around prepare/exec.
 
-### Step 2.3 — Schema
+### Done : Step 2.3 — Schema
 
 ```sql
 CREATE TABLE users (
@@ -199,20 +199,21 @@ Seed Lobby and stub users (`omri`, `spitzer`, `admin`) with `INSERT OR IGNORE`.
 
 Sockets cannot live in SQLite. Keep `roomName → sockets` in memory; persist membership for other nodes.
 
-### Step 2.4 — Rewrite `DatabaseManager` API
+### Done : Step 2.4 — Rewrite `DatabaseManager` API
 
 Keep methods you already call; implement them with SQL:
 
 | Method | SQL |
 |---|---|
-| `getUser(username, password)` | `SELECT … WHERE username=?` then compare password |
-| `createUser` | `INSERT INTO users` |
+| `getUser(username)` | `SELECT username, email, user_type FROM users WHERE username=?` — **no** password column, **no** password argument |
+| `loginUser(username, password)` | `SELECT username, email, user_type FROM users WHERE username=? AND password=?`. If empty: `userExists` to distinguish "not found" vs "wrong password" |
+| `createUser` | `INSERT INTO users`. On `SQLITE_CONSTRAINT` the username already exists — do not check-then-insert |
 | `userExists(username)` | `SELECT 1 FROM users WHERE username=?` (username **only**) |
-| save message | `INSERT OR IGNORE INTO messages` — required so gossip retries are idempotent |
-| load history | `SELECT … FROM messages WHERE room=? ORDER BY created_at` |
-| set/clear membership | `INSERT OR REPLACE` / `DELETE` |
+| `saveMessage` | `INSERT OR IGNORE INTO messages` — required so gossip retries are idempotent |
+| `loadHistory` | `SELECT … FROM messages WHERE room=? ORDER BY created_at` |
+| `setMembership` / `clearMembership` | `INSERT OR REPLACE` / `DELETE` |
 
-Do **not** use `getUser(sender, message)` on register when `message` is `password|email`. Check username only.
+Register uses `userExists(username)` (or `getUser(username)`). Do **not** call `loginUser` or `getUser(sender, message)` when `message` is `password|email`.
 
 ### Step 2.5 — Wire managers
 

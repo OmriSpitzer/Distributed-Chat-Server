@@ -30,7 +30,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
   case Packet::PacketType::LOGIN: {
     try {
       // get the user from the database
-      std::any dbResult = DatabaseManager::getInstance().getUser(packet.sender, packet.message);
+      std::any dbResult = DatabaseManager::getInstance().loginUser(packet.sender, packet.message);
       if (const auto *error = std::any_cast<std::string>(&dbResult)) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = *error;
@@ -62,9 +62,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     // register packet
   case Packet::PacketType::REGISTER: {
     try {
-      // get the user from the database
-      std::any dbResult = DatabaseManager::getInstance().getUser(packet.sender, packet.message);
-      if (const auto *user = std::any_cast<User>(&dbResult)) {
+      if (DatabaseManager::getInstance().userExists(packet.sender)) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "user already exists";
         break;

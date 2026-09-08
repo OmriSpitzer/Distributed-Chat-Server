@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
-project(DistributedChatServer CXX)
+project(DistributedChatServer C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# - - - - - - - - - - - - - - - - - Libraries - - - - - - - - - - - - - - - - -
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # Library
 add_library(utils
@@ -63,6 +67,56 @@ target_include_directories(auth PUBLIC include)
 target_link_libraries(server_lib PUBLIC utils auth ws2_32 Threads::Threads)
 target_link_libraries(client_lib PUBLIC utils auth ws2_32 Threads::Threads)
 
+# Database Library
+add_library(sqlite3 STATIC src/database/sqlite/sqlite3.c)
+target_include_directories(sqlite3 PUBLIC src/database/sqlite)
+
+
+# SQL schema / query registry: "c_name:relative/path.sql"
+set(DB_SCHEMAS
+  "init:src/database/init.sql"
+  "get_user:src/database/queries/get_user.sql"
+  "login_user:src/database/queries/login_user.sql"
+  "create_user:src/database/queries/create_user.sql"
+  "user_exists:src/database/queries/user_exists.sql"
+  "save_message:src/database/queries/save_message.sql"
+  "load_history:src/database/queries/load_history.sql"
+  "set_membership:src/database/queries/set_membership.sql"
+  "clear_membership:src/database/queries/clear_membership.sql"
+)
+
+set(_sql_schemas_h "#pragma once\n\n// Generated - do not edit. Source: DB_SCHEMAS in CMakeLists.txt\nnamespace db::sql {\n\n")
+foreach(_entry IN LISTS DB_SCHEMAS)
+  string(REPLACE ":" ";" _parts "${_entry}")
+  list(GET _parts 0 _name)
+  list(GET _parts 1 _rel)
+  set(_abs "${CMAKE_SOURCE_DIR}/${_rel}")
+  if(NOT EXISTS "${_abs}")
+    message(FATAL_ERROR "DB schema file not found for '${_name}': ${_abs}")
+  endif()
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_abs}")
+  file(READ "${_abs}" _sql)
+  string(APPEND _sql_schemas_h
+    "// ${_rel}\n"
+    "inline constexpr char ${_name}[] = R\"SQL(\n${_sql}\n)SQL\";\n\n")
+  message(STATUS "DB schema '${_name}' <- ${_rel}")
+endforeach()
+string(APPEND _sql_schemas_h "} // namespace db::sql\n")
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+file(WRITE "${CMAKE_BINARY_DIR}/generated/sql_schemas.h" "${_sql_schemas_h}")
+target_include_directories(server_lib PRIVATE "${CMAKE_BINARY_DIR}/generated")
+
+target_link_libraries(server_lib PUBLIC sqlite3)
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ Libraries ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# - - - - - - - - - - - - - - - - - - Tests - - - - - - - - - - - - - - - - - -
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 # Tests
 include(CTest)
 include(FetchContent)
@@ -99,3 +153,7 @@ catch_discover_tests(logger_test)
 catch_discover_tests(user_test)
 catch_discover_tests(packet_test)
 catch_discover_tests(room_test)
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - Tests - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

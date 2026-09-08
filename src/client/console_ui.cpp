@@ -204,5 +204,24 @@ std::optional<Packet> ConsoleUI::showJoinRoom(const User &user) {
   return PacketBuilder::buildJoinRoom(user.getUsername(), roomName);
 }
 
-// showing the leave room screen
-std::optional<Packet> ConsoleUI::showLeaveRoom() { return std::nullopt; }
+// showing the create message screen
+std::optional<Packet> ConsoleUI::showCreateMessage(const User &user) {
+  std::string message;
+
+  // drop the leftover '\n' from the previous cin >> in showUserDashboard
+  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+  do {
+    std::cout << ">> What do you want to say? (type 'exit' to go back): ";
+    std::getline(std::cin, message);
+    std::cout << std::endl;
+
+    if (message == "exit") {
+      return std::nullopt;
+    }
+
+    break;
+  } while (true);
+
+  return PacketBuilder::buildMessage(user.getUsername(), message);
+}

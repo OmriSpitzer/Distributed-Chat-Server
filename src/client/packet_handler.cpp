@@ -18,12 +18,20 @@
 std::optional<std::any> PacketHandler::handlePacket(const Packet &packet) {
   std::optional<std::any> result = std::nullopt;
   switch (packet.type) {
+    // Login and Register packets
   case Packet::PacketType::LOGIN:
-  case Packet::PacketType::REGISTER:
+  case Packet::PacketType::REGISTER: {
     if (auto user = handleLogin(packet)) {
       result = std::any{*user};
     }
     break;
+  }
+
+  // Incoming chat push (not a User response)
+  case Packet::PacketType::MESSAGE: {
+    std::cout << "[" << packet.sender << "]: " << packet.message << std::endl;
+    break;
+  }
   default:
     break;
   }

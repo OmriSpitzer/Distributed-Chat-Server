@@ -227,6 +227,11 @@ void Network::readerLoop() {
       continue;
     }
 
+    if (packet->type == Packet::PacketType::MESSAGE && packet->responseCode == 0) {
+      std::cout << "\n[" << packet->sender << "]: " << packet->message << std::endl;
+      continue;
+    }
+
     {
       std::lock_guard<std::mutex> lock(mutex);
       incoming.push(*packet);

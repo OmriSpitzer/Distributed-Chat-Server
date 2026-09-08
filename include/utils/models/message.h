@@ -17,6 +17,10 @@ public:
   // constructor
   Message(const User &from, const User &to, std::string_view message);
 
+  // reconstruct a message loaded from the database (keeps stored id + timestamp)
+  Message(const User &from, const User &to, std::string_view message, std::string id,
+          std::time_t timestamp);
+
   // getters
   const User &getFrom() const;
   const User &getTo() const;

@@ -1,10 +1,9 @@
 /**
  * PacketBuilder header file class
  *
- * @date 06-09-2026
+ * @date 08-09-2026
  */
 #pragma once
-#include "utils/models/message.h"
 #include "utils/models/packet.h"
 #include "utils/models/user.h"
 #include <string>
@@ -18,7 +17,7 @@ public:
   static Packet buildLogout(const User &user);
 
   // build a message packet
-  static Packet buildMessage(const std::string &username, const Message &msg);
+  static Packet buildMessage(const std::string &username, const std::string &message);
 
   // build a join room packet
   static Packet buildJoinRoom(const std::string &username, const std::string &room);

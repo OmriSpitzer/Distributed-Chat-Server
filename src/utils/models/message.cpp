@@ -25,6 +25,11 @@ Message::Message(const User &from, const User &to, std::string_view message)
     : from(from), to(to), content(message), timestamp(std::time(nullptr)),
       id(idPrefix + std::to_string(++next_message_id)) {}
 
+// reconstruct from stored row
+Message::Message(const User &from, const User &to, std::string_view message, std::string id,
+                 std::time_t timestamp)
+    : from(from), to(to), content(message), timestamp(timestamp), id(std::move(id)) {}
+
 // getters
 const User &Message::getFrom() const { return this->from; }
 const User &Message::getTo() const { return this->to; }

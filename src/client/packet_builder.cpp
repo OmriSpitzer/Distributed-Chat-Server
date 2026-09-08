@@ -6,7 +6,6 @@
  */
 
 #include "client/packet_builder.h"
-#include "utils/models/message.h"
 #include "utils/models/packet.h"
 #include <ctime>
 
@@ -42,13 +41,12 @@ Packet PacketBuilder::buildLogout(const User &user) {
 }
 
 // build a message packet
-Packet PacketBuilder::buildMessage(const std::string &username, const Message &msg) {
+Packet PacketBuilder::buildMessage(const std::string &username, const std::string &message) {
   Packet packet;
   packet.type = Packet::PacketType::MESSAGE;
   packet.sender = username;
-  packet.receiver = msg.getTo().getUsername();
-  packet.message = msg.getContent();
-  packet.timestamp = static_cast<uint64_t>(msg.getTimestamp());
+  packet.message = message;
+  packet.timestamp = static_cast<uint64_t>(std::time(nullptr));
   return packet;
 }
 

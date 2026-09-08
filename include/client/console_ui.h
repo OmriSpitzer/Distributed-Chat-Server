@@ -28,6 +28,6 @@ public:
   // showing the join room screen
   static std::optional<Packet> showJoinRoom(const User &user);
 
-  // showing the leave room screen
-  static std::optional<Packet> showLeaveRoom();
+  // showing the create message screen
+  static std::optional<Packet> showCreateMessage(const User &user);
 };

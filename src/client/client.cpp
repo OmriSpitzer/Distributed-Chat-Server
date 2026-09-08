@@ -17,11 +17,17 @@
 #include <any>
 #include <atomic>
 #include <cstdint>
+#include <iostream>
 #include <optional>
 #include <string>
 
 namespace {
 std::atomic<std::uint64_t> next_client_id{0};
+
+// Room broadcast push: MESSAGE with responseCode 0 (ack uses SUCCESS=200).
+bool isChatPush(const Packet &packet) {
+  return packet.type == Packet::PacketType::MESSAGE && packet.responseCode == 0;
+}
 }
 
 // start the client
@@ -128,12 +134,14 @@ void Client::showDashboard() {
         break;
       }
 
-      // receive the join room response, skipping heartbeat packets
+      // wait for ROOM_JOIN; print any chat pushes that arrive first
       std::optional<Packet> response;
       do {
         response = network.receivePacket();
-      } while (response && (response->type == Packet::PacketType::HEARTBEAT ||
-                            response->type == Packet::PacketType::MESSAGE));
+        if (response && isChatPush(*response)) {
+          handler.handlePacket(*response);
+        }
+      } while (response && (response->type == Packet::PacketType::HEARTBEAT || isChatPush(*response)));
 
       if (response && response->type == Packet::PacketType::ROOM_JOIN) {
         if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
@@ -145,11 +153,77 @@ void Client::showDashboard() {
       break;
     }
     case 3: {
-      // TODO: leave room
+
+      // check if the user is in the Lobby
+      if (state.currentRoom->getType() == Room::RoomType::LOBBY) {
+        std::cout << ">> Cannot leave the Lobby" << std::endl;
+        break;
+      }
+
+      std::string roomName = state.currentRoom->getName();
+      std::string username = state.user->getUsername();
+
+      if (roomName.empty()) {
+        break;
+      }
+
+      // build the leave room packet
+      std::optional<Packet> leaveRoomPacket = PacketBuilder::buildLeaveRoom(username, roomName);
+
+      // send the leave room request
+      if (!network.sendPacket(*leaveRoomPacket, "Leave room request")) {
+        break;
+      }
+
+      // wait for ROOM_LEAVE; print any chat pushes that arrive first
+      std::optional<Packet> response;
+      do {
+        response = network.receivePacket();
+        if (response && isChatPush(*response)) {
+          handler.handlePacket(*response);
+        }
+      } while (response && (response->type == Packet::PacketType::HEARTBEAT || isChatPush(*response)));
+
+      if (response && response->type == Packet::PacketType::ROOM_LEAVE) {
+        if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+          state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+
+          std::cout << ">> Left room " << roomName << std::endl;
+        } else {
+          std::cout << ">> Failed to leave room " << roomName << std::endl;
+        }
+      }
       break;
     }
     case 4: {
-      // TODO: send message
+      std::optional<Packet> createMessagePacket = ui.showCreateMessage(*state.user);
+
+      if (!createMessagePacket) {
+        break;
+      }
+
+      // send the create message request
+      if (!network.sendPacket(*createMessagePacket, "Create message request")) {
+        break;
+      }
+
+      // wait for server MESSAGE ack; print peer pushes that arrive first
+      std::optional<Packet> response;
+      do {
+        response = network.receivePacket();
+        if (response && isChatPush(*response)) {
+          handler.handlePacket(*response);
+        }
+      } while (response &&
+               (response->type == Packet::PacketType::HEARTBEAT || isChatPush(*response)));
+
+      if (response && response->type == Packet::PacketType::MESSAGE) {
+        if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+          std::cout << ">> Message sent successfully" << std::endl;
+        } else {
+          std::cout << ">> Failed to send message" << std::endl;
+        }
+      }
       break;
     }
     case 5: {
@@ -159,12 +233,14 @@ void Client::showDashboard() {
         break;
       }
 
-      // receive the login response, skipping heartbeat packets
+      // wait for LOGOUT; print any chat pushes that arrive first
       std::optional<Packet> response;
       do {
         response = network.receivePacket();
-      } while (response && (response->type == Packet::PacketType::HEARTBEAT ||
-                            response->type == Packet::PacketType::MESSAGE));
+        if (response && isChatPush(*response)) {
+          handler.handlePacket(*response);
+        }
+      } while (response && (response->type == Packet::PacketType::HEARTBEAT || isChatPush(*response)));
 
       if (response && response->type == Packet::PacketType::LOGOUT) {
         if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
