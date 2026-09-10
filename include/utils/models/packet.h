@@ -19,6 +19,10 @@ public:
     DEFAULT,
     HEARTBEAT,
     REGISTER,
+    GOSSIP_HELLO,
+    GOSSIP_EVENT,
+    GOSSIP_DIGEST,
+    GOSSIP_PULL
   };
 
   // constructors

@@ -1,16 +1,18 @@
 /**
  * Server header file class
  *
- * @date 14-07-2026
+ * @date 10-09-2026
  */
 
 #pragma once
 #include "config/config.h"
 #include "server/connection_manager.h"
+#include "server/gossip_manager.h"
 #include "server/heartbeat.h"
 #include "server/packet_processor.h"
 #include "server/thread_pool.h"
 #include <thread>
+
 
 class Server {
 public:
@@ -31,6 +33,7 @@ private:
   ConnectionManager connectionManager;                // client connections
   PacketProcessor processor;                          // request routing
   bool running = false;                               // running flag
-  Heartbeat heartbeat = Heartbeat(connectionManager); // heartbeat
-  std::thread acceptThread;                           // accept thread
+  Heartbeat heartbeat = Heartbeat(connectionManager);             // heartbeat
+  GossipManager gossipManager = GossipManager(connectionManager); // gossip mesh
+  std::thread acceptThread;                                       // accept thread
 };

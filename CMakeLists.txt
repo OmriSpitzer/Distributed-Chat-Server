@@ -34,6 +34,7 @@ add_library(server_lib
     src/server/connection_manager.cpp
     src/server/heartbeat.cpp
     src/server/server.cpp
+    src/server/gossip_manager.cpp
 )
 
 target_include_directories(server_lib PUBLIC include)

@@ -1,7 +1,7 @@
 /**
  * Packet class
  *
- * @date 07-09-2026
+ * @date 10-09-2026
  */
 
 #include "utils/models/packet.h"
@@ -41,6 +41,14 @@ std::string Packet::packetTypeToString(PacketType type) {
     return "HEARTBEAT";
   case PacketType::REGISTER:
     return "REGISTER";
+  case PacketType::GOSSIP_HELLO:
+    return "GOSSIP_HELLO";
+  case PacketType::GOSSIP_EVENT:
+    return "GOSSIP_EVENT";
+  case PacketType::GOSSIP_DIGEST:
+    return "GOSSIP_DIGEST";
+  case PacketType::GOSSIP_PULL:
+    return "GOSSIP_PULL";
   }
   throw std::invalid_argument("Unknown packet type");
 }
@@ -70,6 +78,18 @@ Packet::PacketType Packet::stringToPacketType(const std::string &type) {
   }
   if (type == "REGISTER") {
     return PacketType::REGISTER;
+  }
+  if (type == "GOSSIP_HELLO") {
+    return PacketType::GOSSIP_HELLO;
+  }
+  if (type == "GOSSIP_EVENT") {
+    return PacketType::GOSSIP_EVENT;
+  }
+  if (type == "GOSSIP_DIGEST") {
+    return PacketType::GOSSIP_DIGEST;
+  }
+  if (type == "GOSSIP_PULL") {
+    return PacketType::GOSSIP_PULL;
   }
   throw std::invalid_argument("Unknown packet type: " + type);
 }

@@ -7,6 +7,7 @@
 
 #include "server/server.h"
 #include "config/config.h"
+#include "server/gossip_manager.h"
 #include "server/heartbeat.h"
 #include "utils/models/logger.h"
 #include <iostream>
@@ -42,6 +43,8 @@ void Server::start() {
 
   running = true;
   heartbeat.start();
+  GossipManager::setInstance(&gossipManager);
+  gossipManager.start();
 
   // start the accept loop
   acceptThread = std::thread([this] { connectionManager.acceptLoop(); });
@@ -62,6 +65,8 @@ void Server::stop() {
 
   // stop listening and shutdown thread pool
   heartbeat.stop();
+  gossipManager.stop();
+  GossipManager::setInstance(nullptr);
   connectionManager.stopListening();
   if (acceptThread.joinable()) {
     acceptThread.join();

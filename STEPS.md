@@ -223,7 +223,7 @@ Register uses `userExists(username)` (or `getUser(username)`). Do **not** call `
 
 Drop `src/data/data.cpp` as the source of truth once SQLite is live (or leave it unused).
 
-### Step 2.6 — Phase 2 done when
+### Done : Step 2.6 — Phase 2 done when
 
 Restart **one** server: users and chat history are still there. Two processes with **different** db files still do not see each other’s history — that is Phase 3.
 
@@ -231,7 +231,7 @@ Restart **one** server: users and chat history are still there. Two processes wi
 
 ## Phase 3 — Gossip mesh
 
-### Step 3.1 — Mental model
+### Done : Step 3.1 — Mental model
 
 Each node keeps:
 
@@ -248,7 +248,7 @@ Rules:
 
 Do **not** gossip client `HEARTBEAT` pings. Those are per-socket keepalive only.
 
-### Step 3.2 — New packet types
+### Done : Step 3.2 — New packet types
 
 **Files:** `include/utils/models/packet.h`, `src/utils/models/packet.cpp`, serializer string tables
 
@@ -270,7 +270,7 @@ Suggested field reuse:
 
 Keep client types unchanged. `PacketProcessor` on the **client** port must ignore `GOSSIP_*`. Peers must not go through user `LOGIN`.
 
-### Step 3.3 — `GossipManager` (new class)
+### Done : Step 3.3 — `GossipManager` (new class)
 
 **New files:** `include/server/gossip_manager.h`, `src/server/gossip_manager.cpp`
 
@@ -288,7 +288,7 @@ Peer send uses the same length-prefix framing as `Serializer` / `sendPacket`. Do
 
 `Server` owns `GossipManager` the same way it owns `Heartbeat` and `ConnectionManager`.
 
-### Step 3.4 — Single apply path
+### Done : Step 3.4 — Single apply path
 
 One function used by **both** client `MESSAGE` and incoming gossip:
 

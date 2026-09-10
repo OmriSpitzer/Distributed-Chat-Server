@@ -92,6 +92,10 @@ bool isValidPacketType(Packet::PacketType type) {
   case Packet::PacketType::DEFAULT:
   case Packet::PacketType::HEARTBEAT:
   case Packet::PacketType::REGISTER:
+  case Packet::PacketType::GOSSIP_HELLO:
+  case Packet::PacketType::GOSSIP_EVENT:
+  case Packet::PacketType::GOSSIP_DIGEST:
+  case Packet::PacketType::GOSSIP_PULL:
     return true;
   }
   return false;

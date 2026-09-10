@@ -1,32 +1,33 @@
 /**
  * MessageManager class
  *
- * @brief Sends and persists chat messages via the database.
+ * @brief Builds a gossip event and fans it out via GossipManager::rumor.
  * @date 10-09-2026
  */
 
 #include "server/message_manager.h"
+#include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
-#include "server/room_manager.h"
+#include "server/gossip_manager.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
 
-class ConnectionManager;
-
-// send a message
+// send a message — local apply + peer fan-out happen inside rumor()
 bool MessageManager::send(const Message &message, const Room &room, ConnectionManager &connections,
                           int skipSocket) {
-  DatabaseManager &db = DatabaseManager::getInstance();
-  if (!db.saveMessage(message, room.getName())) {
-    Logger::logError("MessageManager", "Failed to save message: " + message.getContent());
-    return false;
-  }
+  (void)connections;
+  (void)skipSocket; // applyEvent broadcasts to all local room sockets
 
-  const Packet push(message.getFrom().getUsername(), "", Packet::PacketType::MESSAGE,
-                    room.getName(), message.getContent(), 0);
-  RoomManager::getInstance().broadcast(room, push, connections, skipSocket);
-  Logger::logInfo("MessageManager", "Message sent: " + message.getContent());
+  const std::string payload =
+      "MESSAGE|" + message.getId() + "|" + message.getFrom().getUsername() + "|" +
+      message.getContent() + "|" +
+      std::to_string(static_cast<long long>(message.getTimestamp()));
+
+  Packet event(config::NODE_ID, "*", Packet::PacketType::GOSSIP_EVENT, room.getName(), payload);
+  GossipManager::getInstance().rumor(event);
+
+  Logger::logInfo("MessageManager", "Message rumor: " + message.getContent());
   return true;
 }
 

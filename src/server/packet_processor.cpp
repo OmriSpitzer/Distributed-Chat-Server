@@ -26,6 +26,21 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
   // process the packet
   switch (packet.type) {
+    // gossip packets
+  case Packet::PacketType::GOSSIP_HELLO:
+    break;
+
+    // gossip event packet
+  case Packet::PacketType::GOSSIP_EVENT:
+    break;
+
+    // gossip digest packet
+  case Packet::PacketType::GOSSIP_DIGEST:
+    break;
+
+    // gossip pull packet
+  case Packet::PacketType::GOSSIP_PULL:
+    break;
 
     // login packet
   case Packet::PacketType::LOGIN: {
