@@ -59,6 +59,18 @@ public:
   // drop a membership row
   void clearMembership(std::string_view username, std::string_view room);
 
+  // true if username has a cluster presence row
+  bool isUserOnline(std::string_view username);
+
+  // upsert online_users (username → node holding the live socket)
+  void setOnline(std::string_view username, std::string_view nodeId);
+
+  // drop cluster presence for username
+  void clearOnline(std::string_view username);
+
+  // drop all room membership rows for username
+  void clearAllMembership(std::string_view username);
+
   // delete copy constructor and assignment operator
   DatabaseManager(const DatabaseManager &) = delete;
   DatabaseManager &operator=(const DatabaseManager &) = delete;

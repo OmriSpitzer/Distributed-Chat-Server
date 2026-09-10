@@ -31,6 +31,12 @@ CREATE TABLE IF NOT EXISTS membership (
   PRIMARY KEY (username, room)
 );
 
+-- Cluster-wide presence (who is logged in, on which node)
+CREATE TABLE IF NOT EXISTS online_users (
+  username TEXT PRIMARY KEY,
+  node_id  TEXT NOT NULL
+);
+
 -- Populate rooms table
 INSERT OR IGNORE INTO rooms (name, type, privacy)
 VALUES ('Lobby', 'LOBBY', 'PUBLIC');

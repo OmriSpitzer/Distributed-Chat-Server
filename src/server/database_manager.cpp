@@ -220,3 +220,19 @@ void DatabaseManager::setMembership(std::string_view username, std::string_view 
 void DatabaseManager::clearMembership(std::string_view username, std::string_view room) {
   execute(db::sql::clear_membership, {username, room});
 }
+
+bool DatabaseManager::isUserOnline(std::string_view username) {
+  return !query(db::sql::is_user_online, {username}).empty();
+}
+
+void DatabaseManager::setOnline(std::string_view username, std::string_view nodeId) {
+  execute(db::sql::set_online, {username, nodeId});
+}
+
+void DatabaseManager::clearOnline(std::string_view username) {
+  execute(db::sql::clear_online, {username});
+}
+
+void DatabaseManager::clearAllMembership(std::string_view username) {
+  execute(db::sql::clear_all_membership, {username});
+}

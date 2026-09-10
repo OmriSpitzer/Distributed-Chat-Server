@@ -83,6 +83,10 @@ set(DB_SCHEMAS
   "load_history:src/database/queries/load_history.sql"
   "set_membership:src/database/queries/set_membership.sql"
   "clear_membership:src/database/queries/clear_membership.sql"
+  "is_user_online:src/database/queries/is_user_online.sql"
+  "set_online:src/database/queries/set_online.sql"
+  "clear_online:src/database/queries/clear_online.sql"
+  "clear_all_membership:src/database/queries/clear_all_membership.sql"
 )
 
 set(_sql_schemas_h "#pragma once\n\n// Generated - do not edit. Source: DB_SCHEMAS in CMakeLists.txt\nnamespace db::sql {\n\n")

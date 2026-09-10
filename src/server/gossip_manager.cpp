@@ -425,8 +425,79 @@ bool GossipManager::applyEvent(const Packet &event) {
     return false;
   }
 
+  if (type == "LOGIN") {
+    if (username.empty() || content.empty()) {
+      Logger::logWarning("GossipManager", "Malformed LOGIN event");
+      return false;
+    }
+    DatabaseManager::getInstance().setOnline(username, content);
+    Logger::logInfo("GossipManager", "Applied LOGIN for " + username + " on " + content);
+    return true;
+  }
+
+  if (type == "LOGOUT") {
+    if (username.empty()) {
+      Logger::logWarning("GossipManager", "Malformed LOGOUT event");
+      return false;
+    }
+    DatabaseManager::getInstance().clearOnline(username);
+    DatabaseManager::getInstance().clearAllMembership(username);
+    Logger::logInfo("GossipManager", "Applied LOGOUT for " + username);
+    return true;
+  }
+
+  if (type == "USER_CREATED") {
+    // payload: USER_CREATED|eventId|username|password|email  (content=password, ts=email)
+    if (username.empty() || content.empty() || ts.empty()) {
+      Logger::logWarning("GossipManager", "Malformed USER_CREATED event");
+      return false;
+    }
+    auto &db = DatabaseManager::getInstance();
+    if (!db.userExists(username)) {
+      try {
+        db.createUser(username, content, ts);
+      } catch (const std::exception &e) {
+        Logger::logWarning("GossipManager",
+                           std::string("USER_CREATED apply failed for ") + username + ": " + e.what());
+        return false;
+      }
+    }
+    Logger::logInfo("GossipManager", "Applied USER_CREATED for " + username);
+    return true;
+  }
+
+  if (type == "ROOM_JOIN") {
+    // payload: ROOM_JOIN|eventId|username|nodeId|prevRoom ; event.room = new room
+    const std::string newRoom = event.room.empty() ? "Lobby" : event.room;
+    const std::string &nodeId = content;
+    const std::string &prevRoom = ts;
+    if (username.empty() || nodeId.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_JOIN event");
+      return false;
+    }
+    auto &db = DatabaseManager::getInstance();
+    if (!prevRoom.empty() && prevRoom != newRoom) {
+      db.clearMembership(username, prevRoom);
+    }
+    db.setMembership(username, newRoom, nodeId);
+    Logger::logInfo("GossipManager",
+                    "Applied ROOM_JOIN for " + username + " -> " + newRoom + " on " + nodeId);
+    return true;
+  }
+
+  if (type == "ROOM_LEAVE") {
+    // payload: ROOM_LEAVE|eventId|username|nodeId|room ; clears that room row only
+    const std::string roomName = !event.room.empty() ? event.room : ts;
+    if (username.empty() || roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_LEAVE event");
+      return false;
+    }
+    DatabaseManager::getInstance().clearMembership(username, roomName);
+    Logger::logInfo("GossipManager", "Applied ROOM_LEAVE for " + username + " from " + roomName);
+    return true;
+  }
+
   if (type != "MESSAGE") {
-    // presence / user events: handled in later steps
     return true;
   }
 

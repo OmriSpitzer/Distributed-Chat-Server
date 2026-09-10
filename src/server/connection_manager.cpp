@@ -2,16 +2,20 @@
  * ConnectionManager class
  *
  * @brief Owns the listening socket and client sessions.
- * @date 06-09-2026
+ * @date 10-09-2026
  */
 
 #include "server/connection_manager.h"
+#include "config/config.h"
+#include "server/database_manager.h"
+#include "server/gossip_manager.h"
 #include "server/packet_processor.h"
 #include "server/room_manager.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
 #include "utils/serializer.h"
 #include <cstdint>
+#include <ctime>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -236,8 +240,33 @@ void ConnectionManager::removeSession(int socket) {
       sessions.erase(it);
     }
   }
-  if (session) {
-    RoomManager::getInstance().leaveAll(*session);
+  if (!session) {
+    return;
+  }
+
+  const bool wasAuth = session->isAuthenticated();
+  const std::string username = session->getUser().getUsername();
+  RoomManager::getInstance().leaveAll(*session);
+
+  // drop/timeout without LOGOUT still holds the cluster presence row
+  if (wasAuth && !username.empty()) {
+    try {
+      const std::string eventId = config::NODE_ID + "-logout-" + username + "-" +
+                                  std::to_string(static_cast<long long>(std::time(nullptr)));
+      const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)));
+      const std::string payload =
+          "LOGOUT|" + eventId + "|" + username + "|" + config::NODE_ID + "|" + ts;
+      Packet event(config::NODE_ID, "*", Packet::PacketType::GOSSIP_EVENT, "", payload);
+      GossipManager::getInstance().rumor(event);
+    } catch (const std::exception &e) {
+      // gossip already stopped on shutdown — still clear local presence
+      try {
+        DatabaseManager::getInstance().clearOnline(username);
+      } catch (...) {
+      }
+      Logger::logWarning("ConnectionManager",
+                         std::string("Failed to rumor LOGOUT on disconnect: ") + e.what());
+    }
   }
 }
 
