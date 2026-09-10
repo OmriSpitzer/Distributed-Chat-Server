@@ -181,17 +181,20 @@ std::any DatabaseManager::loginUser(const std::string_view &username,
 
 bool DatabaseManager::saveMessage(const Message &message, std::string_view room) {
   const std::string createdAt = std::to_string(static_cast<long long>(message.getTimestamp()));
+  const std::string username = message.getFrom().getUsername();
+
   const int changes =
-      execute(db::sql::save_message, {message.getId(), room, message.getFrom().getUsername(),
-                                      message.getContent(), createdAt, config::NODE_ID});
+      execute(db::sql::save_message,
+              {message.getId(), room, username, message.getContent(), createdAt, config::NODE_ID});
   return changes > 0;
 }
 
-std::vector<Message> DatabaseManager::loadHistory(std::string_view room) {
-  const SqlResult rows = query(db::sql::load_history, {room});
+std::vector<Message> DatabaseManager::loadHistory(std::string_view roomId) {
+  const SqlResult rows = query(db::sql::load_history, {roomId});
   std::vector<Message> messages;
   messages.reserve(rows.size());
 
+  // room history has no recipient column; Message still requires a `to` user
   const User to("", "", User::UserType::GUEST);
   for (const SqlRow &row : rows) {
     if (row.size() < 6) {

@@ -6,7 +6,6 @@
 #pragma once
 #include "auth/authentication.h"
 #include "server/client_session.h"
-#include "server/message_manager.h"
 #include "server/user_manager.h"
 #include "utils/models/packet.h"
 
@@ -24,9 +23,6 @@ public:
 private:
   // authentication
   Authentication authentication;
-
-  // message manager
-  MessageManager messageManager;
 
   // user manager
   UserManager userManager;

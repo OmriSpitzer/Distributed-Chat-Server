@@ -2,12 +2,13 @@
  * PacketProcessor class
  *
  * @brief Routes incoming packets to the appropriate manager and builds a response.
- * @date 03-09-2026
+ * @date 10-09-2026
  */
 
 #include "server/packet_processor.h"
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
+#include "server/message_manager.h"
 #include "server/room_manager.h"
 #include "utils/RESPONSE_CODES.h"
 #include "utils/models/user.h"
@@ -92,9 +93,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
     // logout packet
   case Packet::PacketType::LOGOUT: {
+    RoomManager::getInstance().leaveAll(session);
     session.setAuthenticated(false);
     session.setUser(User::anonymousUser());
-    RoomManager::getInstance().leaveAll(session);
 
     response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
     response.message = "logged out";
@@ -103,42 +104,33 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
   // message packet
   case Packet::PacketType::MESSAGE: {
-    // check if the session is authenticated
     if (!session.isAuthenticated()) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
       response.message = "not authenticated";
       break;
     }
 
-    // check if the message is not empty
     if (packet.message.empty()) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
       response.message = "empty message";
       break;
     }
 
-    // get the room
-    const Room &room = session.getRoom();
+    try {
+      const Room &room = session.getRoom();
+      const Message stored(session.getUser(), User::anonymousUser(), packet.message);
+      if (!MessageManager().send(stored, room, connections, session.getSocket())) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "failed to send message";
+        break;
+      }
 
-    Message stored(session.getUser(), User::anonymousUser(), packet.message);
-
-    // TODO: save the message to the database
-
-    // create a push packet
-    Packet push = packet.copy();
-    push.sender = session.getUser().getUsername();
-    push.receiver = "";
-    push.room = room.getName();
-    push.message = packet.message;
-    push.type = Packet::PacketType::MESSAGE;
-    push.responseCode = 0;
-
-    // broadcast the message to the room
-    RoomManager::getInstance().broadcast(room, push, connections, session.getSocket());
-
-    // ack only
-    response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
-    response.message = "ok";
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+      response.message = "ok";
+    } catch (const std::exception &e) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = std::string("send failed: ") + e.what();
+    }
     break;
   }
 
@@ -150,22 +142,27 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       break;
     }
 
-    const std::string &roomName = packet.room.empty() ? "Lobby" : packet.room;
-    if (!RoomManager::getInstance().getRoom(roomName)) {
-      response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
-      response.message = "unknown room: " + roomName;
-      break;
-    }
+    try {
+      const std::string roomName = packet.room.empty() ? "Lobby" : packet.room;
+      if (!RoomManager::getInstance().getRoom(roomName)) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
+        response.message = "unknown room: " + roomName;
+        break;
+      }
 
-    if (!RoomManager::getInstance().joinRoom(roomName, session)) {
-      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
-      response.message = "failed to join " + roomName;
-      break;
-    }
+      if (!RoomManager::getInstance().joinRoom(roomName, session)) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "failed to join " + roomName;
+        break;
+      }
 
-    response.room = roomName;
-    response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
-    response.message = "joined " + roomName;
+      response.room = roomName;
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+      response.message = "joined " + roomName;
+    } catch (const std::exception &e) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = std::string("join failed: ") + e.what();
+    }
     break;
   }
 
@@ -177,15 +174,20 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       break;
     }
 
-    if (!RoomManager::getInstance().joinRoom("Lobby", session)) {
-      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
-      response.message = "failed to leave room";
-      break;
-    }
+    try {
+      if (!RoomManager::getInstance().joinRoom("Lobby", session)) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "failed to leave room";
+        break;
+      }
 
-    response.room = "Lobby";
-    response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
-    response.message = "left room, back in Lobby";
+      response.room = "Lobby";
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+      response.message = "left room, back in Lobby";
+    } catch (const std::exception &e) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = std::string("leave failed: ") + e.what();
+    }
     break;
   }
 

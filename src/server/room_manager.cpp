@@ -2,13 +2,16 @@
  * RoomManager class
  *
  * @brief In-memory room membership (room name → sockets) and live broadcast.
- * @date 07-09-2026
+ * @date 10-09-2026
  */
 
 #include "server/room_manager.h"
+#include "config/config.h"
 #include "server/client_session.h"
 #include "server/connection_manager.h"
+#include "server/database_manager.h"
 #include "utils/models/logger.h"
+#include <exception>
 #include <vector>
 
 // Lobby room
@@ -41,30 +44,57 @@ void RoomManager::removeSocketLocked(int socket, const std::string &roomName) {
 }
 
 bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) {
-  const std::string &name = roomName.empty() ? "Lobby" : roomName;
+  const std::string name = roomName.empty() ? "Lobby" : roomName;
+  const std::string previousRoom = session.getRoom().getName();
+  const std::string username = session.getUser().getUsername();
+  const bool persist = session.isAuthenticated();
 
-  std::lock_guard<std::mutex> lock(mutex);
-  auto roomIt = knownRooms.find(name);
-  if (roomIt == knownRooms.end()) {
-    Logger::logWarning("RoomManager", "Unknown room: " + name);
-    return false;
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    auto roomIt = knownRooms.find(name);
+    if (roomIt == knownRooms.end()) {
+      Logger::logWarning("RoomManager", "Unknown room: " + name);
+      return false;
+    }
+
+    removeSocketLocked(session.getSocket(), previousRoom);
+    session.setRoom(roomIt->second);
+    members[name].insert(session.getSocket());
   }
 
-  removeSocketLocked(session.getSocket(), session.getRoom().getName());
-  session.setRoom(roomIt->second);
-  members[name].insert(session.getSocket());
+  if (persist) {
+    DatabaseManager &db = DatabaseManager::getInstance();
+    if (previousRoom != name) {
+      db.clearMembership(username, previousRoom);
+    }
+    db.setMembership(username, name, config::NODE_ID);
+  }
 
-  Logger::logInfo("RoomManager", session.getUser().getUsername() + " joined " + name);
+  Logger::logInfo("RoomManager", username + " joined " + name);
   return true;
 }
 
 void RoomManager::leaveAll(ClientSession &session) {
-  std::lock_guard<std::mutex> lock(mutex);
-  removeSocketLocked(session.getSocket(), session.getRoom().getName());
-  session.setRoom(LOBBY);
+  const std::string previousRoom = session.getRoom().getName();
+  const std::string username = session.getUser().getUsername();
+  const bool persist = session.isAuthenticated();
+
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    removeSocketLocked(session.getSocket(), previousRoom);
+    session.setRoom(LOBBY);
+  }
+
+  if (persist) {
+    try {
+      DatabaseManager::getInstance().clearMembership(username, previousRoom);
+    } catch (const std::exception &e) {
+      Logger::logError("RoomManager", std::string("Failed to clear membership: ") + e.what());
+    }
+  }
+
   Logger::logInfo("RoomManager",
-                  session.getUser().getUsername() + " left rooms, socket " +
-                      std::to_string(session.getSocket()));
+                  username + " left rooms, socket " + std::to_string(session.getSocket()));
 }
 
 bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionManager &connections,
@@ -84,9 +114,8 @@ bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionMa
       continue;
     }
     if (!connections.sendPacket(socket, packet)) {
-      Logger::logWarning("RoomManager",
-                         "Failed to send to socket " + std::to_string(socket) + " in " +
-                             room.getName());
+      Logger::logWarning("RoomManager", "Failed to send to socket " + std::to_string(socket) +
+                                            " in " + room.getName());
       ok = false;
     }
   }

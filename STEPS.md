@@ -215,7 +215,7 @@ Keep methods you already call; implement them with SQL:
 
 Register uses `userExists(username)` (or `getUser(username)`). Do **not** call `loginUser` or `getUser(sender, message)` when `message` is `password|email`.
 
-### Step 2.5 — Wire managers
+### Done : Step 2.5 — Wire managers
 
 - Login / register: read/write `users`.
 - `MessageManager::send`: `INSERT OR IGNORE`, then local broadcast.

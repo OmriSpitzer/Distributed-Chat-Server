@@ -50,7 +50,7 @@ public:
   // INSERT OR IGNORE — returns true if a new row was written
   bool saveMessage(const Message &message, std::string_view room);
 
-  // history for a room, oldest first
+  // messages for a room, oldest first
   std::vector<Message> loadHistory(std::string_view room);
 
   // persist which node currently holds this user's socket in the room

@@ -3,14 +3,14 @@ CREATE TABLE IF NOT EXISTS users (
   username  TEXT PRIMARY KEY,
   email     TEXT NOT NULL,
   password  TEXT NOT NULL,
-  user_type ENUM('USER', 'ADMIN') NOT NULL
+  user_type TEXT NOT NULL
 );
 
 -- Create rooms table
 CREATE TABLE IF NOT EXISTS rooms (
   name     TEXT PRIMARY KEY,
-  type     ENUM('RESEARCH_AND_DEVELOPMENT', 'PRODUCTION', 'QA', 'DEVOPS', 'SECURITY', 'DESIGN', 'MARKETING', 'HR', 'FINANCE', 'LEGAL', 'CUSTOMER_SUPPORT', 'OTHER', 'LOBBY') NOT NULL,
-  privacy  ENUM('PUBLIC', 'PRIVATE') NOT NULL
+  type     TEXT NOT NULL,
+  privacy  TEXT NOT NULL
 );
 
 -- Create messages table
