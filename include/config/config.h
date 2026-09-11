@@ -1,7 +1,8 @@
 /**
- * Configuration file for the server
+ * Configuration file
  *
- * @date 07-09-2026
+ * @brief Configuration file for the server and client.
+ * @date 10-09-2026
  */
 #pragma once
 #include <cstdint>
@@ -54,10 +55,13 @@ inline void printUsage(const char *program) {
 // parse a port from a string
 inline bool parsePort(std::string_view text, std::uint16_t &out) {
   try {
+    // parse port as unsigned long
     unsigned long value = std::stoul(std::string(text));
     if (value == 0 || value > 65535) {
       return false;
     }
+
+    // cast to unsigned short
     out = static_cast<std::uint16_t>(value);
     return true;
   } catch (...) {
@@ -67,7 +71,10 @@ inline bool parsePort(std::string_view text, std::uint16_t &out) {
 
 // parse a list of peers from a string
 inline void parsePeers(std::string_view text) {
+  // clear the peers vector
   PEERS.clear();
+
+  // parse the peers from the string
   std::stringstream stream{std::string(text)};
   std::string item;
   while (std::getline(stream, item, ',')) {
@@ -82,6 +89,7 @@ inline bool parseArgs(int argc, char *argv[]) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
 
+    // get the next argument
     auto next = [&](const char *name) -> const char * {
       if (i + 1 >= argc) {
         std::cerr << "Missing value for " << name << "\n";
@@ -91,11 +99,13 @@ inline bool parseArgs(int argc, char *argv[]) {
       return argv[++i];
     };
 
+    // help option
     if (arg == "--help" || arg == "-h") {
       printUsage(argv[0]);
       return false;
     }
 
+    // node id config
     if (arg == "--node-id") {
       const char *value = next("--node-id");
       if (!value) {
@@ -105,6 +115,7 @@ inline bool parseArgs(int argc, char *argv[]) {
       continue;
     }
 
+    // server host config
     if (arg == "--host") {
       const char *value = next("--host");
       if (!value) {
@@ -114,6 +125,7 @@ inline bool parseArgs(int argc, char *argv[]) {
       continue;
     }
 
+    // server port config
     if (arg == "--port") {
       const char *value = next("--port");
       if (!value) {
@@ -126,6 +138,7 @@ inline bool parseArgs(int argc, char *argv[]) {
       continue;
     }
 
+    // peer port config
     if (arg == "--peer-port") {
       const char *value = next("--peer-port");
       if (!value) {
@@ -138,6 +151,7 @@ inline bool parseArgs(int argc, char *argv[]) {
       continue;
     }
 
+    // peers config
     if (arg == "--peers") {
       const char *value = next("--peers");
       if (!value) {
@@ -147,6 +161,7 @@ inline bool parseArgs(int argc, char *argv[]) {
       continue;
     }
 
+    // db path config
     if (arg == "--db") {
       const char *value = next("--db");
       if (!value) {
@@ -156,6 +171,7 @@ inline bool parseArgs(int argc, char *argv[]) {
       continue;
     }
 
+    // unknown argument
     std::cerr << "Unknown argument: " << arg << "\n";
     printUsage(argv[0]);
     return false;

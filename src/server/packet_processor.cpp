@@ -9,7 +9,6 @@
 #include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
-#include "server/gossip_manager.h"
 #include "server/message_manager.h"
 #include "server/room_manager.h"
 #include "utils/RESPONSE_CODES.h"
@@ -31,28 +30,29 @@ std::string makeEventId(const std::string &kind, const std::string &username) {
          std::to_string(++nextPresenceSeq);
 }
 
-void rumorEvent(const std::string &type, const std::string &username, const std::string &content,
-                const std::string &field5, const std::string &room = "") {
+void rumorEvent(ConnectionManager &connections, const std::string &type,
+                const std::string &username, const std::string &content, const std::string &field5,
+                const std::string &room = "") {
   const std::string eventId = makeEventId(type, username);
   const std::string payload = type + "|" + eventId + "|" + username + "|" + content + "|" + field5;
   Packet event(config::NODE_ID, "*", Packet::PacketType::GOSSIP_EVENT, room, payload);
-  GossipManager::getInstance().rumor(event);
+  connections.rumor(event);
 }
 
-void rumorPresence(const char *kind, const std::string &username) {
+void rumorPresence(ConnectionManager &connections, const char *kind, const std::string &username) {
   const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)));
-  rumorEvent(kind, username, config::NODE_ID, ts);
+  rumorEvent(connections, kind, username, config::NODE_ID, ts);
 }
 
-void rumorUserCreated(const std::string &username, std::string_view password,
-                      std::string_view email) {
+void rumorUserCreated(ConnectionManager &connections, const std::string &username,
+                      std::string_view password, std::string_view email) {
   // field5 = email (not a timestamp); do not log this payload
-  rumorEvent("USER_CREATED", username, std::string(password), std::string(email));
+  rumorEvent(connections, "USER_CREATED", username, std::string(password), std::string(email));
 }
 
-void rumorRoomJoin(const std::string &username, const std::string &newRoom,
-                   const std::string &prevRoom) {
-  rumorEvent("ROOM_JOIN", username, config::NODE_ID, prevRoom, newRoom);
+void rumorRoomJoin(ConnectionManager &connections, const std::string &username,
+                   const std::string &newRoom, const std::string &prevRoom) {
+  rumorEvent(connections, "ROOM_JOIN", username, config::NODE_ID, prevRoom, newRoom);
 }
 } // namespace
 
@@ -98,8 +98,8 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       session.setUser(user);
       session.setAuthenticated(true);
       RoomManager::getInstance().joinRoom("Lobby", session);
-      rumorPresence("LOGIN", user.getUsername());
-      rumorRoomJoin(user.getUsername(), "Lobby", prevRoom);
+      rumorPresence(connections, "LOGIN", user.getUsername());
+      rumorRoomJoin(connections, user.getUsername(), "Lobby", prevRoom);
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
@@ -126,15 +126,15 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
       // create the user
       User user = DatabaseManager::getInstance().createUser(username, password, email);
-      rumorUserCreated(user.getUsername(), password, email);
+      rumorUserCreated(connections, user.getUsername(), password, email);
 
       // set the session
       const std::string prevRoom = session.getRoom().getName();
       session.setUser(user);
       session.setAuthenticated(true);
       RoomManager::getInstance().joinRoom("Lobby", session);
-      rumorPresence("LOGIN", user.getUsername());
-      rumorRoomJoin(user.getUsername(), "Lobby", prevRoom);
+      rumorPresence(connections, "LOGIN", user.getUsername());
+      rumorRoomJoin(connections, user.getUsername(), "Lobby", prevRoom);
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
@@ -155,7 +155,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     session.setUser(User::anonymousUser());
 
     if (wasAuth && !username.empty()) {
-      rumorPresence("LOGOUT", username);
+      rumorPresence(connections, "LOGOUT", username);
     }
 
     response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
@@ -178,7 +178,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
 
     try {
-      const Room &room = session.getRoom();
+      Room room = session.getRoom();
       const Message stored(session.getUser(), User::anonymousUser(), packet.message);
       if (!MessageManager().send(stored, room, connections, session.getSocket())) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
@@ -218,7 +218,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
-      rumorRoomJoin(session.getUser().getUsername(), roomName, prevRoom);
+      rumorRoomJoin(connections, session.getUser().getUsername(), roomName, prevRoom);
 
       response.room = roomName;
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
@@ -246,7 +246,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
-      rumorRoomJoin(session.getUser().getUsername(), "Lobby", prevRoom);
+      rumorRoomJoin(connections, session.getUser().getUsername(), "Lobby", prevRoom);
 
       response.room = "Lobby";
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);

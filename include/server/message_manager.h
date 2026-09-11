@@ -13,7 +13,7 @@
 
 class MessageManager {
 public:
-  // build GOSSIP_EVENT payload and call GossipManager::rumor (apply + fan-out)
+  // build GOSSIP_EVENT payload and fan-out via ConnectionManager::rumor
   bool send(const Message &message, const Room &room, ConnectionManager &connections,
             int skipSocket = -1);
 

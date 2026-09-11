@@ -25,10 +25,6 @@ public:
   // destructor
   ~GossipManager();
 
-  // process-wide accessor (set by Server::start)
-  static void setInstance(GossipManager *instance);
-  static GossipManager &getInstance();
-
   // start the gossip
   void start();
 
@@ -43,8 +39,6 @@ public:
   void rumor(const Packet &packet);
 
 private:
-  static GossipManager *instance_;
-
   ConnectionManager &connections;                   // local client sockets for apply
   int listeningSocket{-1};                          // listening socket
   std::atomic<bool> stopped{true};                  // stopped listening

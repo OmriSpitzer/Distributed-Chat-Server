@@ -1,11 +1,7 @@
 /**
- * Length-prefixed TCP packet framing shared by client and server.
+ * Serializer header file class
  *
- * Wire format: [4-byte big-endian payload size][serialized Packet bytes]
- * Payload: [u8 type][u64 BE timestamp][u32 BE responseCode]
- * then sender, receiver, room, message each as [u32 BE byte length][bytes].
- *
- * @date 06-09-2026
+ * @date 11-09-2026
  */
 #pragma once
 #include "utils/models/packet.h"
@@ -21,6 +17,6 @@ public:
   // deserialize a packet
   static std::optional<Packet> deserialize(const std::string &serializedPacket);
 
-private:
+  // maximum payload bytes
   static constexpr std::uint32_t MAX_PAYLOAD_BYTES = 1024 * 1024;
 };

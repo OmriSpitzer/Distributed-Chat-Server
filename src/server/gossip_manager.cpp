@@ -92,20 +92,9 @@ std::string eventIdFromPacket(const Packet &packet) {
 }
 } // namespace
 
-GossipManager *GossipManager::instance_ = nullptr;
-
 GossipManager::GossipManager(ConnectionManager &connections) : connections(connections) {}
 
 GossipManager::~GossipManager() { stop(); }
-
-void GossipManager::setInstance(GossipManager *instance) { instance_ = instance; }
-
-GossipManager &GossipManager::getInstance() {
-  if (!instance_) {
-    throw std::runtime_error("GossipManager not set");
-  }
-  return *instance_;
-}
 
 void GossipManager::start() {
   if (!stopped)

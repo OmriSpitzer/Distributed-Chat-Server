@@ -1,7 +1,7 @@
 /**
  * Server header file class
  *
- * @date 10-09-2026
+ * @date 11-09-2026
  */
 
 #pragma once
@@ -9,10 +9,9 @@
 #include "server/connection_manager.h"
 #include "server/gossip_manager.h"
 #include "server/heartbeat.h"
-#include "server/packet_processor.h"
 #include "server/thread_pool.h"
+#include <atomic>
 #include <thread>
-
 
 class Server {
 public:
@@ -26,14 +25,17 @@ public:
   bool isAlive();
 
   // dashboard of the server
-  int dashboard();
+  void dashboard();
+
+  // destructor
+  ~Server();
 
 private:
-  ThreadPool threadPool{config::THREAD_COUNT};        // worker threads
-  ConnectionManager connectionManager;                // client connections
-  PacketProcessor processor;                          // request routing
-  bool running = false;                               // running flag
+  ThreadPool threadPool{config::THREAD_COUNT};                    // worker threads
+  ConnectionManager connectionManager{};                          // client connections
+  GossipManager gossipManager = GossipManager(connectionManager); // server gossip manager
   Heartbeat heartbeat = Heartbeat(connectionManager);             // heartbeat
-  GossipManager gossipManager = GossipManager(connectionManager); // gossip mesh
-  std::thread acceptThread;                                       // accept thread
+
+  std::thread acceptThread;         // accept thread
+  std::atomic<bool> running{false}; // running flag
 };

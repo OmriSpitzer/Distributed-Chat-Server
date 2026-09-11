@@ -1,15 +1,19 @@
 /**
  * ConnectionManager header file class
  *
- * @date 06-09-2026
+ * @date 11-09-2026
  */
 #pragma once
 #include "server/client_session.h"
 #include "utils/models/packet.h"
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+
+// forward declaration of GossipManager
+class GossipManager;
 
 class ConnectionManager {
 public:
@@ -37,9 +41,6 @@ public:
   // accept loop
   void acceptLoop();
 
-  // stop accepting packets
-  void stopAccepting();
-
   // does the user have a session
   bool hasSession(const User &user) const;
 
@@ -49,12 +50,19 @@ public:
   // close a client socket so its read loop exits
   void closeClient(int socket);
 
+  // inject the gossip manager owned by Server (null when stopped)
+  void setGossip(GossipManager *gossip);
+
+  // fan-out via injected gossip; no-op if not set
+  void rumor(const Packet &event);
+
 private:
-  int listeningSocket; // listening socket file descriptor
+  GossipManager *gossip_{nullptr}; // gossip manager owned by Server
+
   std::unordered_map<int, std::shared_ptr<ClientSession>> sessions; // sessions
-  bool listening;                                                   // is the server listening
+  int listeningSocket;                                              // listening socket
+  std::atomic<bool> listening{false};                               // is the server listening
   mutable std::mutex sessionsMutex;                                 // sessions mutex
-  std::mutex sendMutex;                                             // guards socket sends
 
   // handle the client
   void handleClient(int clientSocket);

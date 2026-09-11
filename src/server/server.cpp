@@ -2,7 +2,7 @@
  * Server class
  *
  * @brief Wires together the server components and owns the listen lifecycle.
- * @date 03-09-2026
+ * @date 11-09-2026
  */
 
 #include "server/server.h"
@@ -41,16 +41,21 @@ void Server::start() {
     return;
   }
 
-  running = true;
+  running = true; // set the server to running
+
+  // start heartbeat thread
   heartbeat.start();
-  GossipManager::setInstance(&gossipManager);
+
+  // create gossip manager thread
+  connectionManager.setGossip(&gossipManager);
   gossipManager.start();
 
   // start the accept loop
-  acceptThread = std::thread([this] { connectionManager.acceptLoop(); });
+  acceptThread = std::thread([this] { connectionManager.acceptLoop(); }); // start the accept loop
 
   Logger::logInfo("Server", "Started on port " + std::to_string(config::PORT) + " with " +
-                                std::to_string(config::THREAD_COUNT) + " worker threads");
+                                std::to_string(config::THREAD_COUNT) +
+                                " worker threads"); // log the server started
 }
 
 // stop the server
@@ -61,24 +66,26 @@ void Server::stop() {
     return;
   }
 
+  // set the server to not running
   running = false;
 
-  // stop listening and shutdown thread pool
+  // stop all threads
   heartbeat.stop();
   gossipManager.stop();
-  GossipManager::setInstance(nullptr);
+  connectionManager.setGossip(nullptr);
   connectionManager.stopListening();
   if (acceptThread.joinable()) {
     acceptThread.join();
   }
   threadPool.shutdown();
 
+  // clean up winsock
   WSACleanup();
   Logger::logInfo("Server", "Server stopped");
 }
 
 // dashboard of the server
-int Server::dashboard() {
+void Server::dashboard() {
   std::cout << "--------------------------------" << std::endl;
   std::cout << "Server dashboard" << std::endl;
   std::cout << "--------------------------------" << std::endl;
@@ -100,8 +107,10 @@ int Server::dashboard() {
   std::cout << std::endl;
   std::cout << "Listening: " << (connectionManager.isListening() ? "yes" : "no") << std::endl;
   std::cout << "--------------------------------\n" << std::endl;
-  return 0;
 }
 
 // check if the server is alive
 bool Server::isAlive() { return running; }
+
+// destructor
+Server::~Server() { stop(); }

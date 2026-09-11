@@ -1,11 +1,13 @@
 /**
- * Length-prefixed TCP packet framing.
+ * Serializer class
+ *
+ * @brief Serializes and deserializes packets.
+ * @date 11-09-2026
  *
  * Wire format: [4-byte big-endian payload size][serialized Packet bytes]
  * Payload: [u8 type][u64 BE timestamp][u32 BE responseCode]
  * then sender, receiver, room, message each as [u32 BE byte length][bytes].
  *
- * @date 07-09-2026
  */
 
 #include "utils/serializer.h"
@@ -15,8 +17,10 @@
 #include <string>
 
 namespace {
+// append a uint8_t to a string
 void appendU8(std::string &out, std::uint8_t value) { out.push_back(static_cast<char>(value)); }
 
+// append a uint32_t to a string in big endian
 void appendU32BE(std::string &out, std::uint32_t value) {
   out.push_back(static_cast<char>((value >> 24) & 0xFF));
   out.push_back(static_cast<char>((value >> 16) & 0xFF));
@@ -24,20 +28,24 @@ void appendU32BE(std::string &out, std::uint32_t value) {
   out.push_back(static_cast<char>(value & 0xFF));
 }
 
+// append a uint64_t to a string in big endian
 void appendU64BE(std::string &out, std::uint64_t value) {
   appendU32BE(out, static_cast<std::uint32_t>(value >> 32));
   appendU32BE(out, static_cast<std::uint32_t>(value & 0xFFFFFFFFu));
 }
 
+// append a length prefixed string to a string
 void appendLenPrefixed(std::string &out, const std::string &value) {
   appendU32BE(out, static_cast<std::uint32_t>(value.size()));
   out.append(value);
 }
 
+// check if there are at least needed bytes remaining in the string
 bool remainingAtLeast(const std::string &in, std::size_t offset, std::size_t needed) {
   return offset <= in.size() && in.size() - offset >= needed;
 }
 
+// read a uint8_t from a string
 bool readU8(const std::string &in, std::size_t &offset, std::uint8_t &value) {
   if (!remainingAtLeast(in, offset, 1)) {
     return false;
@@ -47,6 +55,7 @@ bool readU8(const std::string &in, std::size_t &offset, std::uint8_t &value) {
   return true;
 }
 
+// read a uint32_t from a string in big endian
 bool readU32BE(const std::string &in, std::size_t &offset, std::uint32_t &value) {
   if (!remainingAtLeast(in, offset, 4)) {
     return false;
@@ -59,6 +68,7 @@ bool readU32BE(const std::string &in, std::size_t &offset, std::uint32_t &value)
   return true;
 }
 
+// read a uint64_t from a string in big endian
 bool readU64BE(const std::string &in, std::size_t &offset, std::uint64_t &value) {
   std::uint32_t high = 0;
   std::uint32_t low = 0;
@@ -69,6 +79,7 @@ bool readU64BE(const std::string &in, std::size_t &offset, std::uint64_t &value)
   return true;
 }
 
+// read a length prefixed string from a string
 bool readLenPrefixed(const std::string &in, std::size_t &offset, std::string &value) {
   std::uint32_t length = 0;
   if (!readU32BE(in, offset, length)) {
@@ -82,6 +93,7 @@ bool readLenPrefixed(const std::string &in, std::size_t &offset, std::string &va
   return true;
 }
 
+// check if a packet type is valid
 bool isValidPacketType(Packet::PacketType type) {
   switch (type) {
   case Packet::PacketType::LOGIN:
@@ -104,10 +116,12 @@ bool isValidPacketType(Packet::PacketType type) {
 
 // serialize a packet
 std::string Serializer::serialize(const Packet &packet) {
+  // check if the packet type is valid
   if (!isValidPacketType(packet.type)) {
     return "";
   }
 
+  // serialize the packet
   std::string payload;
   appendU8(payload, static_cast<std::uint8_t>(packet.type));
   appendU64BE(payload, packet.timestamp);
@@ -117,10 +131,12 @@ std::string Serializer::serialize(const Packet &packet) {
   appendLenPrefixed(payload, packet.room);
   appendLenPrefixed(payload, packet.message);
 
+  // check if the payload size is valid
   if (payload.size() > MAX_PAYLOAD_BYTES) {
     return "";
   }
 
+  // create the framed packet
   std::string framed;
   appendU32BE(framed, static_cast<std::uint32_t>(payload.size()));
   framed.append(payload);
@@ -129,10 +145,12 @@ std::string Serializer::serialize(const Packet &packet) {
 
 // deserialize a packet
 std::optional<Packet> Serializer::deserialize(const std::string &serializedPacket) {
+  // check if the serialized packet is valid
   if (serializedPacket.size() < 4) {
     return std::nullopt;
   }
 
+  // deserialize the packet
   std::size_t offset = 0;
   std::uint32_t payloadSize = 0;
   if (!readU32BE(serializedPacket, offset, payloadSize)) {
@@ -145,15 +163,19 @@ std::optional<Packet> Serializer::deserialize(const std::string &serializedPacke
     return std::nullopt;
   }
 
+  // read the packet type
   std::uint8_t typeByte = 0;
   if (!readU8(serializedPacket, offset, typeByte)) {
     return std::nullopt;
   }
+
+  // check if the packet type is valid
   const auto type = static_cast<Packet::PacketType>(typeByte);
   if (!isValidPacketType(type)) {
     return std::nullopt;
   }
 
+  // create the packet
   Packet packet;
   packet.type = type;
   if (!readU64BE(serializedPacket, offset, packet.timestamp)) {
