@@ -1,15 +1,16 @@
 /**
  * Heartbeat header file class
  *
- * @date 07-09-2026
+ * @date 12-09-2026
  */
+
 #pragma once
-#include "server/connection_manager.h"
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+
+class ConnectionManager;
 
 class Heartbeat {
 public:
@@ -25,14 +26,24 @@ public:
   // stop the heartbeat
   void stop();
 
-  // delete copy constructor and assignment operator
+  // delete copy and move
   Heartbeat(const Heartbeat &) = delete;
   Heartbeat &operator=(const Heartbeat &) = delete;
+  Heartbeat(Heartbeat &&) = delete;
+  Heartbeat &operator=(Heartbeat &&) = delete;
 
 private:
-  ConnectionManager &connections;             // connections
-  std::thread heartbeat_thread;               // heartbeat thread
-  std::mutex heartbeat_mutex;                 // heartbeat mutex
-  std::condition_variable condition_variable; // heartbeat condition variable
-  std::atomic<bool> stopped{true};            // stopped
+  // main heartbeat loop
+  void run();
+
+  // snapshot pinging all sessions
+  void pingOnce();
+
+  ConnectionManager &connections;   // connections
+  std::thread heartbeat_thread;     // heartbeat thread
+  std::mutex lifecycle_mutex;       // serializes start / stop / join
+  std::mutex wait_mutex;            // heartbeat wait mutex
+  std::condition_variable stop_cv;  // interruptible sleep
+  std::atomic<bool> stopped{true};  // request to stop the worker
+  std::atomic<bool> running{false}; // worker is alive (or start is in progress)
 };

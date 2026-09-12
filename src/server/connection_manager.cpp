@@ -292,6 +292,7 @@ void ConnectionManager::closeClient(int socket) {
     session = it->second;
   }
 
+  std::lock_guard<std::mutex> send(session->sendMutex());
   if (session->markClosed()) {
     closesocket(static_cast<SOCKET>(socket));
   }

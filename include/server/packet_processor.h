@@ -16,9 +16,6 @@ public:
   static Packet processPacket(const Packet &packet, ClientSession &session,
                               ConnectionManager &connections);
 
-  // process a heartbeat packet
-  static Packet processHeartbeatPacket(const Packet &packet, ConnectionManager &connections);
-
 private:
   // user manager
   UserManager userManager;

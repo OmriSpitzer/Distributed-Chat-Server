@@ -259,31 +259,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
     break;
   }
-
-  case Packet::PacketType::HEARTBEAT:
-    response.message = "pong";
-    break;
   }
 
-  return response;
-}
-
-// process a heartbeat packet
-Packet PacketProcessor::processHeartbeatPacket(const Packet &packet,
-                                               ConnectionManager &connections) {
-  auto sessions = connections.getSessions();
-
-  std::string message = "sessions: ";
-  for (const auto &entry : sessions) {
-    const ClientSession &session = *entry.second;
-    message += "[" + session.getUser().getUsername() + "," + session.getRoom().getName() + "] ";
-  }
-  message += "total: " + std::to_string(sessions.size());
-
-  Packet response = Packet(packet);
-  response.timestamp = static_cast<uint64_t>(std::time(nullptr));
-  response.sender = "server";
-  response.receiver = packet.sender;
-  response.message = message;
   return response;
 }

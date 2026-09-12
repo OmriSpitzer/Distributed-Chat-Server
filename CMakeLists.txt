@@ -174,6 +174,9 @@ target_link_libraries(client_session_test PRIVATE utils Catch2::Catch2WithMain T
 add_executable(database_manager_test tests/server/database_manager_test.cpp)
 target_link_libraries(database_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
 
+add_executable(heartbeat_test tests/server/heartbeat_test.cpp)
+target_link_libraries(heartbeat_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
 add_executable(message_test tests/utils/message_test.cpp)
 target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
 
@@ -202,6 +205,7 @@ catch_discover_tests(packet_test)
 # ------------ Server tests ------------
 catch_discover_tests(client_session_test)
 catch_discover_tests(database_manager_test)
+catch_discover_tests(heartbeat_test)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - Tests - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^
