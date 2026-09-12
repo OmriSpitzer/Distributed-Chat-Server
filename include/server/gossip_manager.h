@@ -1,10 +1,10 @@
 /**
  * GossipManager header file class
  *
- * @date 10-09-2026
+ * @date 12-09-2026
  */
-#pragma once
 
+#pragma once
 #include "server/connection_manager.h"
 #include "utils/models/packet.h"
 #include <atomic>
@@ -16,6 +16,7 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 class GossipManager {
 public:
@@ -35,33 +36,43 @@ public:
   GossipManager(const GossipManager &) = delete;
   GossipManager &operator=(const GossipManager &) = delete;
 
-  // apply locally (if new), then fan-out GOSSIP_EVENT to peers
+  // rumor a packet
   void rumor(const Packet &packet);
 
 private:
-  ConnectionManager &connections;                   // local client sockets for apply
-  int listeningSocket{-1};                          // listening socket
-  std::atomic<bool> stopped{true};                  // stopped listening
-  std::thread acceptThread;                         // accept thread
-  std::thread dialThread;                           // dial thread
-  std::thread antiEntropyThread;                    // anti-entropy thread
-  std::unordered_map<int, std::string> peers;       // socket -> remote NODE_ID
-  std::unordered_set<std::string> seenEvents;       // seen events
-  std::deque<std::string> recentEventIds;           // ordered ids for digests
-  std::unordered_map<std::string, Packet> eventLog; // id -> full event for PULL
-  mutable std::mutex peersMutex;                    // peers mutex
-  std::mutex sendMutex;                             // send mutex
-  std::mutex seenMutex;                             // seen / eventLog mutex
-  std::condition_variable dialCv;                   // dial condition variable
-  std::mutex dialMutex;                             // dial mutex
-  std::condition_variable antiEntropyCv;            // anti-entropy condition variable
-  std::mutex antiEntropyMutex;                      // anti-entropy mutex
+  ConnectionManager &connections;  // local client sockets for apply
+  int listeningSocket{-1};         // listening socket
+  std::atomic<bool> stopped{true}; // stopped listening
 
-  // start listening for incoming connections
-  bool startListening(std::uint16_t port);
+  std::thread acceptThread;      // accept thread
+  std::thread dialThread;        // dial thread
+  std::thread antiEntropyThread; // anti-entropy thread
 
-  // stop listening for incoming connections
-  void stopListening();
+  std::unordered_map<int, std::string> peers;         // socket -> remote NODE_ID
+  std::unordered_set<std::string> seenEvents;         // seen events
+  std::deque<std::string> recentEventIds;             // ordered ids for digests
+  std::unordered_map<std::string, Packet> eventLog;   // id -> full event for PULL
+  std::unordered_map<int, std::string> outboundAddrs; // socket -> "host:port"
+
+  mutable std::mutex peersMutex;         // peers mutex
+  std::mutex sendMutex;                  // send mutex
+  std::mutex seenMutex;                  // seen / eventLog mutex
+  std::condition_variable dialCv;        // dial condition variable
+  std::mutex dialMutex;                  // dial mutex
+  std::condition_variable antiEntropyCv; // anti-entropy condition variable
+  std::mutex antiEntropyMutex;           // anti-entropy mutex
+
+  static constexpr std::size_t MAX_EVENT_LOG =
+      256; // maximum number of events to keep in the event log
+  static constexpr std::size_t DIAL_INTERVAL = 3; // interval in seconds to dial peers
+  static constexpr std::size_t ANTI_ENTROPY_INTERVAL =
+      3; // interval in seconds to send anti-entropy packets
+
+  std::vector<std::thread> peerThreads; // peer threads
+  std::mutex peerThreadsMutex;          // peer threads mutex
+
+  // spawn a peer handler
+  void spawnPeerHandler(int fd);
 
   // accept loop
   void acceptLoop();
@@ -92,4 +103,10 @@ private:
 
   // build digest payload from recentEventIds (caller holds seenMutex)
   std::string buildDigestLocked() const;
+
+  // parse host and port from a string
+  static bool parseHostPort(const std::string &addr, std::string &host, std::uint16_t &port);
+
+  // get the event id from a packet
+  static std::string eventIdFromPacket(const Packet &packet);
 };

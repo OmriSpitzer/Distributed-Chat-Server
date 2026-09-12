@@ -10,6 +10,7 @@
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
 #include "utils/serializer.h"
+#include "utils/socket_io.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -19,63 +20,6 @@
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
-
-namespace {
-constexpr std::uint32_t kMaxPayloadBytes = 1024 * 1024; // same as Serializer
-
-bool recvExact(SOCKET socket, char *buffer, int bytes) {
-  int received = 0;
-  while (received < bytes) {
-    int n = recv(socket, buffer + received, bytes - received, 0);
-    if (n <= 0) {
-      return false;
-    }
-    received += n;
-  }
-  return true;
-}
-
-bool sendExact(SOCKET socket, const char *buffer, int bytes) {
-  int sent = 0;
-  while (sent < bytes) {
-    int n = send(socket, buffer + sent, bytes - sent, 0);
-    if (n == SOCKET_ERROR) {
-      return false;
-    }
-    sent += n;
-  }
-  return true;
-}
-
-std::optional<Packet> readPacket(SOCKET socket) {
-  char sizeBuf[4];
-  if (!recvExact(socket, sizeBuf, 4)) {
-    return std::nullopt;
-  }
-
-  std::uint32_t payloadSize =
-      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[0])) << 24) |
-      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[1])) << 16) |
-      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[2])) << 8) |
-      static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[3]));
-
-  if (payloadSize == 0 || payloadSize > kMaxPayloadBytes) {
-    return std::nullopt;
-  }
-
-  std::string framed(4 + payloadSize, '\0');
-  framed[0] = sizeBuf[0];
-  framed[1] = sizeBuf[1];
-  framed[2] = sizeBuf[2];
-  framed[3] = sizeBuf[3];
-
-  if (!recvExact(socket, framed.data() + 4, static_cast<int>(payloadSize))) {
-    return std::nullopt;
-  }
-
-  return Serializer::deserialize(framed);
-}
-} // namespace
 
 // destructor
 Network::~Network() { disconnect(); }
@@ -178,8 +122,8 @@ bool Network::sendPacket(const Packet &packet, std::string_view message) {
     return false;
   }
 
-  if (!sendExact(static_cast<SOCKET>(clientSocket), serialized.c_str(),
-                 static_cast<int>(serialized.size()))) {
+  if (!socket_io::sendExact(static_cast<SOCKET>(clientSocket), serialized.c_str(),
+                            static_cast<int>(serialized.size()))) {
     Logger::logError("Network", "Failed to send packet to the server");
     return false;
   }
@@ -212,7 +156,7 @@ void Network::readerLoop() {
       break;
     }
 
-    std::optional<Packet> packet = readPacket(static_cast<SOCKET>(fd));
+    std::optional<Packet> packet = socket_io::readPacket(static_cast<SOCKET>(fd));
     if (!packet) {
       connected = false;
       incomingCv.notify_all();

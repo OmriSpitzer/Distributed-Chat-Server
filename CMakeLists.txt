@@ -16,6 +16,7 @@ add_library(utils
     src/utils/models/room.cpp
     src/utils/models/packet.cpp
     src/utils/serializer.cpp
+    src/utils/socket_io.cpp
 )
 target_include_directories(utils PUBLIC include)
 target_link_libraries(utils PUBLIC ws2_32)
@@ -140,6 +141,9 @@ target_link_libraries(room_test PRIVATE utils Catch2::Catch2WithMain)
 add_executable(serializer_test tests/class/serializer_test.cpp)
 target_link_libraries(serializer_test PRIVATE utils Catch2::Catch2WithMain)
 
+add_executable(socket_io_test tests/class/socket_io_test.cpp)
+target_link_libraries(socket_io_test PRIVATE utils Catch2::Catch2WithMain)
+
 add_executable(client_session_test tests/server/client_session_test.cpp src/server/client_session.cpp)
 target_link_libraries(client_session_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
 
@@ -160,6 +164,7 @@ include(Catch)
 catch_discover_tests(user_test)
 catch_discover_tests(room_test)
 catch_discover_tests(serializer_test)
+catch_discover_tests(socket_io_test)
 catch_discover_tests(client_session_test)
 
 #catch_discover_tests(message_test)

@@ -14,6 +14,7 @@
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
 #include "utils/serializer.h"
+#include "utils/socket_io.h"
 #include <atomic>
 #include <cstdint>
 #include <ctime>
@@ -28,80 +29,6 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
-
-namespace {
-// receive exact number of bytes
-bool recvExact(SOCKET socket, char *buffer, int bytes) {
-  int received = 0;
-  while (received < bytes) {
-    // number of bytes received
-    int n = recv(socket, buffer + received, bytes - received, 0);
-
-    if (n <= 0) {
-      return false;
-    }
-    received += n;
-  }
-  return true;
-}
-
-// send exact number of bytes
-bool sendExact(SOCKET socket, const char *buffer, int bytes) {
-  int sent = 0;
-  while (sent < bytes) {
-
-    // number of bytes sent
-    int n = send(socket, buffer + sent, bytes - sent, 0);
-    if (n <= 0) {
-      return false;
-    }
-    sent += n;
-  }
-  return true;
-}
-
-// read a packet from the socket
-std::optional<Packet> readPacket(SOCKET socket) {
-  char sizeBuf[4];
-
-  // check if the size buffer is received
-  if (!recvExact(socket, sizeBuf, 4)) {
-    return std::nullopt;
-  }
-
-  // convert the size buffer to a 32-bit unsigned integer
-  std::uint32_t payloadSize =
-      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[0])) << 24) |
-      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[1])) << 16) |
-      (static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[2])) << 8) |
-      static_cast<std::uint32_t>(static_cast<unsigned char>(sizeBuf[3]));
-
-  // check if the payload size is valid
-  if (payloadSize == 0 || payloadSize > Serializer::MAX_PAYLOAD_BYTES) {
-    return std::nullopt;
-  }
-
-  // create the framed buffer
-  std::string framed(4 + payloadSize, '\0');
-  framed[0] = sizeBuf[0];
-  framed[1] = sizeBuf[1];
-  framed[2] = sizeBuf[2];
-  framed[3] = sizeBuf[3];
-
-  // check if the payload is received
-  if (!recvExact(socket, framed.data() + 4, static_cast<int>(payloadSize))) {
-    return std::nullopt;
-  }
-
-  // deserialize the packet
-  return Serializer::deserialize(framed);
-}
-} // namespace
-
-/* --------------------------------------------------
- * ConnectionManager class implementation
- * --------------------------------------------------
- */
 
 // constructor
 ConnectionManager::ConnectionManager() : listeningSocket(-1) {}
@@ -127,41 +54,12 @@ bool ConnectionManager::startListening(std::uint16_t port) {
     return false;
   }
 
-  // create socket and check if successful
-  SOCKET socketFd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  SOCKET socketFd = socket_io::listenTo(port);
   if (socketFd == INVALID_SOCKET) {
-    Logger::logError("ConnectionManager", "Failed to create socket");
-    return false;
-  }
-
-  // allow quick rebinds after restart
-  int reuse = 1;
-  if (setsockopt(socketFd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&reuse),
-                 sizeof(reuse)) != 0) {
-    Logger::logWarning("ConnectionManager", "setsockopt(SO_REUSEADDR) failed");
-  }
-
-  // bind socket to port
-  sockaddr_in address{};
-  address.sin_family = AF_INET;                // set address family
-  address.sin_addr.s_addr = htonl(INADDR_ANY); // bind to all interfaces
-  address.sin_port = htons(port);              // bind to port
-
-  // bind socket to port and check if successful
-  if (bind(socketFd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
-    Logger::logError("ConnectionManager", "Failed to bind port " + std::to_string(port));
-    closesocket(socketFd);
-    return false;
-  }
-
-  // listen for connections and check if successful
-  if (listen(socketFd, SOMAXCONN) != 0) {
     Logger::logError("ConnectionManager", "Failed to listen on port " + std::to_string(port));
-    closesocket(socketFd);
     return false;
   }
 
-  // set listening socket and mark as listening
   listeningSocket = static_cast<int>(socketFd);
   listening.store(true);
   Logger::logInfo("ConnectionManager", "Listening on port " + std::to_string(port));
@@ -235,7 +133,7 @@ void ConnectionManager::handleClient(int clientSocket) {
 
   while (listening.load()) {
     // read a packet from the client socket
-    std::optional<Packet> packet = readPacket(sock);
+    std::optional<Packet> packet = socket_io::readPacket(sock);
 
     // check if the packet is valid
     if (!packet) {
@@ -378,7 +276,8 @@ bool ConnectionManager::sendPacket(int socket, const Packet &packet) {
   if (session->isClosed()) {
     return false;
   }
-  return sendExact(static_cast<SOCKET>(socket), framed.data(), static_cast<int>(framed.size()));
+  return socket_io::sendExact(static_cast<SOCKET>(socket), framed.data(),
+                              static_cast<int>(framed.size()));
 }
 
 // close a client socket so its read loop exits (at most once)
