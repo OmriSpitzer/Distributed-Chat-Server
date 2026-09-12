@@ -1,10 +1,10 @@
 /**
  * LogMessage header file class
  *
- * @date 04-09-2026
+ * @date 12-09-2026
  */
-#pragma once
 
+#pragma once
 #include <ctime>
 #include <ostream>
 #include <string>
@@ -23,6 +23,20 @@ public:
 
   // equality operator
   bool operator==(const LogMessage &other) const;
+  bool operator!=(const LogMessage &other) const;
+
+  // type to string
+  static std::string typeToString(LogMessage::Type type);
+
+  // string to type
+  static LogMessage::Type stringToType(std::string_view type);
+
+  // getters
+  const std::string &getId() const;
+  const std::string &getSource() const;
+  const std::string &getMessage() const;
+  LogMessage::Type getType() const;
+  std::time_t getTimestamp() const;
 
 private:
   std::string id;        // message id
@@ -30,7 +44,4 @@ private:
   std::string message;   // message content
   LogMessage::Type type; // message type
   std::time_t timestamp; // message timestamp
-
-  // type to string
-  static std::string typeToString(LogMessage::Type type);
 };

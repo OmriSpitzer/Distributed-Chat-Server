@@ -1,18 +1,15 @@
 /**
  * Logger class
  *
- * @brief Logger class to store a list of messages and its metadata (message count, messages)
- * @date 04-09-2026
+ * @brief Logger class to store a list of messages.
+ * @date 12-09-2026
  */
 
 #include "utils/models/logger.h"
 #include "utils/models/log_message.h"
 #include <iostream>
-#include <queue>
+#include <stdexcept>
 #include <string_view>
-
-// singleton constructor design pattern
-Logger::Logger() : message_count(0) {}
 
 // log an info message
 void Logger::logInfo(std::string_view source, std::string_view message) {
@@ -31,30 +28,39 @@ void Logger::logError(std::string_view source, std::string_view message) {
 
 // log a heartbeat message
 void Logger::logHeartbeat(std::string_view source, std::string_view message) {
-  LogMessage logMessage(source, message, LogMessage::Type::HEARTBEAT);
-
-  // print the message
-  std::cout << logMessage << "\n";
+  getInstance().addMessage(source, message, LogMessage::Type::HEARTBEAT);
 }
 
 // get a message by index
-LogMessage Logger::getMessage(int index) const {
-  auto copy = Logger::getInstance().messages;
-  for (int i = 0; i < index; i++) {
-    copy.pop();
+LogMessage Logger::getMessage(std::size_t index) const {
+  std::lock_guard lock(messages_mutex);
+  if (index >= messages.size()) {
+    throw std::out_of_range("Logger::getMessage index out of range");
   }
-  return copy.front();
+  return messages[index];
+}
+
+// clear the logger
+void Logger::clear() {
+  Logger &logger = getInstance();
+  std::lock_guard lock(logger.messages_mutex);
+  logger.messages.clear();
+}
+
+// get the size of the logger
+std::size_t Logger::size() {
+  Logger &logger = getInstance();
+  std::lock_guard lock(logger.messages_mutex);
+  return logger.messages.size();
 }
 
 // print the logger
 std::ostream &operator<<(std::ostream &out, const Logger &logger) {
-  out << "Logger: " << Logger::getInstance().message_count << " messages\n";
+  std::lock_guard lock(logger.messages_mutex);
+  out << "Logger: " << logger.messages.size() << " messages\n";
   out << "Messages:\n";
-
-  auto copy = Logger::getInstance().messages;
-  while (!copy.empty()) {
-    out << copy.front() << "\n";
-    copy.pop();
+  for (const auto &msg : logger.messages) {
+    out << msg << "\n";
   }
   out << "\n";
   return out;
@@ -64,10 +70,17 @@ std::ostream &operator<<(std::ostream &out, const Logger &logger) {
 void Logger::addMessage(std::string_view source, std::string_view message, LogMessage::Type type) {
   LogMessage logMessage(source, message, type);
 
-  // add the message to the logger
-  getInstance().messages.push(logMessage);
-  ++getInstance().message_count;
+  {
+    std::lock_guard lock(messages_mutex);
+    messages.push_back(logMessage);
+    while (messages.size() > kMaxMessages) {
+      messages.pop_front();
+    }
+  }
 
-  // print the message
-  std::cout << logMessage << "\n";
+  if (type == LogMessage::Type::ERROR) {
+    std::cerr << logMessage << "\n";
+  } else {
+    std::cout << logMessage << "\n";
+  }
 }

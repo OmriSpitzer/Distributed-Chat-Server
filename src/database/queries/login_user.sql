@@ -1,3 +1,3 @@
-SELECT username, email, user_type
-FROM users 
-WHERE username = ? AND password = ?;
+SELECT username, email, user_type, password
+FROM users
+WHERE username = ?;

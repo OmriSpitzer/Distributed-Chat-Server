@@ -6,7 +6,6 @@
  */
 
 #include "client/console_ui.h"
-#include "auth/authentication.h"
 #include "client/client_state.h"
 #include "client/packet_builder.h"
 #include "utils/models/packet.h"
@@ -108,9 +107,6 @@ std::optional<Packet> ConsoleUI::showLogin() {
     if (username == "exit") {
       return std::nullopt;
     }
-    if (!Authentication::verifyUsername(username)) {
-      continue;
-    }
 
     std::cout << ">> Password (insert 'exit' to go back): ";
     std::getline(std::cin, password);
@@ -118,9 +114,6 @@ std::optional<Packet> ConsoleUI::showLogin() {
 
     if (password == "exit") {
       return std::nullopt;
-    }
-    if (!Authentication::verifyPassword(password)) {
-      continue;
     }
     break;
   } while (true);
@@ -146,9 +139,6 @@ std::optional<Packet> ConsoleUI::showRegister() {
     if (username == "exit") {
       return std::nullopt;
     }
-    if (!Authentication::verifyUsername(username)) {
-      continue;
-    }
 
     std::cout << ">> New password (insert 'exit' to go back): ";
     std::getline(std::cin, password);
@@ -157,9 +147,6 @@ std::optional<Packet> ConsoleUI::showRegister() {
     if (password == "exit") {
       return std::nullopt;
     }
-    if (!Authentication::verifyPassword(password)) {
-      continue;
-    }
 
     std::cout << ">> New email (insert 'exit' to go back): ";
     std::getline(std::cin, email);
@@ -167,9 +154,6 @@ std::optional<Packet> ConsoleUI::showRegister() {
 
     if (email == "exit") {
       return std::nullopt;
-    }
-    if (!Authentication::verifyEmail(email)) {
-      continue;
     }
 
     break;

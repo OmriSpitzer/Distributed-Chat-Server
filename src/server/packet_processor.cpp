@@ -13,13 +13,13 @@
 #include "server/room_manager.h"
 #include "utils/RESPONSE_CODES.h"
 #include "utils/models/user.h"
-#include <any>
 #include <atomic>
 #include <cstdint>
 #include <ctime>
 #include <exception>
 #include <string>
 #include <string_view>
+#include <variant>
 
 namespace {
 std::atomic<std::uint64_t> nextPresenceSeq{0};
@@ -60,7 +60,8 @@ void rumorRoomJoin(ConnectionManager &connections, const std::string &username,
 Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &session,
                                       ConnectionManager &connections) {
   // create a response packet
-  Packet response = packet.copy();
+  Packet response = Packet(packet);
+  response.timestamp = static_cast<uint64_t>(std::time(nullptr));
   response.sender = "server";
   response.receiver = packet.sender;
 
@@ -77,14 +78,15 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
   case Packet::PacketType::LOGIN: {
     try {
       // get the user from the database
-      std::any dbResult = DatabaseManager::getInstance().loginUser(packet.sender, packet.message);
-      if (const auto *error = std::any_cast<std::string>(&dbResult)) {
+      std::variant<User, std::string> dbResult =
+          DatabaseManager::getInstance().loginUser(packet.sender, packet.message);
+      if (const auto *error = std::get_if<std::string>(&dbResult)) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = *error;
         break;
       }
 
-      User user = std::any_cast<User>(dbResult);
+      User user = std::get<User>(dbResult);
 
       // local socket or another node's presence row
       if (connections.hasSession(user) ||
@@ -278,7 +280,8 @@ Packet PacketProcessor::processHeartbeatPacket(const Packet &packet,
   }
   message += "total: " + std::to_string(sessions.size());
 
-  Packet response = packet.copy();
+  Packet response = Packet(packet);
+  response.timestamp = static_cast<uint64_t>(std::time(nullptr));
   response.sender = "server";
   response.receiver = packet.sender;
   response.message = message;

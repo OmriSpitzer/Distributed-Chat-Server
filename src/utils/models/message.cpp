@@ -1,29 +1,36 @@
 /**
  * Message class
  *
- * @brief Message class to store a message and its metadata (from, to, content, timestamp, id)
- * @date 07-09-2026
+ * @brief Message class to store a message and its metadata.
+ * @date 11-09-2026
  */
 
 #include "utils/models/message.h"
 #include "config/config.h"
 #include <atomic>
 #include <ctime>
+#include <random>
 
 // unique message id generator
 namespace {
-// message id : <nodeId>-<unix_time>-<local_counter>
 // local counter
 std::atomic<uint64_t> next_message_id{0};
 
-// id prefix
-std::string idPrefix = config::NODE_ID + "-" + std::to_string(std::time(nullptr)) + "-";
+// boot id
+const std::string boot_id =
+    std::to_string(static_cast<uint64_t>(std::time(nullptr)) * 1000003ull + std::random_device{}());
+
+// make a message id
+std::string makeMessageId(std::time_t now) {
+  const auto seq = ++next_message_id;
+  return config::NODE_ID + "-" + boot_id + "-" + std::to_string(now) + "-" + std::to_string(seq);
+}
 } // namespace
 
 // constructor
 Message::Message(const User &from, const User &to, std::string_view message)
     : from(from), to(to), content(message), timestamp(std::time(nullptr)),
-      id(idPrefix + std::to_string(++next_message_id)) {}
+      id(makeMessageId(timestamp)) {}
 
 // reconstruct from stored row
 Message::Message(const User &from, const User &to, std::string_view message, std::string id,
@@ -33,9 +40,9 @@ Message::Message(const User &from, const User &to, std::string_view message, std
 // getters
 const User &Message::getFrom() const { return this->from; }
 const User &Message::getTo() const { return this->to; }
-std::string Message::getContent() const { return this->content; }
+const std::string &Message::getContent() const { return this->content; }
 std::time_t Message::getTimestamp() const { return this->timestamp; }
-std::string Message::getId() const { return this->id; }
+const std::string &Message::getId() const { return this->id; }
 
 // print operator
 std::ostream &operator<<(std::ostream &out, const Message &msg) {
@@ -54,9 +61,5 @@ bool Message::operator!=(const Message &other) const { return !(*this == other);
 // comparison operators
 bool Message::operator<(const Message &other) const { return this->timestamp < other.timestamp; }
 bool Message::operator>(const Message &other) const { return this->timestamp > other.timestamp; }
-bool Message::operator<=(const Message &other) const {
-  return this->timestamp <= other.timestamp || *this == other;
-}
-bool Message::operator>=(const Message &other) const {
-  return this->timestamp >= other.timestamp || *this == other;
-}
+bool Message::operator<=(const Message &other) const { return *this < other || *this == other; }
+bool Message::operator>=(const Message &other) const { return *this > other || *this == other; }

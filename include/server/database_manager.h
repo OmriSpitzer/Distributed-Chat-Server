@@ -1,28 +1,32 @@
 /**
  * DatabaseManager header file class
  *
- * @date 08-09-2026
+ * @date 12-09-2026
  */
+
 #pragma once
 #include "utils/models/message.h"
 #include "utils/models/user.h"
-#include <any>
 #include <initializer_list>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
+// import sqlite3
 struct sqlite3;
 struct sqlite3_stmt;
 
 class DatabaseManager {
 public:
+  // define SqlRow and SqlResult
   using SqlRow = std::vector<std::string>;
   using SqlResult = std::vector<SqlRow>;
 
+  // define ConstraintError
   class ConstraintError : public std::runtime_error {
   public:
     explicit ConstraintError(const std::string &what) : std::runtime_error(what) {}
@@ -45,12 +49,13 @@ public:
                   const std::string_view &email);
 
   // authenticate: returns User or an error string
-  std::any loginUser(const std::string_view &username, const std::string_view &password);
+  std::variant<User, std::string> loginUser(const std::string_view &username,
+                                            const std::string_view &password);
 
   // INSERT OR IGNORE — returns true if a new row was written
   bool saveMessage(const Message &message, std::string_view room);
 
-  // messages for a room, oldest first
+  // messages for a room, newest first
   std::vector<Message> loadHistory(std::string_view room);
 
   // persist which node currently holds this user's socket in the room
@@ -74,13 +79,16 @@ public:
   // delete copy constructor and assignment operator
   DatabaseManager(const DatabaseManager &) = delete;
   DatabaseManager &operator=(const DatabaseManager &) = delete;
+  DatabaseManager(DatabaseManager &&) = delete;
+  DatabaseManager &operator=(DatabaseManager &&) = delete;
 
   // destructor
   ~DatabaseManager();
 
 private:
-  std::mutex mutex;      // the mutex for the database
-  sqlite3 *db = nullptr; // the database connection
+  std::mutex mutex;                    // the mutex for the database
+  sqlite3 *db = nullptr;               // the database connection
+  std::size_t DEFAULT_INTERVAL = 5000; // lock timeout interval
 
   // constructor
   DatabaseManager();

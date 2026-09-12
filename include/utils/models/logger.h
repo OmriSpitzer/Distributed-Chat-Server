@@ -1,17 +1,21 @@
 /**
  * Logger header file class
  *
- * @date 04-09-2026
+ * @date 12-09-2026
  */
-#pragma once
 
+#pragma once
 #include "utils/models/log_message.h"
+#include <cstddef>
+#include <deque>
+#include <mutex>
 #include <ostream>
-#include <queue>
 #include <string_view>
 
 class Logger {
 public:
+  static constexpr std::size_t kMaxMessages = 1000;
+
   // singleton instance getter
   static Logger &getInstance() {
     static Logger instance;
@@ -25,22 +29,27 @@ public:
   static void logHeartbeat(std::string_view source, std::string_view message);
 
   // get a message by index
-  LogMessage getMessage(int index) const;
+  LogMessage getMessage(std::size_t index) const;
+
+  // clear stored messages
+  static void clear();
+
+  // get the size of the logger
+  static std::size_t size();
 
   // print the logger
   friend std::ostream &operator<<(std::ostream &out, const Logger &logger);
 
-  // delete copy constructor and assignment operator
   Logger(const Logger &) = delete;
   Logger &operator=(const Logger &) = delete;
+  Logger(Logger &&) = delete;
+  Logger &operator=(Logger &&) = delete;
 
 private:
-  std::queue<LogMessage> messages; // messages
-  int message_count;               // message count
+  mutable std::mutex messages_mutex;
+  std::deque<LogMessage> messages;
 
-  // add a message to the logger
   void addMessage(std::string_view source, std::string_view message, LogMessage::Type type);
 
-  // constructor
-  Logger();
+  Logger() = default;
 };

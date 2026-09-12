@@ -11,8 +11,11 @@
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
 #include "utils/models/logger.h"
+#include "utils/models/packet.h"
+#include "utils/models/room.h"
 #include <exception>
 #include <vector>
+
 
 // Lobby room
 const Room RoomManager::LOBBY = Room("Lobby", Room::RoomType::LOBBY);

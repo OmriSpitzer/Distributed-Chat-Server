@@ -1,7 +1,7 @@
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
   username  TEXT PRIMARY KEY,
-  email     TEXT NOT NULL,
+  email     TEXT NOT NULL UNIQUE,
   password  TEXT NOT NULL,
   user_type TEXT NOT NULL
 );
@@ -15,12 +15,14 @@ CREATE TABLE IF NOT EXISTS rooms (
 
 -- Create messages table
 CREATE TABLE IF NOT EXISTS messages (
-  id         TEXT PRIMARY KEY,  
+  id         TEXT PRIMARY KEY,
   room       TEXT NOT NULL,
   sender     TEXT NOT NULL,
   content    TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  origin     TEXT NOT NULL      
+  origin     TEXT NOT NULL,
+  FOREIGN KEY (room) REFERENCES rooms(name),
+  FOREIGN KEY (sender) REFERENCES users(username)
 );
 
 -- Create membership table
@@ -43,6 +45,6 @@ VALUES ('Lobby', 'LOBBY', 'PUBLIC');
 
 -- Populate users table
 INSERT OR IGNORE INTO users (username, email, password, user_type) VALUES
-  ('omri', 'omri@gmail.com', '123', 'USER'),
-  ('spitzer', 'spitzer@gmail.com', '123', 'USER'),
-  ('admin', 'admin@gmail.com', '123', 'ADMIN');
+  ('omri', 'omri@gmail.com', '$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>', 'USER'),
+  ('spitzer', 'spitzer@gmail.com', '$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>', 'USER'),
+  ('admin', 'admin@gmail.com', '$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>', 'ADMIN');

@@ -1,11 +1,10 @@
 /**
  * Message header file class
  *
- * @date 13-07-2026
+ * @date 11-09-2026
  */
 
 #pragma once
-
 #include "utils/models/user.h"
 #include <ctime>
 #include <ostream>
@@ -24,9 +23,9 @@ public:
   // getters
   const User &getFrom() const;
   const User &getTo() const;
-  std::string getContent() const;
+  const std::string &getContent() const;
   std::time_t getTimestamp() const;
-  std::string getId() const;
+  const std::string &getId() const;
 
   // print operator
   friend std::ostream &operator<<(std::ostream &out, const Message &msg);

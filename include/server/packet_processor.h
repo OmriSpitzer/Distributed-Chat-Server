@@ -4,7 +4,6 @@
  * @date 06-09-2026
  */
 #pragma once
-#include "auth/authentication.h"
 #include "server/client_session.h"
 #include "server/user_manager.h"
 #include "utils/models/packet.h"
@@ -21,9 +20,6 @@ public:
   static Packet processHeartbeatPacket(const Packet &packet, ConnectionManager &connections);
 
 private:
-  // authentication
-  Authentication authentication;
-
   // user manager
   UserManager userManager;
 };

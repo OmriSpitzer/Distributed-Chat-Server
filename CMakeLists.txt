@@ -3,11 +3,36 @@ project(DistributedChatServer C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # - - - - - - - - - - - - - - - - - Libraries - - - - - - - - - - - - - - - - -
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# Library
+# Authentication Library
+include(FetchContent)
+FetchContent_Declare(
+  argon2
+  GIT_REPOSITORY https://github.com/P-H-C/phc-winner-argon2.git
+  GIT_TAG        20190702
+)
+FetchContent_GetProperties(argon2)
+if(NOT argon2_POPULATED)
+  FetchContent_Populate(argon2)
+endif()
+add_library(argon2 STATIC
+  ${argon2_SOURCE_DIR}/src/argon2.c
+  ${argon2_SOURCE_DIR}/src/core.c
+  ${argon2_SOURCE_DIR}/src/encoding.c
+  ${argon2_SOURCE_DIR}/src/thread.c
+  ${argon2_SOURCE_DIR}/src/blake2/blake2b.c
+  ${argon2_SOURCE_DIR}/src/ref.c
+)
+target_include_directories(argon2
+  PUBLIC  ${argon2_SOURCE_DIR}/include
+  PRIVATE ${argon2_SOURCE_DIR}/src
+)
+
+# Utils Library
 add_library(utils
     src/utils/models/logger.cpp
     src/utils/models/log_message.cpp
@@ -62,9 +87,8 @@ target_link_libraries(chat_client PRIVATE client_lib)
 add_library(auth
     src/auth/authentication.cpp
 )
-target_link_libraries(auth PUBLIC utils)
-
 target_include_directories(auth PUBLIC include)
+target_link_libraries(auth PUBLIC utils argon2)
 target_link_libraries(server_lib PUBLIC utils auth ws2_32 Threads::Threads)
 target_link_libraries(client_lib PUBLIC utils auth ws2_32 Threads::Threads)
 
@@ -132,46 +156,52 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(user_test tests/class/user_test.cpp)
+add_executable(user_test tests/utils/user_test.cpp)
 target_link_libraries(user_test PRIVATE utils Catch2::Catch2WithMain)
 
-add_executable(room_test tests/class/room_test.cpp)
+add_executable(room_test tests/utils/room_test.cpp)
 target_link_libraries(room_test PRIVATE utils Catch2::Catch2WithMain)
 
-add_executable(serializer_test tests/class/serializer_test.cpp)
+add_executable(serializer_test tests/utils/serializer_test.cpp)
 target_link_libraries(serializer_test PRIVATE utils Catch2::Catch2WithMain)
 
-add_executable(socket_io_test tests/class/socket_io_test.cpp)
+add_executable(socket_io_test tests/utils/socket_io_test.cpp)
 target_link_libraries(socket_io_test PRIVATE utils Catch2::Catch2WithMain)
 
 add_executable(client_session_test tests/server/client_session_test.cpp src/server/client_session.cpp)
 target_link_libraries(client_session_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
 
-#add_executable(message_test tests/class/message_test.cpp)
-#target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(database_manager_test tests/server/database_manager_test.cpp)
+target_link_libraries(database_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
 
-#add_executable(log_message_test tests/class/log_message_test.cpp)
-#target_link_libraries(log_message_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(message_test tests/utils/message_test.cpp)
+target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
 
-#add_executable(logger_test tests/class/logger_test.cpp)
-#target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(log_message_test tests/utils/log_message_test.cpp)
+target_link_libraries(log_message_test PRIVATE utils Catch2::Catch2WithMain)
 
-#add_executable(packet_test tests/class/packet_test.cpp)
-#target_link_libraries(packet_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(logger_test tests/utils/logger_test.cpp)
+target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain)
+
+add_executable(packet_test tests/utils/packet_test.cpp)
+target_link_libraries(packet_test PRIVATE utils Catch2::Catch2WithMain)
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
+
+# ------------ Utils tests ------------
 catch_discover_tests(user_test)
 catch_discover_tests(room_test)
 catch_discover_tests(serializer_test)
 catch_discover_tests(socket_io_test)
+catch_discover_tests(message_test)
+catch_discover_tests(log_message_test)
+catch_discover_tests(logger_test)
+catch_discover_tests(packet_test)
+
+# ------------ Server tests ------------
 catch_discover_tests(client_session_test)
-
-#catch_discover_tests(message_test)
-#catch_discover_tests(log_message_test)
-#catch_discover_tests(logger_test)
-#catch_discover_tests(packet_test)
-
+catch_discover_tests(database_manager_test)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - Tests - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^

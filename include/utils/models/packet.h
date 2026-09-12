@@ -1,11 +1,13 @@
 /**
  * Packet header file class
  *
- * @date 07-09-2026
+ * @date 12-09-2026
  */
+
 #pragma once
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 class Packet {
 public:
@@ -27,8 +29,8 @@ public:
 
   // constructors
   Packet();
-  Packet(std::string sender, std::string receiver, PacketType type = PacketType::DEFAULT,
-         std::string room = "", std::string message = "", int responseCode = 0);
+  Packet(std::string_view sender, std::string_view receiver, PacketType type = PacketType::DEFAULT,
+         std::string_view room = "", std::string_view message = "", int responseCode = 0);
 
   // packet type
   PacketType type;
@@ -51,12 +53,9 @@ public:
   // response code
   int responseCode;
 
-  // copy the packet
-  Packet copy() const;
-
   // convert packet type to string
   static std::string packetTypeToString(PacketType type);
 
   // convert string to packet type
-  static PacketType stringToPacketType(const std::string &type);
+  static PacketType stringToPacketType(std::string_view type);
 };
