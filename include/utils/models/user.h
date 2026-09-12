@@ -1,12 +1,10 @@
 /**
  * User header file class
  *
- * @brief User class to store a user and its metadata (username, email, user_type)
- * @date 06-09-2026
+ * @date 11-09-2026
  */
 
 #pragma once
-
 #include <ostream>
 #include <string>
 #include <string_view>

@@ -1,8 +1,8 @@
 /**
  * User class
  *
- * @brief User class to store a user and its metadata (username, email, user_type)
- * @date 12-07-2026
+ * @brief User class to store a user and its metadata.
+ * @date 11-09-2026
  */
 
 #include "utils/models/user.h"
@@ -10,6 +10,21 @@
 #include <random>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
+
+// type to string map
+static const std::unordered_map<User::UserType, std::string> kTypeToString{
+    {User::UserType::ADMIN, "ADMIN"},
+    {User::UserType::USER, "USER"},
+    {User::UserType::GUEST, "GUEST"},
+};
+
+// string to type map
+static const std::unordered_map<std::string, User::UserType> kStringToType{
+    {"ADMIN", User::UserType::ADMIN},
+    {"USER", User::UserType::USER},
+    {"GUEST", User::UserType::GUEST},
+};
 
 // constructor
 User::User(std::string_view username, std::string_view email, User::UserType user_type)
@@ -31,15 +46,22 @@ std::string User::getUsername() const { return this->username; }
 std::string User::getEmail() const { return this->email; }
 User::UserType User::getUserType() const { return this->user_type; }
 
+// type to string
 std::string User::typeToString(User::UserType user_type) {
-  switch (user_type) {
-  case User::UserType::ADMIN:
-    return "ADMIN";
-  case User::UserType::USER:
-    return "USER";
-  default:
-    return "GUEST";
+  auto it = kTypeToString.find(user_type);
+  if (it != kTypeToString.end()) {
+    return it->second;
   }
+  return kTypeToString.at(User::UserType::GUEST);
+}
+
+// string to type
+User::UserType User::stringToType(const std::string_view &type) {
+  auto it = kStringToType.find(std::string(type));
+  if (it != kStringToType.end()) {
+    return it->second;
+  }
+  return User::UserType::GUEST;
 }
 
 // setters
@@ -64,17 +86,6 @@ User User::anonymousUser() {
   return User(genUsername, genUsername + "@local", User::UserType::GUEST);
 }
 
-// string to type
-User::UserType User::stringToType(const std::string_view &type) {
-  if (type == "ADMIN") {
-    return User::UserType::ADMIN;
-  }
-  if (type == "USER") {
-    return User::UserType::USER;
-  }
-  return User::UserType::GUEST;
-}
-
 // serialize
 std::string User::serialize() const {
   return "user(" + this->username + "|" + this->email + "|" + User::typeToString(this->user_type) +
@@ -91,7 +102,8 @@ User User::deserialize(const std::string &serialized) {
 
   const std::string body = serialized.substr(prefix.size(), serialized.size() - prefix.size() - 1);
   const std::size_t first = body.find('|');
-  const std::size_t second = (first == std::string::npos) ? std::string::npos : body.find('|', first + 1);
+  const std::size_t second =
+      (first == std::string::npos) ? std::string::npos : body.find('|', first + 1);
   if (first == std::string::npos || second == std::string::npos) {
     throw std::invalid_argument("Invalid serialized user");
   }

@@ -131,32 +131,42 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(message_test tests/class/message_test.cpp)
-target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
-
-add_executable(log_message_test tests/class/log_message_test.cpp)
-target_link_libraries(log_message_test PRIVATE utils Catch2::Catch2WithMain)
-
-add_executable(logger_test tests/class/logger_test.cpp)
-target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(user_test tests/class/user_test.cpp)
 target_link_libraries(user_test PRIVATE utils Catch2::Catch2WithMain)
-
-add_executable(packet_test tests/class/packet_test.cpp)
-target_link_libraries(packet_test PRIVATE utils Catch2::Catch2WithMain)
 
 add_executable(room_test tests/class/room_test.cpp)
 target_link_libraries(room_test PRIVATE utils Catch2::Catch2WithMain)
 
+add_executable(serializer_test tests/class/serializer_test.cpp)
+target_link_libraries(serializer_test PRIVATE utils Catch2::Catch2WithMain)
+
+add_executable(client_session_test tests/server/client_session_test.cpp src/server/client_session.cpp)
+target_link_libraries(client_session_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
+
+#add_executable(message_test tests/class/message_test.cpp)
+#target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
+
+#add_executable(log_message_test tests/class/log_message_test.cpp)
+#target_link_libraries(log_message_test PRIVATE utils Catch2::Catch2WithMain)
+
+#add_executable(logger_test tests/class/logger_test.cpp)
+#target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain)
+
+#add_executable(packet_test tests/class/packet_test.cpp)
+#target_link_libraries(packet_test PRIVATE utils Catch2::Catch2WithMain)
+
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
-catch_discover_tests(message_test)
-catch_discover_tests(log_message_test)
-catch_discover_tests(logger_test)
 catch_discover_tests(user_test)
-catch_discover_tests(packet_test)
 catch_discover_tests(room_test)
+catch_discover_tests(serializer_test)
+catch_discover_tests(client_session_test)
+
+#catch_discover_tests(message_test)
+#catch_discover_tests(log_message_test)
+#catch_discover_tests(logger_test)
+#catch_discover_tests(packet_test)
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - Tests - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^

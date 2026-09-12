@@ -1,145 +1,107 @@
 /**
  * Room class
  *
- * @brief Room class to store a room and its metadata (name, type, privacy, users, history,
- * created_at)
- * @date 12-07-2026
+ * @brief Room class to store a room and its metadata.
+ * @date 11-09-2026
  */
-
 #include "utils/models/room.h"
-#include "utils/models/message.h"
 #include <atomic>
 #include <ctime>
-#include <exception>
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace {
 std::atomic<uint64_t> next_room_id{0};
 }
 
+// type to string map
+static const std::unordered_map<Room::RoomType, std::string> typeMap{
+    {Room::RoomType::RESEARCH_AND_DEVELOPMENT, "R&D"},
+    {Room::RoomType::PRODUCTION, "Production"},
+    {Room::RoomType::QA, "QA"},
+    {Room::RoomType::DEVOPS, "DevOps"},
+    {Room::RoomType::SECURITY, "Security"},
+    {Room::RoomType::DESIGN, "Design"},
+    {Room::RoomType::MARKETING, "Marketing"},
+    {Room::RoomType::HR, "HR"},
+    {Room::RoomType::FINANCE, "Finance"},
+    {Room::RoomType::LEGAL, "Legal"},
+    {Room::RoomType::CUSTOMER_SUPPORT, "Customer Support"},
+    {Room::RoomType::OTHER, "Other"},
+    {Room::RoomType::LOBBY, "Lobby"},
+};
+
+// string to type map
+static const std::unordered_map<std::string, Room::RoomType> stringToTypeMap{
+    {"R&D", Room::RoomType::RESEARCH_AND_DEVELOPMENT},
+    {"Production", Room::RoomType::PRODUCTION},
+    {"QA", Room::RoomType::QA},
+    {"DevOps", Room::RoomType::DEVOPS},
+    {"Security", Room::RoomType::SECURITY},
+    {"Design", Room::RoomType::DESIGN},
+    {"Marketing", Room::RoomType::MARKETING},
+    {"HR", Room::RoomType::HR},
+    {"Finance", Room::RoomType::FINANCE},
+    {"Legal", Room::RoomType::LEGAL},
+    {"Customer Support", Room::RoomType::CUSTOMER_SUPPORT},
+    {"Other", Room::RoomType::OTHER},
+    {"Lobby", Room::RoomType::LOBBY},
+};
+
+// privacy to string map
+static const std::unordered_map<Room::Privacy, std::string> privacyMap{
+    {Room::Privacy::PUBLIC, "PUBLIC"},
+    {Room::Privacy::PRIVATE, "PRIVATE"},
+};
+
+// string to privacy map
+static const std::unordered_map<std::string, Room::Privacy> stringToPrivacyMap{
+    {"PUBLIC", Room::Privacy::PUBLIC},
+    {"PRIVATE", Room::Privacy::PRIVATE},
+};
+
 // constructor
 Room::Room(std::string_view name, Room::RoomType type, Room::Privacy privacy)
     : id(std::to_string(++next_room_id)), name(name), type(type), privacy(privacy),
-      created_at(std::time(nullptr)), num_users(0), num_messages(0) {}
+      created_at(std::time(nullptr)) {}
 
 // stream output operator
-std::ostream &operator<<(std::ostream &out, Room &room) {
-  out << "Room " << room.name << " (" << room.id << ", " << room.roomTypeToString() << "):\n";
-  out << "created at: " << room.created_at << ", privacy: " << room.privacyToString() << "with "
-      << room.num_users << " users and " << room.num_messages << " messages";
+std::ostream &operator<<(std::ostream &out, const Room &room) {
+  out << "Room " << room.name << " (" << room.id << ", " << room.roomTypeToString(room.type)
+      << "):\n";
+  out << "created at: " << room.created_at << ", privacy: " << room.privacyToString(room.privacy);
   return out;
 }
 
-// user operations
-bool Room::addUser(User &user) {
-  if (num_users >= ROOM_CAPACITY) {
-    return false;
+// type operations
+std::string Room::roomTypeToString(Room::RoomType type) {
+  if (typeMap.find(type) != typeMap.end()) {
+    return typeMap.at(type);
   }
-  if (this->getUser(user.getEmail()) != nullptr) {
-    return false;
+  return typeMap.at(Room::RoomType::OTHER);
+}
+std::string Room::privacyToString(Room::Privacy privacy) {
+  if (privacyMap.find(privacy) != privacyMap.end()) {
+    return privacyMap.at(privacy);
   }
-  users.insert({user.getEmail(), user});
-  num_users++;
-  return true;
+  return privacyMap.at(Room::Privacy::PUBLIC);
 }
-
-bool Room::addMessage(User &from, User &to, std::string_view message) {
-  try {
-    Message msg(from, to, message);
-    history.push_back(msg);
-    num_messages++;
-    return true;
-  } catch (const std::exception &e) {
-    return false;
-  } catch (...) {
-    return false;
+Room::RoomType Room::stringToRoomType(std::string_view type) {
+  if (stringToTypeMap.find(std::string(type)) != stringToTypeMap.end()) {
+    return stringToTypeMap.at(std::string(type));
   }
+  return Room::RoomType::OTHER;
 }
-
-// authorization operations
-bool Room::removeUser(std::string_view email, std::string_view reason,
-                      std::string_view autherization) {
-
-  // TODO: Implement authorization check
-
-  auto user_ptr = this->getUser(email, autherization);
-  if (user_ptr == nullptr) {
-    return false;
+Room::Privacy Room::stringToPrivacy(std::string_view privacy) {
+  if (stringToPrivacyMap.find(std::string(privacy)) != stringToPrivacyMap.end()) {
+    return stringToPrivacyMap.at(std::string(privacy));
   }
-  users.erase(user_ptr->getEmail());
-  num_users--;
-  return true;
-}
-User *Room::getUser(std::string_view email, std::string_view authorization) {
-  // TODO: Implement authorization check
-
-  auto user_ptr = users.find(std::string(email));
-  if (user_ptr == users.end()) {
-    return nullptr;
-  }
-  return &user_ptr->second;
-}
-bool Room::isEmpty(std::string_view authorization) {
-  // TODO: Implement authorization check
-  return num_users == 0;
-}
-
-// health check
-bool Room::ping() {
-
-  // TODO: Implement ping check
-
-  return !isEmpty();
-}
-
-// destructor
-Room::~Room() {
-  users.clear();
-  history.clear();
+  return Room::Privacy::PUBLIC;
 }
 
 // getters
-std::string Room::roomTypeToString() {
-  switch (type) {
-  case RoomType::RESEARCH_AND_DEVELOPMENT:
-    return "R&D";
-  case RoomType::PRODUCTION:
-    return "Production";
-  case RoomType::QA:
-    return "QA";
-  case RoomType::DEVOPS:
-    return "DevOps";
-  case RoomType::SECURITY:
-    return "Security";
-  case RoomType::DESIGN:
-    return "Design";
-  case RoomType::MARKETING:
-    return "Marketing";
-  case RoomType::HR:
-    return "HR";
-  case RoomType::FINANCE:
-    return "Finance";
-  case RoomType::LEGAL:
-    return "Legal";
-  case RoomType::CUSTOMER_SUPPORT:
-    return "Customer Support";
-  default:
-    return "Other";
-  }
-}
-std::string Room::privacyToString() {
-  switch (privacy) {
-  case Privacy::PUBLIC:
-    return "PUBLIC";
-  case Privacy::PRIVATE:
-    return "PRIVATE";
-  default:
-    return "OTHER";
-  }
-}
-
 std::string Room::getId() const { return this->id; }
 std::string Room::getName() const { return this->name; }
 Room::RoomType Room::getType() const { return this->type; }

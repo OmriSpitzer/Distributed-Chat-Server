@@ -1,17 +1,13 @@
 /**
  * Room header file class
  *
- * @date 06-09-2026
+ * @date 11-09-2026
  */
 
 #pragma once
-
-#include "utils/models/message.h"
-#include "utils/models/user.h"
 #include <ctime>
-#include <map>
 #include <string>
-#include <vector>
+#include <string_view>
 
 class Room {
 public:
@@ -40,41 +36,24 @@ public:
        Room::Privacy privacy = Privacy::PUBLIC);
 
   // stream output operator
-  friend std::ostream &operator<<(std::ostream &out, Room &room);
+  friend std::ostream &operator<<(std::ostream &out, const Room &room);
 
-  // user operations
-  bool addUser(User &user);
-  bool addMessage(User &from, User &to, std::string_view message);
-
-  // authorization operations
-  bool removeUser(std::string_view email, std::string_view reason = "",
-                  std::string_view autherization = "");
-  User *getUser(std::string_view email, std::string_view authorization = "");
-  bool isEmpty(std::string_view authorization = "");
-
-  // health check
-  bool ping();
-
-  // destructor
-  ~Room();
+  // type operations
+  static std::string roomTypeToString(Room::RoomType type);
+  static std::string privacyToString(Room::Privacy privacy);
+  static Room::RoomType stringToRoomType(std::string_view type);
+  static Room::Privacy stringToPrivacy(std::string_view privacy);
 
   // getters
-  std::string roomTypeToString();
-  std::string privacyToString();
   std::string getId() const;
   std::string getName() const;
   Room::RoomType getType() const;
   Room::Privacy getPrivacy() const;
 
 private:
-  std::string id;                    // room id
-  std::string name;                  // room name
-  Room::RoomType type;               // room type
-  Room::Privacy privacy;             // privacy type
-  std::map<std::string, User> users; // users in the room
-  std::vector<Message> history;      // message history
-  std::time_t created_at;            // creation time
-  int num_users;                     // number of users in the room
-  int num_messages;                  // number of messages in the room
-  int ROOM_CAPACITY = 20;            // room capacity
+  Room::RoomType type;    // room type
+  Room::Privacy privacy;  // privacy type
+  std::string id;         // room id
+  std::string name;       // room name
+  std::time_t created_at; // creation time
 };
