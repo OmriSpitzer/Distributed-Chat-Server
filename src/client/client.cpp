@@ -2,7 +2,7 @@
  * Client class
  *
  * @brief Wires together the client components and runs a basic login flow.
- * @date 07-09-2026
+ * @date 13-09-2026
  */
 
 #include "client/client.h"
@@ -14,20 +14,28 @@
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
-#include <any>
 #include <atomic>
 #include <cstdint>
-#include <iostream>
 #include <optional>
 #include <string>
 
 namespace {
 std::atomic<std::uint64_t> next_client_id{0};
+} // namespace
 
-// Room broadcast push: MESSAGE with responseCode 0 (ack uses SUCCESS=200).
-bool isChatPush(const Packet &packet) {
-  return packet.type == Packet::PacketType::MESSAGE && packet.responseCode == 0;
-}
+// waiting for a packet of a specific type
+std::optional<Packet> Client::waitFor(Packet::PacketType expected) {
+  while (true) {
+    auto response = network.receivePacket();
+    if (!response) {
+      Logger::logError("Client " + id, "Connection lost while waiting for response");
+      return std::nullopt;
+    }
+    if (response->type == expected) {
+      return response;
+    }
+    // ignore unexpected queued types (heartbeats/pushes are handled in Network)
+  }
 }
 
 // start the client
@@ -51,63 +59,66 @@ bool Client::isAlive() const { return network.isConnected(); }
 
 // showing the dashboard
 void Client::showDashboard() {
-  if (!state.loggedIn || !state.user) {
-    int answer = ui.showHomeScreen();
+  if (!state.isLoggedIn()) {
+    // show home screen
+    int answer = ConsoleUI::showHomeScreen();
+
     switch (answer) {
+      // login option
     case 1: {
-      std::optional<Packet> loginPacket = ui.showLogin();
+      std::optional<Packet> loginPacket = ConsoleUI::showLogin();
       if (!loginPacket) {
         return;
       }
-      if (!network.sendPacket(*loginPacket, "Login request")) {
+      if (!network.sendPacket(*loginPacket)) {
         break;
       }
 
-      // receive the login response, skipping heartbeat packets
-      std::optional<Packet> response;
-      do {
-        response = network.receivePacket();
-      } while (response && (response->type == Packet::PacketType::HEARTBEAT ||
-                            response->type == Packet::PacketType::MESSAGE));
+      auto response = waitFor(Packet::PacketType::LOGIN);
+      if (!response) {
+        break;
+      }
 
-      if (response && response->type == Packet::PacketType::LOGIN) {
-        std::optional<std::any> result = handler.handlePacket(*response);
-        if (result) {
-          state.user = std::any_cast<User>(*result);
-          state.loggedIn = true;
-          state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
-        }
+      if (auto user = handler.handlePacket(*response)) {
+        state.user = *user;
+        state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+      } else if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        Logger::logError("Client " + id, "Login failed: " + response->message);
+      } else {
+        Logger::logError("Client " + id, "Login failed: invalid user payload");
       }
 
       break;
     }
+
+    // register option
     case 2: {
-      std::optional<Packet> registerPacket = ui.showRegister();
+      std::optional<Packet> registerPacket = ConsoleUI::showRegister();
       if (!registerPacket) {
         return;
       }
-      if (!network.sendPacket(*registerPacket, "Register request")) {
+      if (!network.sendPacket(*registerPacket)) {
         break;
       }
 
-      // receive the login response, skipping heartbeat packets
-      std::optional<Packet> response;
-      do {
-        response = network.receivePacket();
-      } while (response && (response->type == Packet::PacketType::HEARTBEAT ||
-                            response->type == Packet::PacketType::MESSAGE));
+      auto response = waitFor(Packet::PacketType::REGISTER);
+      if (!response) {
+        break;
+      }
 
-      if (response && response->type == Packet::PacketType::REGISTER) {
-        std::optional<std::any> result = handler.handlePacket(*response);
-        if (result) {
-          state.user = std::any_cast<User>(*result);
-          state.loggedIn = true;
-          state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
-        }
+      if (auto user = handler.handlePacket(*response)) {
+        state.user = *user;
+        state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+      } else if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        Logger::logError("Client " + id, "Register failed: " + response->message);
+      } else {
+        Logger::logError("Client " + id, "Register failed: invalid user payload");
       }
 
       break;
     }
+
+    // exit option
     case 3: {
       stop();
       break;
@@ -116,47 +127,49 @@ void Client::showDashboard() {
       break;
     }
   } else {
-    int answer = ui.showUserDashboard(state);
+    // show user dashboard
+    int answer = ConsoleUI::showUserDashboard(state);
+
     switch (answer) {
+      // update profile option
     case 1: {
       // TODO: update profile
       break;
     }
+
+    // join room option
     case 2: {
-      std::optional<Packet> joinRoomPacket = ui.showJoinRoom(*state.user);
+      std::optional<Packet> joinRoomPacket = ConsoleUI::showJoinRoom(*state.user);
 
       if (!joinRoomPacket) {
         break;
       }
 
-      // send the join room request
-      if (!network.sendPacket(*joinRoomPacket, "Join room request")) {
+      if (!network.sendPacket(*joinRoomPacket)) {
         break;
       }
 
-      // wait for ROOM_JOIN; print any chat pushes that arrive first
-      std::optional<Packet> response;
-      do {
-        response = network.receivePacket();
-        if (response && isChatPush(*response)) {
-          handler.handlePacket(*response);
-        }
-      } while (response && (response->type == Packet::PacketType::HEARTBEAT || isChatPush(*response)));
+      auto response = waitFor(Packet::PacketType::ROOM_JOIN);
+      if (!response) {
+        break;
+      }
 
-      if (response && response->type == Packet::PacketType::ROOM_JOIN) {
-        if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
-          state.currentRoom = Room(response->room);
-
-          // TODO: change visuals
-        }
+      if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        state.currentRoom = Room(response->room);
+        // TODO: change visuals
+      } else {
+        Logger::logError("Client " + id, "Join failed: " + response->message);
       }
       break;
     }
-    case 3: {
 
-      // check if the user is in the Lobby
+    // leave room option
+    case 3: {
+      if (!state.currentRoom) {
+        break;
+      }
       if (state.currentRoom->getType() == Room::RoomType::LOBBY) {
-        std::cout << ">> Cannot leave the Lobby" << std::endl;
+        Logger::logError("Client " + id, "Cannot leave the Lobby");
         break;
       }
 
@@ -167,87 +180,66 @@ void Client::showDashboard() {
         break;
       }
 
-      // build the leave room packet
-      std::optional<Packet> leaveRoomPacket = PacketBuilder::buildLeaveRoom(username, roomName);
-
-      // send the leave room request
-      if (!network.sendPacket(*leaveRoomPacket, "Leave room request")) {
+      Packet leaveRoomPacket = PacketBuilder::buildLeaveRoom(username, roomName);
+      if (!network.sendPacket(leaveRoomPacket)) {
         break;
       }
 
-      // wait for ROOM_LEAVE; print any chat pushes that arrive first
-      std::optional<Packet> response;
-      do {
-        response = network.receivePacket();
-        if (response && isChatPush(*response)) {
-          handler.handlePacket(*response);
-        }
-      } while (response && (response->type == Packet::PacketType::HEARTBEAT || isChatPush(*response)));
+      auto response = waitFor(Packet::PacketType::ROOM_LEAVE);
+      if (!response) {
+        break;
+      }
 
-      if (response && response->type == Packet::PacketType::ROOM_LEAVE) {
-        if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
-          state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
-
-          std::cout << ">> Left room " << roomName << std::endl;
-        } else {
-          std::cout << ">> Failed to leave room " << roomName << std::endl;
-        }
+      if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+        Logger::logInfo("Client " + id, "Left room " + roomName);
+      } else {
+        Logger::logError("Client " + id, "Failed to leave room " + roomName);
       }
       break;
     }
+
+    // create message option
     case 4: {
-      std::optional<Packet> createMessagePacket = ui.showCreateMessage(*state.user);
+      std::optional<Packet> createMessagePacket = ConsoleUI::showCreateMessage(*state.user);
 
       if (!createMessagePacket) {
         break;
       }
 
-      // send the create message request
-      if (!network.sendPacket(*createMessagePacket, "Create message request")) {
+      if (!network.sendPacket(*createMessagePacket)) {
         break;
       }
 
-      // wait for server MESSAGE ack; print peer pushes that arrive first
-      std::optional<Packet> response;
-      do {
-        response = network.receivePacket();
-        if (response && isChatPush(*response)) {
-          handler.handlePacket(*response);
-        }
-      } while (response &&
-               (response->type == Packet::PacketType::HEARTBEAT || isChatPush(*response)));
+      auto response = waitFor(Packet::PacketType::MESSAGE);
+      if (!response) {
+        break;
+      }
 
-      if (response && response->type == Packet::PacketType::MESSAGE) {
-        if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
-          std::cout << ">> Message sent successfully" << std::endl;
-        } else {
-          std::cout << ">> Failed to send message" << std::endl;
-        }
+      if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        Logger::logInfo("Client " + id, "Message sent successfully");
+      } else {
+        Logger::logError("Client " + id, "Failed to send message");
       }
       break;
     }
-    case 5: {
-      std::optional<Packet> logout = PacketBuilder::buildLogout(*state.user);
 
-      if (!network.sendPacket(*logout, "Logout request")) {
+    // logout option
+    case 5: {
+      Packet logout = PacketBuilder::buildLogout(*state.user);
+      if (!network.sendPacket(logout)) {
         break;
       }
 
-      // wait for LOGOUT; print any chat pushes that arrive first
-      std::optional<Packet> response;
-      do {
-        response = network.receivePacket();
-        if (response && isChatPush(*response)) {
-          handler.handlePacket(*response);
-        }
-      } while (response && (response->type == Packet::PacketType::HEARTBEAT || isChatPush(*response)));
+      auto response = waitFor(Packet::PacketType::LOGOUT);
+      if (!response) {
+        break;
+      }
 
-      if (response && response->type == Packet::PacketType::LOGOUT) {
-        if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
-          state.user.reset();
-          state.loggedIn = false;
-          state.currentRoom.reset();
-        }
+      if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        state.clear();
+      } else {
+        Logger::logError("Client " + id, "Logout failed: " + response->message);
       }
       break;
     }

@@ -1,8 +1,9 @@
 /**
  * Network header file class
  *
- * @date 07-09-2026
+ * @date 13-09-2026
  */
+
 #pragma once
 #include "utils/models/packet.h"
 #include <atomic>
@@ -10,8 +11,6 @@
 #include <mutex>
 #include <optional>
 #include <queue>
-#include <string>
-#include <string_view>
 #include <thread>
 
 class Network {
@@ -33,7 +32,7 @@ public:
   void disconnect();
 
   // sending a packet to the main server
-  bool sendPacket(const Packet &packet, std::string_view message);
+  bool sendPacket(const Packet &packet);
 
   // receiving a packet from the server
   std::optional<Packet> receivePacket();

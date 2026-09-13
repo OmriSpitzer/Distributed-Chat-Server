@@ -1,145 +1,164 @@
 # Distributed Chat Server
 
-C++17 chat system with a TCP server, a console client, username/password authentication, and a pipe-delimited text database. The long-term design is multiple chat servers that stay in sync and share one store. This repository currently implements a **single Windows server** (Winsock) plus a client whose network layer is still stubbed.
+[![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)[![CMake](https://img.shields.io/badge/CMake-3.16%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)[![Platform](https://img.shields.io/badge/Windows-Winsock-0078D6?logo=windows&logoColor=white)](#quick-start)[![Tests](https://img.shields.io/badge/tests-Catch2%20v3.8-FF6B2B)](https://github.com/catchorg/Catch2)[![Version](https://img.shields.io/badge/version-1.0.0-informational)]()
 
-## What it does
+C++17 chat cluster for Windows. Clients talk to a TCP server over framed binary packets; servers gossip with each other so presence, membership, and messages stay in sync across nodes.
 
-- **Server** (`chat_server`) initializes Winsock, binds TCP port `5555`, and owns a worker thread pool, connection manager, and packet router.
-- **Client** (`chat_client`) assigns a local id, “connects” (stub), and shows a Login / Register / Exit menu.
-- **Packets** carry typed requests: login, logout, chat message, join room, leave room.
-- **Authentication** registers and logs users against `data/db.txt`.
-- **Persistence** stores users, rooms, and messages in three sections of that file.
+```
+  chat_client ──TCP :PORT──►  chat_server ──gossip :PEER_PORT──►  peer servers
+                                   │
+                                   ▼
+                              SQLite (per node)
+```
 
-Several pieces are sketched but not fully wired: accept loop and session I/O, real client sockets, room broadcast, heartbeat, inter-server sync, and WebSocket/desktop UIs.
+A console client (`chat_client`) and a Winsock server (`chat_server`) ship in this repo. Passwords are hashed with Argon2id. Each node keeps its own SQLite file and replicates events over gossip rather than sharing a single store.
 
-## Target architecture
+Class-level diagrams live in [architecture.md](architecture.md).
+
+## Features
+
+- **Auth** — register and login with Argon2id; one live session per user across the cluster
+- **Rooms** — join / leave rooms, default public Lobby, in-room broadcast
+- **Messages** — persist to SQLite, fan out to local sockets, rumor to peer nodes
+- **Heartbeat** — server pings; client auto-replies `pong`; stale sockets are closed
+- **Gossip** — `HELLO`, `EVENT`, `DIGEST`, and `PULL` with periodic anti-entropy
+- **Console UI** — login, register, join room, send message, logout
+
+## Architecture
 
 ```
                     +------------------+
-                    |   Desktop/Web    |
-                    |      Client      |
+                    |  Console client  |
                     +--------+---------+
-                             |
-                         TCP / WebSocket
-                             |
+                             |  TCP :PORT
+                             |  Packet (Serializer + socket_io)
           +------------------+------------------+
           |                                     |
-   +------+-------+                     +--------+------+
-   | Chat Server 1|<------Sync--------->| Chat Server 2 |
-   +------+-------+                     +--------+------+
-          |                                     |
-          +------------------+------------------+
+   +------+-------+      gossip :PEER_PORT     +--------+------+
+   | Chat Server 1|<-------------------------->| Chat Server 2 |
+   +------+-------+                            +--------+------+
+          |  SQLite                                  |  SQLite
+          +------------------+------------------+----+
                              |
-                    +--------+--------+
-                    |    Database      |
-                    +------------------+
+              users · rooms · messages · membership · online_users
 ```
 
-**Today:** one server process, console client, local text DB. Sync between servers is not implemented.
+**Client path.** `ConsoleUI` builds a `Packet` via `PacketBuilder`. `Network` writes it on the socket (background reader thread pongs heartbeats and logs pushed messages). The server `ConnectionManager` accepts the connection, owns a `ClientSession`, and hands the packet to `PacketProcessor`.
+
+**Server path.** `PacketProcessor` authenticates against `DatabaseManager`, updates `RoomManager`, and rumors a `GOSSIP_EVENT` through `GossipManager`. Gossip applies the event locally (persist + optional room broadcast) and forwards it to peers. Anti-entropy digests catch nodes that missed a rumor.
+
+**Wire format.** Length-prefixed binary frames, max 1 MiB payload:
+
+```
+[u32 BE size][u8 type][u64 BE timestamp][u32 BE responseCode]
+  then sender, receiver, room, message as [u32 BE length][bytes]
+```
+
+Gossip event bodies use five length-prefixed fields (`type`, `eventId`, `username`, `content`, `field5`) so payloads may contain `|`.
+
+## Packet types
+
+| Type | Role |
+|------|------|
+| `LOGIN` / `REGISTER` / `LOGOUT` | Session lifecycle |
+| `ROOM_JOIN` / `ROOM_LEAVE` | Membership (`LEAVE` returns to Lobby) |
+| `MESSAGE` | Chat send (response) and room push (`responseCode == 0`) |
+| `HEARTBEAT` | Server `ping` / client `pong` |
+| `GOSSIP_HELLO` / `GOSSIP_EVENT` / `GOSSIP_DIGEST` / `GOSSIP_PULL` | Peer port only |
+
+Responses use `200` success, `400` error, `404` not found, `500` internal.
+
+## Quick start
+
+Requires **CMake 3.16+**, a **C++17** compiler, and **Ninja** if you use the PowerShell helpers. The server and client link **Winsock** (`ws2_32`). Catch2 v3.8.1 and Argon2 are fetched at configure time.
+
+```powershell
+cmake -B build -S . -G "Ninja" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build build
+
+# Server (listens on 5555, gossip on 5557)
+.\src\server.ps1
+# or
+.\build\chat_server.exe
+
+# Client (connects to 127.0.0.1:5555)
+.\src\client.ps1
+# or
+.\build\chat_client.exe
+```
+
+SQLite files are created under `data/` relative to the process working directory (gitignored). Prefer running from the repo root.
+
+### Two-node cluster
+
+```powershell
+.\build\chat_server.exe --node-id node1 --port 5555 --peer-port 5557 --peers 127.0.0.1:5558 --db data/node-1.db
+.\build\chat_server.exe --node-id node2 --port 5556 --peer-port 5558 --peers 127.0.0.1:5557 --db data/node-2.db
+
+.\build\chat_client.exe --host 127.0.0.1 --port 5555
+.\build\chat_client.exe --host 127.0.0.1 --port 5556
+```
+
+`--peers` is a comma-separated list of **gossip** addresses (`host:port`), not client ports.
+
+## Configuration
+
+CLI flags map onto `include/config/config.h`:
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--node-id ID` | `node1` | Cluster identity for this process |
+| `--host HOST` | `127.0.0.1` | Client connect host |
+| `--port N` | `5555` | Client TCP listen / connect port |
+| `--peer-port N` | `5557` | Gossip listen port |
+| `--peers H:P,H:P` | *(empty)* | Other nodes' gossip addresses |
+| `--db PATH` | `data/node-1.db` | SQLite path |
+| `--help` | | Print usage |
+
+Heartbeat interval is 5 s; timeout is 10 s. Worker thread count is 4.
 
 ## Repository layout
 
 ```
 Distributed-Chat-Server/
-├── CMakeLists.txt          Build: utils, server_lib, client_lib, tests
-├── compile_commands.json   Compile database for IDEs
-├── README.md               This file
-├── data/db.txt             Runtime text database (also copied under src/data)
-├── include/                Public headers (mirrors src/)
+├── CMakeLists.txt          Libraries, executables, Catch2 tests
+├── architecture.md         Class and sequence diagrams
+├── include/                Public headers
+│   ├── auth/               Argon2id wrapper
+│   ├── client/             Network, UI, packets, client state
+│   ├── config/             Ports, peers, DB path, CLI parser
+│   ├── server/             Sessions, rooms, gossip, heartbeat
+│   └── utils/              Packet, serializer, socket_io, models
+├── src/
+│   ├── server.ps1          Configure, build, run chat_server
+│   ├── client.ps1          Configure, build, run chat_client
 │   ├── auth/
 │   ├── client/
-│   ├── config/config.h     Port, thread count, DB path
+│   ├── database/           init.sql + queries (baked into sql_schemas.h)
 │   ├── server/
-│   └── utils/models/
-├── src/
-│   ├── server.ps1          Configure, build, and run chat_server
-│   ├── client.ps1          Configure, build, and run chat_client
-│   ├── auth/               AUTH.md
-│   ├── client/             CLIENT.md
-│   ├── data/               DATA.md
-│   ├── server/             SERVER.md
-│   └── utils/              UTILS.md  →  models/ MODELS.md
-├── scripts/                Extra build/run helpers (stubs)
-├── tests/class/            Catch2 unit tests for utils models
-└── build/                  CMake output (generated)
+│   └── utils/
+└── tests/                  auth · client · server · utils
 ```
 
-Headers live in `include/`; implementations live in `src/`. CMake adds `include/` as a public include path.
-
-| Folder docs | Covers |
-|-------------|--------|
-| [src/server/SERVER.md](src/server/SERVER.md) | Listen socket, sessions, packet routing, managers, thread pool |
-| [src/client/CLIENT.md](src/client/CLIENT.md) | Console UI, packet build/handle, network stub |
-| [src/auth/AUTH.md](src/auth/AUTH.md) | Register, login, password check |
-| [src/utils/UTILS.md](src/utils/UTILS.md) | Shared `utils` library |
-| [src/utils/models/MODELS.md](src/utils/models/MODELS.md) | User, Room, Message, Packet, Logger |
-| [src/data/DATA.md](src/data/DATA.md) | Text database format |
-
-## How a request is meant to flow
-
-```
-Client                         Server
-  |                              |
-  |  Packet (LOGIN, MESSAGE, …)  |
-  |----------------------------->|
-  |                    PacketProcessor
-  |                         ├── Authentication
-  |                         ├── UserManager
-  |                         ├── RoomManager
-  |                         └── GossipManager
-  |                                    └── DatabaseManager → data/db.txt
-  |  Packet (response)               |
-  |<-----------------------------|
-```
-
-`PacketProcessor` already routes those types and calls `Authentication` for login/logout. The server does **not** yet accept clients or read sockets, so this path is not live end-to-end.
-
-## Build and run
-
-Requires CMake 3.16+, a C++17 compiler, and **Ninja** if you use `src/server.ps1` or `src/client.ps1`. The server links **Winsock** (`ws2_32`). Catch2 v3.5.4 is fetched at configure time.
-
-```powershell
-# Configure and build everything
-cmake -B build -S . -G "Ninja" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-cmake --build build
-
-# Server or client (also builds that target and its dependencies)
-.\src\server.ps1
-.\src\client.ps1
-
-# run all registered tests
-ctest --test-dir build --output-on-failure
-
-# Or run binaries from the build directory
-.\build\chat_server.exe
-.\build\chat_client.exe
-```
-
-Run the server from a working directory where `data/db.txt` is reachable (`config::DB_PATH` is `data/db.txt` relative to the process CWD). Prefer the repo root.
-
-## Configuration
-
-`include/config/config.h` (header-only, no `src/config`):
-
-| Constant | Default | Meaning |
-|----------|---------|---------|
-| `config::PORT` | `5555` | TCP listen port |
-| `config::THREAD_COUNT` | `4` | Worker threads in `ThreadPool` |
-| `config::DB_PATH` | `data/db.txt` | Text database path |
+Headers live in `include/`; implementations live in `src/`. CMake adds `include/` as a public include path and embeds SQL files from `DB_SCHEMAS` into a generated `sql_schemas.h` at configure time.
 
 ## CMake targets
 
 | Target | Role |
 |--------|------|
-| `utils` | Models: logger, log message, user, message, room |
-| `server_lib` | Server + `src/auth/authentication.cpp` |
-| `chat_server` | `src/server/main.cpp` |
-| `client_lib` | Client sources |
-| `chat_client` | `src/client/main.cpp` |
-| `*_test` | Catch2 tests for utils models |
+| `utils` | Models, serializer, socket I/O, gossip payload |
+| `auth` | Argon2id hash / verify |
+| `server_lib` / `chat_server` | Server library and executable |
+| `client_lib` / `chat_client` | Client library and executable |
+| `sqlite3` | Bundled SQLite amalgamation |
+| `*_test` | Catch2 binaries (discovered by CTest) |
+
+```powershell
+ctest --test-dir build --output-on-failure
+```
 
 ## Status
 
-**Implemented:** domain models and unit tests, singleton logger, text DB CRUD for users/rooms/messages, auth against that DB, Winsock listen/bind, thread pool, packet type routing, client welcome menu and packet builders.
+**Working today:** TCP accept and framed I/O, console login/register/logout, room join/leave, message persist and broadcast, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, Catch2 coverage for utils, auth, client, and server.
 
-**Not finished:** accept/read/write on client sockets, real client TCP, command parser, heartbeat, room membership and broadcast on the wire, multi-server sync, WebSocket or GUI clients.
+**Not in this tree:** profile updates (menu stub), room directory in the console UI, WebSocket or GUI clients, a shared remote database. `ThreadPool` is constructed but session I/O currently runs on dedicated threads.

@@ -196,24 +196,9 @@ void GossipManager::dialLoop() {
       }
 
       // create a socket to connect to the peer
-      SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+      SOCKET sock = socket_io::connectTo(host, port);
       if (sock == INVALID_SOCKET)
         continue;
-
-      // set the address of the peer
-      sockaddr_in address{};
-      address.sin_family = AF_INET;
-      address.sin_port = htons(port);
-      if (inet_pton(AF_INET, host.c_str(), &address.sin_addr) != 1) {
-        closesocket(sock);
-        continue;
-      }
-
-      // connect to the peer
-      if (connect(sock, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
-        closesocket(sock);
-        continue;
-      }
 
       // send a hello packet to the peer
       const int fd = static_cast<int>(sock);

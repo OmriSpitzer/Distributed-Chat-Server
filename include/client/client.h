@@ -1,16 +1,17 @@
 /**
  * Client header file class
  *
- * @date 06-09-2026
+ * @date 13-09-2026
  */
 
 #pragma once
 #include "client/client_state.h"
-#include "client/console_ui.h"
 #include "client/network.h"
-#include "client/packet_builder.h"
 #include "client/packet_handler.h"
+#include "utils/models/packet.h"
+#include <optional>
 #include <string>
+
 
 class Client {
 public:
@@ -29,8 +30,9 @@ public:
 private:
   std::string id;        // client id
   Network network;       // network class
-  ConsoleUI ui;          // console UI class
   PacketHandler handler; // packet handler class
-  PacketBuilder builder; // packet builder class
   ClientState state;     // client state class
+
+  // waiting for a packet of a specific type
+  std::optional<Packet> waitFor(Packet::PacketType expected);
 };

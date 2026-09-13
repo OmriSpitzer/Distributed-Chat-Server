@@ -1,8 +1,9 @@
 /**
  * ClientState header file class
  *
- * @date 06-09-2026
+ * @date 13-09-2026
  */
+
 #pragma once
 #include "utils/models/room.h"
 #include "utils/models/user.h"
@@ -10,15 +11,15 @@
 
 class ClientState {
 public:
-  // user
-  std::optional<User> user;
+  std::optional<User> user;        // user data
+  std::optional<Room> currentRoom; // current room data
 
-  // current room
-  std::optional<Room> currentRoom;
+  // check if the user is logged in
+  bool isLoggedIn() const { return user.has_value(); }
 
-  // connected
-  bool connected = false;
-
-  // logged in
-  bool loggedIn = false;
+  // clear the data
+  void clear() {
+    user.reset();
+    currentRoom.reset();
+  }
 };

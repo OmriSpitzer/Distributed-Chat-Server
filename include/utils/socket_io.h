@@ -1,7 +1,7 @@
 /**
  * Socket I/O functions header
  *
- * @date 11-09-2026
+ * @date 13-09-2026
  */
 
 #pragma once
@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -19,6 +20,9 @@ namespace socket_io {
 
 // create, bind, and listen to a socket
 SOCKET listenTo(std::uint16_t port);
+
+// create a TCP socket and connect to host:port (INVALID_SOCKET on failure)
+SOCKET connectTo(std::string_view host, std::uint16_t port);
 
 // receive exact number of bytes
 bool recvExact(SOCKET socket, char *buffer, int bytes);

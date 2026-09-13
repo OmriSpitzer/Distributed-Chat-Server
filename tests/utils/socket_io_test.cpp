@@ -1,10 +1,10 @@
 /**
  * Socket I/O unit tests
  *
- * @brief Includes: listenTo, sendExact / recvExact edges, writePacket frames
+ * @brief Includes: listenTo, connectTo, sendExact / recvExact edges, writePacket frames
  * matching Serializer, readPacket from Serializer frames, invalid / truncated /
  * oversize frames, peer close, back-to-back packets.
- * @date 12-09-2026
+ * @date 13-09-2026
  */
 
 #include "utils/models/packet.h"
@@ -23,14 +23,15 @@
 
 /**
  * 1. listenTo binds and accepts
- * 2. sendExact / recvExact edges
- * 3. writePacket frames match Serializer::serialize
- * 4. readPacket restores Serializer frames
- * 5. writePacket / readPacket round-trip edges
- * 6. writePacket rejects packets Serializer cannot serialize
- * 7. readPacket rejects empty / truncated / oversize frames
- * 8. peer close and invalid sockets
- * 9. back-to-back packets
+ * 2. connectTo reaches a listener
+ * 3. sendExact / recvExact edges
+ * 4. writePacket frames match Serializer::serialize
+ * 5. readPacket restores Serializer frames
+ * 6. writePacket / readPacket round-trip edges
+ * 7. writePacket rejects packets Serializer cannot serialize
+ * 8. readPacket rejects empty / truncated / oversize frames
+ * 9. peer close and invalid sockets
+ * 10. back-to-back packets
  */
 
 namespace {
@@ -82,15 +83,8 @@ struct ConnectedPair {
     if (getsockname(listener, reinterpret_cast<sockaddr *>(&bound), &boundLen) != 0)
       return false;
 
-    client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    client = socket_io::connectTo("127.0.0.1", ntohs(bound.sin_port));
     if (client == INVALID_SOCKET)
-      return false;
-
-    sockaddr_in dest{};
-    dest.sin_family = AF_INET;
-    dest.sin_port = bound.sin_port;
-    dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    if (connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0)
       return false;
 
     server = accept(listener, nullptr, nullptr);
@@ -147,7 +141,48 @@ TEST_CASE("socket_io listenTo binds and accepts", "[socket_io][listen][edge]") {
   }
 }
 
-// 2. sendExact / recvExact edges
+// 2. connectTo reaches a listener
+TEST_CASE("socket_io connectTo reaches a listener", "[socket_io][connect][edge]") {
+  REQUIRE(winsock().ok);
+
+  SECTION("loopback connect succeeds") {
+    SOCKET listener = socket_io::listenTo(0);
+    REQUIRE(listener != INVALID_SOCKET);
+
+    sockaddr_in bound{};
+    int boundLen = sizeof(bound);
+    REQUIRE(getsockname(listener, reinterpret_cast<sockaddr *>(&bound), &boundLen) == 0);
+
+    SOCKET client = socket_io::connectTo("127.0.0.1", ntohs(bound.sin_port));
+    REQUIRE(client != INVALID_SOCKET);
+
+    SOCKET server = accept(listener, nullptr, nullptr);
+    REQUIRE(server != INVALID_SOCKET);
+
+    closesocket(client);
+    closesocket(server);
+    closesocket(listener);
+  }
+
+  SECTION("invalid host fails") {
+    REQUIRE(socket_io::connectTo("not-an-ip", 1) == INVALID_SOCKET);
+  }
+
+  SECTION("closed listener port fails") {
+    SOCKET listener = socket_io::listenTo(0);
+    REQUIRE(listener != INVALID_SOCKET);
+
+    sockaddr_in bound{};
+    int boundLen = sizeof(bound);
+    REQUIRE(getsockname(listener, reinterpret_cast<sockaddr *>(&bound), &boundLen) == 0);
+    const std::uint16_t port = ntohs(bound.sin_port);
+    closesocket(listener);
+
+    REQUIRE(socket_io::connectTo("127.0.0.1", port) == INVALID_SOCKET);
+  }
+}
+
+// 3. sendExact / recvExact edges
 TEST_CASE("socket_io sendExact / recvExact edges", "[socket_io][exact][edge]") {
   REQUIRE(winsock().ok);
   ConnectedPair pair;
