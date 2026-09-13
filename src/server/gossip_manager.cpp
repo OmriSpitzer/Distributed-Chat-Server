@@ -9,6 +9,7 @@
 #include "config/config.h"
 #include "server/database_manager.h"
 #include "server/room_manager.h"
+#include "utils/gossip_payload.h"
 #include "utils/models/logger.h"
 #include "utils/models/message.h"
 #include "utils/models/user.h"
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <ctime>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -23,7 +25,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -55,17 +56,7 @@ bool GossipManager::parseHostPort(const std::string &addr, std::string &host, st
 
 // get the event id from a packet
 std::string GossipManager::eventIdFromPacket(const Packet &packet) {
-  // check if the first pipe is in the message
-  const auto first = packet.message.find('|');
-  if (first == std::string::npos)
-    return packet.message;
-
-  // check if the second pipe is in the message
-  const auto second = packet.message.find('|', first + 1);
-  if (second == std::string::npos)
-    return packet.message.substr(first + 1);
-
-  return packet.message.substr(first + 1, second - first - 1);
+  return gossip_payload::eventId(packet.message);
 }
 
 // constructor
@@ -114,19 +105,15 @@ void GossipManager::stop() {
   dialCv.notify_all();
   antiEntropyCv.notify_all();
 
-  // close all peer sockets
+  // close all peer sockets (registered or still handshaking)
   std::vector<int> sockets;
   {
     std::lock_guard lock(peersMutex);
-    for (const auto &entry : peers)
-      sockets.push_back(entry.first);
-    for (const auto &entry : outboundAddrs)
-      sockets.push_back(entry.first);
+    sockets.assign(openPeerSockets.begin(), openPeerSockets.end());
+    openPeerSockets.clear();
     peers.clear();
     outboundAddrs.clear();
   }
-  std::sort(sockets.begin(), sockets.end());
-  sockets.erase(std::unique(sockets.begin(), sockets.end()), sockets.end());
   for (int fd : sockets)
     closesocket(static_cast<SOCKET>(fd));
 
@@ -162,6 +149,10 @@ void GossipManager::acceptLoop() {
 
     // send a hello packet to the peer
     int fd = static_cast<int>(peer);
+    {
+      std::lock_guard lock(peersMutex);
+      openPeerSockets.insert(fd);
+    }
     Packet hello(config::NODE_ID, "*", Packet::PacketType::GOSSIP_HELLO);
     sendPacket(fd, hello);
 
@@ -236,6 +227,7 @@ void GossipManager::dialLoop() {
       {
         std::lock_guard lock(peersMutex);
         outboundAddrs[fd] = addr;
+        openPeerSockets.insert(fd);
       }
 
       // create a thread to handle the peer
@@ -406,9 +398,16 @@ void GossipManager::handlePeer(int peerSocket) {
     }
   }
 
-  // remove the peer and close the socket
+  // remove the peer and close the socket (skip close if stop() already did)
   removePeer(peerSocket);
-  closesocket(sock);
+  bool shouldClose = false;
+  {
+    std::lock_guard lock(peersMutex);
+    shouldClose = openPeerSockets.erase(peerSocket) > 0;
+  }
+  if (shouldClose) {
+    closesocket(sock);
+  }
   Logger::logInfo("GossipManager", "Peer disconnected socket " + std::to_string(peerSocket));
 }
 
@@ -461,18 +460,17 @@ bool GossipManager::applyEvent(const Packet &event) {
   auto &db = DatabaseManager::getInstance();
 
   // parse the event
-  std::stringstream ss(event.message);
-  std::string type;
-  std::string eventId;
-  std::string username;
-  std::string content;
-  std::string ts;
-  if (!std::getline(ss, type, '|') || !std::getline(ss, eventId, '|') ||
-      !std::getline(ss, username, '|') || !std::getline(ss, content, '|') ||
-      !std::getline(ss, ts, '|')) {
+  const auto fields = gossip_payload::decode(event.message);
+  if (!fields) {
     Logger::logWarning("GossipManager", "Malformed event payload");
     return false;
   }
+
+  const std::string &type = fields->type;
+  const std::string &eventId = fields->eventId;
+  const std::string &username = fields->username;
+  const std::string &content = fields->content;
+  const std::string &ts = fields->field5;
 
   // login event
   if (type == "LOGIN") {
@@ -583,7 +581,14 @@ bool GossipManager::applyEvent(const Packet &event) {
   const Message msg(from, User::anonymousUser(), content, eventId, created);
 
   // save the message
-  const bool inserted = db.saveMessage(msg, roomName);
+  bool inserted = false;
+  try {
+    inserted = db.saveMessage(msg, roomName);
+  } catch (const std::exception &e) {
+    Logger::logWarning("GossipManager",
+                       std::string("MESSAGE apply failed for ") + eventId + ": " + e.what());
+    return false;
+  }
 
   // broadcast the message to the room
   if (inserted) {

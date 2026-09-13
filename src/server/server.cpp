@@ -19,13 +19,13 @@
 
 // start the server
 void Server::start() {
-  Logger::logInfo("Server", "Starting server");
-
   // check if the server is already running
   if (running) {
     Logger::logInfo("Server", "Server is already running");
     return;
   }
+
+  Logger::logInfo("Server", "Starting server");
 
   // initialize winsock 2.2
   WSADATA data;

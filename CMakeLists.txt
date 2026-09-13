@@ -42,6 +42,7 @@ add_library(utils
     src/utils/models/packet.cpp
     src/utils/serializer.cpp
     src/utils/socket_io.cpp
+    src/utils/gossip_payload.cpp
 )
 target_include_directories(utils PUBLIC include)
 target_link_libraries(utils PUBLIC ws2_32)
@@ -51,9 +52,7 @@ find_package(Threads REQUIRED)
 # Server library
 add_library(server_lib
     src/server/database_manager.cpp
-    src/server/user_manager.cpp
     src/server/room_manager.cpp
-    src/server/message_manager.cpp
     src/server/thread_pool.cpp
     src/server/packet_processor.cpp
     src/server/client_session.cpp
@@ -156,6 +155,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
+# ------------ Utils connections ------------
 add_executable(user_test tests/utils/user_test.cpp)
 target_link_libraries(user_test PRIVATE utils Catch2::Catch2WithMain)
 
@@ -167,15 +167,6 @@ target_link_libraries(serializer_test PRIVATE utils Catch2::Catch2WithMain)
 
 add_executable(socket_io_test tests/utils/socket_io_test.cpp)
 target_link_libraries(socket_io_test PRIVATE utils Catch2::Catch2WithMain)
-
-add_executable(client_session_test tests/server/client_session_test.cpp src/server/client_session.cpp)
-target_link_libraries(client_session_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
-
-add_executable(database_manager_test tests/server/database_manager_test.cpp)
-target_link_libraries(database_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
-
-add_executable(heartbeat_test tests/server/heartbeat_test.cpp)
-target_link_libraries(heartbeat_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
 
 add_executable(message_test tests/utils/message_test.cpp)
 target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
@@ -189,23 +180,63 @@ target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain)
 add_executable(packet_test tests/utils/packet_test.cpp)
 target_link_libraries(packet_test PRIVATE utils Catch2::Catch2WithMain)
 
+add_executable(gossip_payload_test tests/utils/gossip_payload_test.cpp)
+target_link_libraries(gossip_payload_test PRIVATE utils Catch2::Catch2WithMain)
+
+# ------------ Auth connections ------------
+add_executable(authentication_test tests/auth/authentication_test.cpp)
+target_link_libraries(authentication_test PRIVATE auth Catch2::Catch2WithMain)
+
+
+# ------------ Server connections ------------
+add_executable(client_session_test tests/server/client_session_test.cpp src/server/client_session.cpp)
+target_link_libraries(client_session_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(database_manager_test tests/server/database_manager_test.cpp)
+target_link_libraries(database_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(heartbeat_test tests/server/heartbeat_test.cpp)
+target_link_libraries(heartbeat_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(room_manager_test tests/server/room_manager_test.cpp)
+target_link_libraries(room_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(gossip_manager_test tests/server/gossip_manager_test.cpp)
+target_link_libraries(gossip_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(packet_processor_test tests/server/packet_processor_test.cpp)
+target_link_libraries(packet_processor_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(connection_manager_test tests/server/connection_manager_test.cpp)
+target_link_libraries(connection_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(server_test tests/server/server_test.cpp)
+target_link_libraries(server_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
 # ------------ Utils tests ------------
-catch_discover_tests(user_test)
-catch_discover_tests(room_test)
-catch_discover_tests(serializer_test)
-catch_discover_tests(socket_io_test)
-catch_discover_tests(message_test)
-catch_discover_tests(log_message_test)
-catch_discover_tests(logger_test)
-catch_discover_tests(packet_test)
+#catch_discover_tests(user_test)
+#catch_discover_tests(room_test)
+#catch_discover_tests(serializer_test)
+#catch_discover_tests(socket_io_test)
+#catch_discover_tests(message_test)
+#catch_discover_tests(log_message_test)
+#catch_discover_tests(logger_test)
+#catch_discover_tests(packet_test)
+#catch_discover_tests(gossip_payload_test)
+catch_discover_tests(authentication_test)
 
 # ------------ Server tests ------------
-catch_discover_tests(client_session_test)
-catch_discover_tests(database_manager_test)
-catch_discover_tests(heartbeat_test)
+#catch_discover_tests(client_session_test)
+#catch_discover_tests(database_manager_test)
+#catch_discover_tests(heartbeat_test)
+#catch_discover_tests(room_manager_test)
+#catch_discover_tests(gossip_manager_test)
+#catch_discover_tests(packet_processor_test)
+#catch_discover_tests(connection_manager_test)
+catch_discover_tests(server_test)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - Tests - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^

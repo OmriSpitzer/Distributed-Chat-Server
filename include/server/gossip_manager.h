@@ -53,6 +53,7 @@ private:
   std::deque<std::string> recentEventIds;             // ordered ids for digests
   std::unordered_map<std::string, Packet> eventLog;   // id -> full event for PULL
   std::unordered_map<int, std::string> outboundAddrs; // socket -> "host:port"
+  std::unordered_set<int> openPeerSockets;            // all sockets with a live handlePeer
 
   mutable std::mutex peersMutex;         // peers mutex
   std::mutex sendMutex;                  // send mutex

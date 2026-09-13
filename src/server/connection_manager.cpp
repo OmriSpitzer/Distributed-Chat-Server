@@ -11,6 +11,7 @@
 #include "server/gossip_manager.h"
 #include "server/packet_processor.h"
 #include "server/room_manager.h"
+#include "utils/gossip_payload.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
 #include "utils/serializer.h"
@@ -219,7 +220,7 @@ void ConnectionManager::removeSession(int socket) {
                                 std::to_string(++dropLogoutSeq);
     const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)));
     const std::string payload =
-        "LOGOUT|" + eventId + "|" + username + "|" + config::NODE_ID + "|" + ts;
+        gossip_payload::encode("LOGOUT", eventId, username, config::NODE_ID, ts);
     Packet event(config::NODE_ID, "*", Packet::PacketType::GOSSIP_EVENT, "", payload);
 
     // rumor the gossip event

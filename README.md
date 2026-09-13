@@ -86,7 +86,7 @@ Client                         Server
   |                         ├── Authentication
   |                         ├── UserManager
   |                         ├── RoomManager
-  |                         └── MessageManager
+  |                         └── GossipManager
   |                                    └── DatabaseManager → data/db.txt
   |  Packet (response)               |
   |<-----------------------------|
