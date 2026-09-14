@@ -380,7 +380,48 @@ TEST_CASE("PacketProcessor room join and leave", "[packet_processor][room]") {
   REQUIRE(fx.session.getRoom().getName() == RoomManager::LOBBY.getName());
 }
 
-// 14. response envelope fields
+// 14. UPDATE_USER password and username
+TEST_CASE("PacketProcessor UPDATE_USER", "[packet_processor][update]") {
+  Fixture fx;
+  const std::string name = unique("upd");
+  const std::string email = name + "@example.com";
+
+  Packet reg(name, "server", Packet::PacketType::REGISTER, email, "oldpw");
+  REQUIRE(process(reg, fx.session, fx.connections).responseCode ==
+          static_cast<int>(RESPONSE_CODES::SUCCESS));
+
+  SECTION("password change") {
+    Packet upd(name, "server", Packet::PacketType::UPDATE_USER, email, "newpw");
+    const Packet res = process(upd, fx.session, fx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(fx.session.getUser().getUsername() == name);
+
+    const auto login = db().loginUser(name, "newpw");
+    REQUIRE(std::holds_alternative<User>(login));
+  }
+
+  SECTION("username rename") {
+    const std::string renamed = unique("ren");
+    Packet upd(renamed, "server", Packet::PacketType::UPDATE_USER, email, "");
+    const Packet res = process(upd, fx.session, fx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(fx.session.getUser().getUsername() == renamed);
+
+    const User restored = User::deserialize(res.message);
+    REQUIRE(restored.getUsername() == renamed);
+    REQUIRE(restored.getEmail() == email);
+  }
+
+  SECTION("rejects when not authenticated") {
+    ClientSession anon(nextFakeSocket(), User::anonymousUser(), RoomManager::LOBBY);
+    Packet upd(name, "server", Packet::PacketType::UPDATE_USER, email, "pw");
+    const Packet res = process(upd, anon, fx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+    REQUIRE(res.message == "not authenticated");
+  }
+}
+
+// 15. response envelope fields
 TEST_CASE("PacketProcessor response envelope", "[packet_processor][envelope]") {
   Fixture fx;
   Packet req("alice", "ignored", Packet::PacketType::HEARTBEAT, "r", "ping", 123);

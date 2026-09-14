@@ -45,7 +45,7 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ## 4. Client product gaps
 
-- [ ] **Update profile** — dashboard choice 1 is still a TODO (`Client::showDashboard`).
+- [x] **Update profile** — dashboard choice 1 (`UPDATE_USER` via `PacketBuilder` / `ConsoleUI::showUpdateProfile`).
 - [ ] **Room directory** — console should list available rooms before join (`ConsoleUI::showJoinRoom`).
 - [x] **Validate room exists** before sending `ROOM_JOIN` (or surface clear `404` from server).
 - [ ] **Message history** — server has `loadHistory`; client never requests or displays it after join.

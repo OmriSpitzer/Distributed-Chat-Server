@@ -212,6 +212,53 @@ User DatabaseManager::createUser(const std::string_view &username, const std::st
   return User(username, email, User::UserType::USER);
 }
 
+// update username and/or password (empty password keeps the existing hash)
+User DatabaseManager::updateUser(const std::string_view &currentUsername,
+                                 const std::string_view &newUsername,
+                                 const std::string_view &newPassword,
+                                 const std::string_view &email) {
+  auto existing = getUser(currentUsername);
+  if (!existing) {
+    throw std::runtime_error("User not found");
+  }
+  if (existing->getEmail() != email) {
+    throw std::runtime_error("Email does not match profile");
+  }
+
+  const std::string current(currentUsername);
+  const std::string desired(newUsername);
+  if (desired.empty()) {
+    throw std::runtime_error("Username is required");
+  }
+
+  if (desired != current && userExists(desired)) {
+    throw ConstraintError("Username already taken");
+  }
+
+  if (!newPassword.empty()) {
+    const std::string passwordHash = Authentication::hashPassword(newPassword);
+    execute(db::sql::update_user_password, {passwordHash, current});
+  }
+
+  if (desired != current) {
+    // membership / online_users FK username while renaming; briefly disable checks
+    exec("PRAGMA foreign_keys=OFF;");
+    try {
+      execute(db::sql::update_user, {desired, current});
+    } catch (...) {
+      exec("PRAGMA foreign_keys=ON;");
+      throw;
+    }
+    exec("PRAGMA foreign_keys=ON;");
+  }
+
+  auto updated = getUser(desired);
+  if (!updated) {
+    throw std::runtime_error("User missing after update");
+  }
+  return *updated;
+}
+
 // login user
 std::variant<User, std::string> DatabaseManager::loginUser(const std::string_view &username,
                                                            const std::string_view &password) {

@@ -133,7 +133,28 @@ void Client::showDashboard() {
     switch (answer) {
       // update profile option
     case 1: {
-      // TODO: update profile
+      std::optional<Packet> updatePacket = ConsoleUI::showUpdateProfile(*state.user);
+      if (!updatePacket) {
+        break;
+      }
+
+      if (!network.sendPacket(*updatePacket)) {
+        break;
+      }
+
+      auto response = waitFor(Packet::PacketType::UPDATE_USER);
+      if (!response) {
+        break;
+      }
+
+      if (auto user = handler.handlePacket(*response)) {
+        state.user = *user;
+        Logger::logInfo("Client " + id, "Profile updated: " + user->getUsername());
+      } else if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        Logger::logError("Client " + id, "Update failed: " + response->message);
+      } else {
+        Logger::logError("Client " + id, "Update failed: invalid user payload");
+      }
       break;
     }
 

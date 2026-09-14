@@ -12,6 +12,9 @@
 #include <mutex>
 #include <unordered_map>
 #include <winsock2.h>
+#ifdef ERROR
+#undef ERROR
+#endif
 
 // forward declaration of GossipManager
 class GossipManager;

@@ -64,3 +64,13 @@ Packet PacketBuilder::buildLeaveRoom(std::string_view username, std::string_view
 
   return Packet(username, "", Packet::PacketType::ROOM_LEAVE, room, "");
 }
+
+// build a update user packet
+Packet PacketBuilder::buildUpdateUser(std::string_view username, std::string_view password,
+                                      std::string_view email) {
+  if (username.empty() || email.empty()) {
+    throw std::invalid_argument("Username and email are required");
+  }
+
+  return Packet(username, "", Packet::PacketType::UPDATE_USER, email, password);
+}

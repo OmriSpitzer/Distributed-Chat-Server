@@ -17,6 +17,7 @@ std::optional<User> PacketHandler::handlePacket(const Packet &packet) {
   switch (packet.type) {
   case Packet::PacketType::LOGIN:
   case Packet::PacketType::REGISTER:
+  case Packet::PacketType::UPDATE_USER:
     return handleLogin(packet);
   default:
     return std::nullopt;

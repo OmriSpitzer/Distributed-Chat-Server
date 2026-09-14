@@ -49,6 +49,10 @@ public:
   User createUser(const std::string_view &username, const std::string_view &password,
                   const std::string_view &email);
 
+  // update username and/or password for an existing user (empty password = keep current)
+  User updateUser(const std::string_view &currentUsername, const std::string_view &newUsername,
+                  const std::string_view &newPassword, const std::string_view &email);
+
   // authenticate: returns User or an error string
   std::variant<User, std::string> loginUser(const std::string_view &username,
                                             const std::string_view &password);

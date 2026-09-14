@@ -13,6 +13,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <winsock2.h>
+#ifdef ERROR
+#undef ERROR
+#endif
 
 class ClientSession;
 class ConnectionManager;

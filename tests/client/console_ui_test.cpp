@@ -177,3 +177,36 @@ TEST_CASE("ConsoleUI showCreateMessage cancel via exit", "[console_ui][message][
   IoRedirect io("exit\n");
   REQUIRE_FALSE(ConsoleUI::showCreateMessage(user).has_value());
 }
+
+// 15. showUpdateProfile username change
+TEST_CASE("ConsoleUI showUpdateProfile builds username UPDATE_USER", "[console_ui][update]") {
+  const User user("alice", "alice@example.com", User::UserType::USER);
+  IoRedirect io("1\nbob\n");
+  const auto packet = ConsoleUI::showUpdateProfile(user);
+
+  REQUIRE(packet.has_value());
+  REQUIRE(packet->type == Packet::PacketType::UPDATE_USER);
+  REQUIRE(packet->sender == "bob");
+  REQUIRE(packet->message.empty());
+  REQUIRE(packet->room == "alice@example.com");
+}
+
+// 16. showUpdateProfile password change
+TEST_CASE("ConsoleUI showUpdateProfile builds password UPDATE_USER", "[console_ui][update]") {
+  const User user("alice", "alice@example.com", User::UserType::USER);
+  IoRedirect io("2\nnewsecret\n");
+  const auto packet = ConsoleUI::showUpdateProfile(user);
+
+  REQUIRE(packet.has_value());
+  REQUIRE(packet->type == Packet::PacketType::UPDATE_USER);
+  REQUIRE(packet->sender == "alice");
+  REQUIRE(packet->message == "newsecret");
+  REQUIRE(packet->room == "alice@example.com");
+}
+
+// 17. showUpdateProfile back cancels
+TEST_CASE("ConsoleUI showUpdateProfile back cancels", "[console_ui][update][edge]") {
+  const User user("alice", "alice@example.com", User::UserType::USER);
+  IoRedirect io("3\n");
+  REQUIRE_FALSE(ConsoleUI::showUpdateProfile(user).has_value());
+}

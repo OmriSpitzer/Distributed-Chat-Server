@@ -13,6 +13,9 @@
 #include <queue>
 #include <thread>
 #include <winsock2.h>
+#ifdef ERROR
+#undef ERROR
+#endif
 
 class Network {
 public:

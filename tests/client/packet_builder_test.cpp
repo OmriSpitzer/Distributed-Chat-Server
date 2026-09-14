@@ -165,7 +165,36 @@ TEST_CASE("PacketBuilder join and leave reject empty arguments",
   }
 }
 
-// 12. defaults: empty receiver, responseCode 0, timestamp set
+// 12. buildUpdateUser maps fields and allows empty password
+TEST_CASE("PacketBuilder buildUpdateUser maps fields", "[packet_builder][update]") {
+  SECTION("username and password change") {
+    const Packet packet = PacketBuilder::buildUpdateUser("alice", "newpw", "alice@example.com");
+    REQUIRE(packet.type == Packet::PacketType::UPDATE_USER);
+    REQUIRE(packet.sender == "alice");
+    REQUIRE(packet.message == "newpw");
+    REQUIRE(packet.room == "alice@example.com");
+  }
+
+  SECTION("empty password keeps current on server") {
+    const Packet packet = PacketBuilder::buildUpdateUser("bob", "", "bob@example.com");
+    REQUIRE(packet.type == Packet::PacketType::UPDATE_USER);
+    REQUIRE(packet.sender == "bob");
+    REQUIRE(packet.message.empty());
+    REQUIRE(packet.room == "bob@example.com");
+  }
+}
+
+TEST_CASE("PacketBuilder buildUpdateUser rejects empty username or email",
+          "[packet_builder][update][edge]") {
+  SECTION("empty username") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildUpdateUser("", "pw", "a@b.com"), std::invalid_argument);
+  }
+  SECTION("empty email") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildUpdateUser("alice", "pw", ""), std::invalid_argument);
+  }
+}
+
+// 13. defaults: empty receiver, responseCode 0, timestamp set
 TEST_CASE("PacketBuilder sets defaults and timestamp", "[packet_builder][edge]") {
   const Packet packet = PacketBuilder::buildLogin("alice", "secret");
 

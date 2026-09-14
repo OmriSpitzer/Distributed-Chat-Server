@@ -96,6 +96,10 @@ TEST_CASE("Serializer round-trip all packet types", "[serializer][roundtrip]") {
   SECTION("GOSSIP_PULL") {
     requireRoundTrip(makePacket(Packet::PacketType::GOSSIP_PULL, "node-a", "node-b", "", "pull"));
   }
+  SECTION("UPDATE_USER") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::UPDATE_USER, "alice", "server", "a@b.c", "secret"));
+  }
 }
 
 // 2. empty and whitespace fields
@@ -222,11 +226,11 @@ TEST_CASE("Serializer serialize rejects invalid type", "[serializer][serialize][
     REQUIRE(Serializer::serialize(packet).empty());
   }
 
-  // first unused enum value after GOSSIP_PULL
-  SECTION("first unused enum value after GOSSIP_PULL") {
+  // first unused enum value after UPDATE_USER
+  SECTION("first unused enum value after UPDATE_USER") {
     Packet packet = makePacket(Packet::PacketType::MESSAGE);
     packet.type =
-        static_cast<Packet::PacketType>(static_cast<int>(Packet::PacketType::GOSSIP_PULL) + 1);
+        static_cast<Packet::PacketType>(static_cast<int>(Packet::PacketType::UPDATE_USER) + 1);
     REQUIRE(Serializer::serialize(packet).empty());
   }
 }

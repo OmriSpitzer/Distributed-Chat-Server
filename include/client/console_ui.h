@@ -29,4 +29,7 @@ public:
 
   // showing the create message screen
   static std::optional<Packet> showCreateMessage(const User &user);
+
+  // showing the update profile screen
+  static std::optional<Packet> showUpdateProfile(const User &user);
 };

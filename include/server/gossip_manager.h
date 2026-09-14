@@ -18,6 +18,9 @@
 #include <unordered_set>
 #include <vector>
 #include <winsock2.h>
+#ifdef ERROR
+#undef ERROR
+#endif
 
 
 class GossipManager {

@@ -286,6 +286,45 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
+    // update profile (username and/or password); email must match the session user
+  case Packet::PacketType::UPDATE_USER: {
+    if (!session.isAuthenticated()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "not authenticated";
+      break;
+    }
+
+    try {
+      const std::string currentUsername = session.getUser().getUsername();
+      const std::string_view newUsername = packet.sender;
+      const std::string_view newPassword = packet.message;
+      const std::string_view email = packet.room;
+
+      if (newUsername.empty() || email.empty()) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "missing username or email";
+        break;
+      }
+
+      User updated = DatabaseManager::getInstance().updateUser(currentUsername, newUsername,
+                                                              newPassword, email);
+      session.setUser(updated);
+
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+      response.message = updated.serialize();
+    } catch (const DatabaseManager::ConstraintError &e) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = e.what();
+    } catch (const std::exception &e) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = e.what();
+    } catch (...) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = "update failed";
+    }
+    break;
+  }
+
   default: {
     response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
     response.message = "unknown packet type";

@@ -145,6 +145,13 @@ TEST_CASE("Packet constructor stores all fields", "[packet][ctor]") {
     REQUIRE(packet.type == Packet::PacketType::GOSSIP_PULL);
     REQUIRE(packet.message == "pull");
   }
+
+  SECTION("UPDATE_USER") {
+    const Packet packet("alice", "server", Packet::PacketType::UPDATE_USER, "a@b.c", "secret");
+    REQUIRE(packet.type == Packet::PacketType::UPDATE_USER);
+    REQUIRE(packet.room == "a@b.c");
+    REQUIRE(packet.message == "secret");
+  }
 }
 
 // 3. constructor default arguments
@@ -462,6 +469,7 @@ TEST_CASE("Packet packetTypeToString", "[packet][packetTypeToString]") {
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::GOSSIP_EVENT) == "GOSSIP_EVENT");
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::GOSSIP_DIGEST) == "GOSSIP_DIGEST");
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::GOSSIP_PULL) == "GOSSIP_PULL");
+  REQUIRE(Packet::packetTypeToString(Packet::PacketType::UPDATE_USER) == "UPDATE_USER");
 
   SECTION("invalid enum value defaults to DEFAULT") {
     const auto bogus = static_cast<Packet::PacketType>(999);
@@ -488,6 +496,7 @@ TEST_CASE("Packet stringToPacketType", "[packet][stringToPacketType]") {
   REQUIRE(Packet::stringToPacketType("GOSSIP_EVENT") == Packet::PacketType::GOSSIP_EVENT);
   REQUIRE(Packet::stringToPacketType("GOSSIP_DIGEST") == Packet::PacketType::GOSSIP_DIGEST);
   REQUIRE(Packet::stringToPacketType("GOSSIP_PULL") == Packet::PacketType::GOSSIP_PULL);
+  REQUIRE(Packet::stringToPacketType("UPDATE_USER") == Packet::PacketType::UPDATE_USER);
 
   SECTION("unknown / edge strings default to DEFAULT") {
     REQUIRE(Packet::stringToPacketType("") == Packet::PacketType::DEFAULT);

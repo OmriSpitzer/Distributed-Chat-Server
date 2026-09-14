@@ -24,6 +24,7 @@ static const std::unordered_map<Packet::PacketType, std::string> packet_type_to_
     {Packet::PacketType::GOSSIP_EVENT, "GOSSIP_EVENT"},
     {Packet::PacketType::GOSSIP_DIGEST, "GOSSIP_DIGEST"},
     {Packet::PacketType::GOSSIP_PULL, "GOSSIP_PULL"},
+    {Packet::PacketType::UPDATE_USER, "UPDATE_USER"},
 };
 
 // string to packet type map
@@ -40,6 +41,7 @@ static const std::unordered_map<std::string, Packet::PacketType> string_to_packe
     {"GOSSIP_EVENT", Packet::PacketType::GOSSIP_EVENT},
     {"GOSSIP_DIGEST", Packet::PacketType::GOSSIP_DIGEST},
     {"GOSSIP_PULL", Packet::PacketType::GOSSIP_PULL},
+    {"UPDATE_USER", Packet::PacketType::UPDATE_USER},
 };
 
 // constructor

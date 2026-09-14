@@ -29,4 +29,8 @@ public:
   // build a register packet
   static Packet buildRegister(std::string_view username, std::string_view password,
                               std::string_view email);
+
+  // build a update user packet
+  static Packet buildUpdateUser(std::string_view username, std::string_view password,
+                                std::string_view email);
 };

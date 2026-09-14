@@ -102,6 +102,8 @@ set(DB_SCHEMAS
   "get_user:src/database/queries/get_user.sql"
   "login_user:src/database/queries/login_user.sql"
   "create_user:src/database/queries/create_user.sql"
+  "update_user_password:src/database/queries/update_user_password.sql"
+  "update_user:src/database/queries/update_user.sql"
   "user_exists:src/database/queries/user_exists.sql"
   "save_message:src/database/queries/save_message.sql"
   "load_history:src/database/queries/load_history.sql"

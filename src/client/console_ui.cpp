@@ -189,3 +189,47 @@ std::optional<Packet> ConsoleUI::showCreateMessage(const User &user) {
     return std::nullopt;
   }
 }
+
+// showing the update profile screen
+std::optional<Packet> ConsoleUI::showUpdateProfile(const User &user) {
+  std::cout << ">> Update profile for " << user.getUsername() << " (" << user.getEmail() << ")\n";
+  std::cout << "1. Update username\n";
+  std::cout << "2. Update password\n";
+  std::cout << "3. Back\n";
+  std::cout << "--------------------------------\n";
+
+  const auto answer = tryReadMenuChoice(1, 3);
+  if (!answer || *answer == 3) {
+    return std::nullopt;
+  }
+
+  switch (*answer) {
+  case 1: {
+    const auto newUsername = readLine(">> New username (type 'exit' to go back): ");
+    if (!newUsername) {
+      return std::nullopt;
+    }
+    try {
+      // empty password => server keeps the current password
+      return PacketBuilder::buildUpdateUser(*newUsername, "", user.getEmail());
+    } catch (const std::invalid_argument &e) {
+      std::cout << ">> " << e.what() << '\n';
+      return std::nullopt;
+    }
+  }
+  case 2: {
+    const auto newPassword = readLine(">> New password (type 'exit' to go back): ");
+    if (!newPassword) {
+      return std::nullopt;
+    }
+    try {
+      return PacketBuilder::buildUpdateUser(user.getUsername(), *newPassword, user.getEmail());
+    } catch (const std::invalid_argument &e) {
+      std::cout << ">> " << e.what() << '\n';
+      return std::nullopt;
+    }
+  }
+  default:
+    return std::nullopt;
+  }
+}

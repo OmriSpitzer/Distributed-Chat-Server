@@ -696,3 +696,44 @@ TEST_CASE("DatabaseManager createRoom assigns id and round-trips",
   REQUIRE_THROWS_AS(database.deleteRoom(1), std::runtime_error); // seed Lobby
   REQUIRE_THROWS_AS(database.deleteRoom(2), std::runtime_error); // seed General
 }
+
+// 20. updateUser password and username
+TEST_CASE("DatabaseManager updateUser password and username", "[database_manager][updateUser]") {
+  DatabaseManager &database = db();
+  const std::string name = unique("upd");
+  const std::string email = name + "@mail.test";
+  database.createUser(name, "oldpw", email);
+
+  SECTION("password change keeps username") {
+    const User updated = database.updateUser(name, name, "newpw", email);
+    REQUIRE(updated.getUsername() == name);
+    REQUIRE(updated.getEmail() == email);
+
+    const auto ok = database.loginUser(name, "newpw");
+    REQUIRE(std::holds_alternative<User>(ok));
+    const auto bad = database.loginUser(name, "oldpw");
+    REQUIRE(std::holds_alternative<std::string>(bad));
+  }
+
+  SECTION("username rename and empty password keeps hash") {
+    const std::string renamed = unique("renamed");
+    const User updated = database.updateUser(name, renamed, "", email);
+    REQUIRE(updated.getUsername() == renamed);
+    REQUIRE_FALSE(database.userExists(name));
+    REQUIRE(database.userExists(renamed));
+
+    const auto ok = database.loginUser(renamed, "oldpw");
+    REQUIRE(std::holds_alternative<User>(ok));
+  }
+
+  SECTION("taken username is rejected") {
+    const std::string other = unique("other");
+    database.createUser(other, "pw", other + "@mail.test");
+    REQUIRE_THROWS_AS(database.updateUser(name, other, "", email),
+                      DatabaseManager::ConstraintError);
+  }
+
+  SECTION("email mismatch is rejected") {
+    REQUIRE_THROWS_AS(database.updateUser(name, name, "pw", "wrong@mail.test"), std::runtime_error);
+  }
+}

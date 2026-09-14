@@ -108,6 +108,7 @@ bool isValidPacketType(Packet::PacketType type) {
   case Packet::PacketType::GOSSIP_EVENT:
   case Packet::PacketType::GOSSIP_DIGEST:
   case Packet::PacketType::GOSSIP_PULL:
+  case Packet::PacketType::UPDATE_USER:
     return true;
   }
   return false;

@@ -10,6 +10,9 @@
 #include <chrono>
 #include <mutex>
 #include <winsock2.h>
+#ifdef ERROR
+#undef ERROR
+#endif
 
 class ClientSession {
 public:

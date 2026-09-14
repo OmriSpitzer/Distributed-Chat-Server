@@ -24,7 +24,8 @@ public:
     GOSSIP_HELLO,
     GOSSIP_EVENT,
     GOSSIP_DIGEST,
-    GOSSIP_PULL
+    GOSSIP_PULL,
+    UPDATE_USER,
   };
 
   // constructors
