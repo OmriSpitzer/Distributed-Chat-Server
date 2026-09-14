@@ -100,6 +100,18 @@ TEST_CASE("Serializer round-trip all packet types", "[serializer][roundtrip]") {
     requireRoundTrip(
         makePacket(Packet::PacketType::UPDATE_USER, "alice", "server", "a@b.c", "secret"));
   }
+  SECTION("ROOM_CREATE") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::ROOM_CREATE, "alice", "server", "Labs", "Other|PUBLIC"));
+  }
+  SECTION("ROOM_LIST") {
+    requireRoundTrip(makePacket(Packet::PacketType::ROOM_LIST, "server", "*", "",
+                                "room(1|Lobby|Lobby|PUBLIC)", 1, 0));
+  }
+  SECTION("LOAD_MESSAGE_HISTORY") {
+    requireRoundTrip(makePacket(Packet::PacketType::LOAD_MESSAGE_HISTORY, "alice", "server",
+                                "Lobby", "", 1, 0));
+  }
 }
 
 // 2. empty and whitespace fields
@@ -226,11 +238,11 @@ TEST_CASE("Serializer serialize rejects invalid type", "[serializer][serialize][
     REQUIRE(Serializer::serialize(packet).empty());
   }
 
-  // first unused enum value after UPDATE_USER
-  SECTION("first unused enum value after UPDATE_USER") {
+  // first unused enum value after LOAD_MESSAGE_HISTORY
+  SECTION("first unused enum value after LOAD_MESSAGE_HISTORY") {
     Packet packet = makePacket(Packet::PacketType::MESSAGE);
-    packet.type =
-        static_cast<Packet::PacketType>(static_cast<int>(Packet::PacketType::UPDATE_USER) + 1);
+    packet.type = static_cast<Packet::PacketType>(
+        static_cast<int>(Packet::PacketType::LOAD_MESSAGE_HISTORY) + 1);
     REQUIRE(Serializer::serialize(packet).empty());
   }
 }

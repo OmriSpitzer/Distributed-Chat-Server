@@ -10,6 +10,7 @@
 #include "utils/models/room.h"
 #include <catch2/catch_test_macros.hpp>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -262,5 +263,42 @@ TEST_CASE("Room stream output includes name, type, and privacy", "[room][print]"
     const std::string text = out.str();
 
     REQUIRE(text.find("Lobby") != std::string::npos);
+  }
+}
+
+// 11. room serialize / deserialize round-trip
+TEST_CASE("Room serialize deserialize round-trip", "[room][serialize]") {
+  const Room original(42, "secure", Room::RoomType::SECURITY, Room::Privacy::PRIVATE);
+  const std::string bytes = original.serialize();
+  REQUIRE(bytes == "room(42|secure|Security|PRIVATE)");
+
+  const Room restored = Room::deserialize(bytes);
+  REQUIRE(restored.getId() == 42);
+  REQUIRE(restored.getName() == "secure");
+  REQUIRE(restored.getType() == Room::RoomType::SECURITY);
+  REQUIRE(restored.getPrivacy() == Room::Privacy::PRIVATE);
+}
+
+// 12. room list serialize / deserialize
+TEST_CASE("Room serializeList deserializeList", "[room][serialize][list]") {
+  const std::vector<Room> rooms = {
+      Room(1, "Lobby", Room::RoomType::LOBBY),
+      Room(2, "General", Room::RoomType::OTHER),
+  };
+
+  const std::string encoded = Room::serializeList(rooms);
+  const std::vector<Room> restored = Room::deserializeList(encoded);
+
+  REQUIRE(restored.size() == 2);
+  REQUIRE(restored[0].getName() == "Lobby");
+  REQUIRE(restored[1].getName() == "General");
+
+  SECTION("empty list") {
+    REQUIRE(Room::serializeList({}).empty());
+    REQUIRE(Room::deserializeList("").empty());
+  }
+
+  SECTION("invalid entry throws") {
+    REQUIRE_THROWS_AS(Room::deserializeList("not-a-room"), std::invalid_argument);
   }
 }

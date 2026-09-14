@@ -152,6 +152,27 @@ TEST_CASE("Packet constructor stores all fields", "[packet][ctor]") {
     REQUIRE(packet.room == "a@b.c");
     REQUIRE(packet.message == "secret");
   }
+
+  SECTION("ROOM_CREATE") {
+    const Packet packet("alice", "server", Packet::PacketType::ROOM_CREATE, "Labs", "Other|PUBLIC");
+    REQUIRE(packet.type == Packet::PacketType::ROOM_CREATE);
+    REQUIRE(packet.room == "Labs");
+    REQUIRE(packet.message == "Other|PUBLIC");
+  }
+
+  SECTION("ROOM_LIST") {
+    const Packet packet("server", "*", Packet::PacketType::ROOM_LIST, "", "room(1|Lobby|Lobby|PUBLIC)",
+                        0);
+    REQUIRE(packet.type == Packet::PacketType::ROOM_LIST);
+    REQUIRE(packet.message == "room(1|Lobby|Lobby|PUBLIC)");
+    REQUIRE(packet.responseCode == 0);
+  }
+
+  SECTION("LOAD_MESSAGE_HISTORY") {
+    const Packet packet("alice", "server", Packet::PacketType::LOAD_MESSAGE_HISTORY, "Lobby");
+    REQUIRE(packet.type == Packet::PacketType::LOAD_MESSAGE_HISTORY);
+    REQUIRE(packet.room == "Lobby");
+  }
 }
 
 // 3. constructor default arguments
@@ -470,6 +491,10 @@ TEST_CASE("Packet packetTypeToString", "[packet][packetTypeToString]") {
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::GOSSIP_DIGEST) == "GOSSIP_DIGEST");
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::GOSSIP_PULL) == "GOSSIP_PULL");
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::UPDATE_USER) == "UPDATE_USER");
+  REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_CREATE) == "ROOM_CREATE");
+  REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_LIST) == "ROOM_LIST");
+  REQUIRE(Packet::packetTypeToString(Packet::PacketType::LOAD_MESSAGE_HISTORY) ==
+          "LOAD_MESSAGE_HISTORY");
 
   SECTION("invalid enum value defaults to DEFAULT") {
     const auto bogus = static_cast<Packet::PacketType>(999);
@@ -497,6 +522,10 @@ TEST_CASE("Packet stringToPacketType", "[packet][stringToPacketType]") {
   REQUIRE(Packet::stringToPacketType("GOSSIP_DIGEST") == Packet::PacketType::GOSSIP_DIGEST);
   REQUIRE(Packet::stringToPacketType("GOSSIP_PULL") == Packet::PacketType::GOSSIP_PULL);
   REQUIRE(Packet::stringToPacketType("UPDATE_USER") == Packet::PacketType::UPDATE_USER);
+  REQUIRE(Packet::stringToPacketType("ROOM_CREATE") == Packet::PacketType::ROOM_CREATE);
+  REQUIRE(Packet::stringToPacketType("ROOM_LIST") == Packet::PacketType::ROOM_LIST);
+  REQUIRE(Packet::stringToPacketType("LOAD_MESSAGE_HISTORY") ==
+          Packet::PacketType::LOAD_MESSAGE_HISTORY);
 
   SECTION("unknown / edge strings default to DEFAULT") {
     REQUIRE(Packet::stringToPacketType("") == Packet::PacketType::DEFAULT);
@@ -527,7 +556,9 @@ TEST_CASE("Packet type conversion round-trip", "[packet][type-roundtrip]") {
       Packet::PacketType::ROOM_LEAVE,    Packet::PacketType::DEFAULT,
       Packet::PacketType::HEARTBEAT,     Packet::PacketType::REGISTER,
       Packet::PacketType::GOSSIP_HELLO,  Packet::PacketType::GOSSIP_EVENT,
-      Packet::PacketType::GOSSIP_DIGEST, Packet::PacketType::GOSSIP_PULL};
+      Packet::PacketType::GOSSIP_DIGEST, Packet::PacketType::GOSSIP_PULL,
+      Packet::PacketType::UPDATE_USER,   Packet::PacketType::ROOM_CREATE,
+      Packet::PacketType::ROOM_LIST,     Packet::PacketType::LOAD_MESSAGE_HISTORY};
 
   for (const auto type : types) {
     REQUIRE(Packet::stringToPacketType(Packet::packetTypeToString(type)) == type);

@@ -15,7 +15,9 @@
 #include "server/packet_processor.h"
 #include "server/room_manager.h"
 #include "utils/RESPONSE_CODES.h"
+#include "utils/models/message.h"
 #include "utils/models/packet.h"
+#include "utils/models/room.h"
 #include "utils/models/user.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
@@ -196,6 +198,8 @@ TEST_CASE("PacketProcessor register success and duplicate", "[packet_processor][
   REQUIRE(db().isUserOnline(name));
   REQUIRE(fx.session.getRoom().getName() == RoomManager::LOBBY.getName());
   REQUIRE_NOTHROW(User::deserialize(res.message));
+  REQUIRE_FALSE(res.room.empty());
+  REQUIRE_FALSE(Room::deserializeList(res.room).empty());
 
   Packet again(name, "server", Packet::PacketType::REGISTER, email, "secret");
   ClientSession other(nextFakeSocket(), User::anonymousUser(), RoomManager::LOBBY);
@@ -237,6 +241,9 @@ TEST_CASE("PacketProcessor login success", "[packet_processor][login]") {
   REQUIRE(db().isUserOnline(user.getUsername()));
   REQUIRE(fx.session.getRoom().getName() == RoomManager::LOBBY.getName());
   REQUIRE_NOTHROW(User::deserialize(res.message));
+  REQUIRE_FALSE(res.room.empty());
+  REQUIRE_NOTHROW(Room::deserializeList(res.room));
+  REQUIRE_FALSE(Room::deserializeList(res.room).empty());
 }
 
 // 8. login rejected when already online
@@ -434,6 +441,75 @@ TEST_CASE("PacketProcessor response envelope", "[packet_processor][envelope]") {
   REQUIRE(res.type == Packet::PacketType::HEARTBEAT);
   REQUIRE(res.timestamp >= before);
   REQUIRE(res.timestamp <= after);
+}
+
+// 16. ROOM_CREATE creates room and rejects unauthenticated / duplicate
+TEST_CASE("PacketProcessor ROOM_CREATE", "[packet_processor][create]") {
+  Fixture fx;
+  const User user = fx.createUser("secret");
+  fx.authenticate(user);
+
+  const std::string roomName = unique("room");
+  Packet req(user.getUsername(), "server", Packet::PacketType::ROOM_CREATE, roomName, "");
+  const Packet res = process(req, fx.session, fx.connections);
+
+  REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+  REQUIRE(res.room == roomName);
+  REQUIRE(RoomManager::getInstance().getRoom(roomName).has_value());
+  REQUIRE_NOTHROW(Room::deserialize(res.message));
+
+  SECTION("duplicate name fails") {
+    Packet again(user.getUsername(), "server", Packet::PacketType::ROOM_CREATE, roomName, "");
+    const Packet dup = process(again, fx.session, fx.connections);
+    REQUIRE(dup.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+  }
+
+  SECTION("rejects when not authenticated") {
+    ClientSession anon(nextFakeSocket(), User::anonymousUser(), RoomManager::LOBBY);
+    Packet create("anon", "server", Packet::PacketType::ROOM_CREATE, unique("x"), "");
+    const Packet denied = process(create, anon, fx.connections);
+    REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+    REQUIRE(denied.message == "not authenticated");
+  }
+
+  SECTION("ROOM_LIST on client port rejected") {
+    Packet list(user.getUsername(), "server", Packet::PacketType::ROOM_LIST, "", "");
+    const Packet denied = process(list, fx.session, fx.connections);
+    REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+  }
+}
+
+// 17. LOAD_MESSAGE_HISTORY returns encoded history
+TEST_CASE("PacketProcessor LOAD_MESSAGE_HISTORY", "[packet_processor][history]") {
+  Fixture fx;
+  const User user = fx.createUser("secret");
+  fx.authenticate(user);
+
+  const Message msg(user, User::anonymousUser(), "hello history");
+  REQUIRE(db().saveMessage(msg, RoomManager::LOBBY.getId()));
+
+  Packet req(user.getUsername(), "server", Packet::PacketType::LOAD_MESSAGE_HISTORY, "Lobby", "");
+  const Packet res = process(req, fx.session, fx.connections);
+
+  REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+  REQUIRE(res.room == "Lobby");
+  REQUIRE(res.message.find("[") != std::string::npos);
+  REQUIRE(res.message.find(user.getUsername()) != std::string::npos);
+  REQUIRE(res.message.find("hello history") != std::string::npos);
+
+  SECTION("rejects when not authenticated") {
+    ClientSession anon(nextFakeSocket(), User::anonymousUser(), RoomManager::LOBBY);
+    Packet history("anon", "server", Packet::PacketType::LOAD_MESSAGE_HISTORY, "Lobby", "");
+    const Packet denied = process(history, anon, fx.connections);
+    REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+  }
+
+  SECTION("unknown room returns NOT_FOUND") {
+    Packet history(user.getUsername(), "server", Packet::PacketType::LOAD_MESSAGE_HISTORY,
+                   unique("missing"), "");
+    const Packet denied = process(history, fx.session, fx.connections);
+    REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::NOT_FOUND));
+  }
 }
 
 // 15. typical register / message / logout flow

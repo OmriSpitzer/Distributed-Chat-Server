@@ -8,6 +8,7 @@
 #include <ctime>
 #include <string>
 #include <string_view>
+#include <vector>
 
 class Room {
 public:
@@ -53,6 +54,16 @@ public:
   // equals operator
   bool operator==(const Room &other) const;
   bool operator!=(const Room &other) const;
+
+  // serialize one room: room(id|name|type|privacy)
+  std::string serialize() const;
+
+  // deserialize one room
+  static Room deserialize(const std::string &serialized);
+
+  // serialize / deserialize a directory (semicolon-separated rooms)
+  static std::string serializeList(const std::vector<Room> &rooms);
+  static std::vector<Room> deserializeList(const std::string &serialized);
 
 private:
   int id;                 // room id

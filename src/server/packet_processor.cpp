@@ -12,6 +12,8 @@
 #include "server/room_manager.h"
 #include "utils/RESPONSE_CODES.h"
 #include "utils/gossip_payload.h"
+#include "utils/models/message.h"
+#include "utils/models/room.h"
 #include "utils/models/user.h"
 #include <atomic>
 #include <cstdint>
@@ -19,6 +21,7 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 namespace {
 std::atomic<std::uint64_t> nextPresenceSeq{0};
@@ -63,6 +66,53 @@ void rumorMessage(ConnectionManager &connections, const std::string &username,
                   const std::string &content, const std::string &room) {
   const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)));
   rumorEvent(connections, "MESSAGE", username, content, ts, room);
+}
+
+// send a room created event to the network
+void rumorRoomCreated(ConnectionManager &connections, const std::string &username,
+                      const Room &room) {
+  rumorEvent(connections, "ROOM_CREATED", username, Room::roomTypeToString(room.getType()),
+             Room::privacyToString(room.getPrivacy()), room.getName());
+}
+
+// encode the current room directory for clients
+std::string encodeRoomDirectory() {
+  return Room::serializeList(RoomManager::getInstance().listRooms());
+}
+
+// push the full room directory to all local clients
+void pushRoomDirectory(ConnectionManager &connections, SOCKET skipSocket = INVALID_SOCKET) {
+  Packet push("server", "*", Packet::PacketType::ROOM_LIST, "", encodeRoomDirectory(), 0);
+  RoomManager::getInstance().broadcastAll(push, connections, skipSocket);
+}
+
+// parse ROOM_CREATE message as "type|privacy" (both optional)
+bool parseCreateRoomMessage(std::string_view message, Room::RoomType &type,
+                            Room::Privacy &privacy) {
+  type = Room::RoomType::OTHER;
+  privacy = Room::Privacy::PUBLIC;
+  if (message.empty()) {
+    return true;
+  }
+
+  const std::size_t pipe = message.find('|');
+  if (pipe == std::string_view::npos) {
+    type = Room::stringToRoomType(message);
+    return true;
+  }
+
+  type = Room::stringToRoomType(message.substr(0, pipe));
+  privacy = Room::stringToPrivacy(message.substr(pipe + 1));
+  return true;
+}
+
+// encode history newest-first DB rows as oldest-first console lines
+std::string encodeHistory(const std::vector<Message> &messages) {
+  std::string out;
+  for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+    out += "[" + it->getFrom().getUsername() + "] " + it->getContent() + "\n";
+  }
+  return out;
 }
 } // namespace
 
@@ -126,6 +176,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
+      response.room = encodeRoomDirectory();
     } catch (...) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
       response.message = std::string("login failed");
@@ -169,6 +220,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
+      response.room = encodeRoomDirectory();
     } catch (...) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
       response.message = std::string("register failed");
@@ -286,6 +338,89 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
+    // create a room, then push the full directory to local clients
+  case Packet::PacketType::ROOM_CREATE: {
+    if (!session.isAuthenticated()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "not authenticated";
+      break;
+    }
+
+    try {
+      const std::string roomName = packet.room;
+      if (roomName.empty()) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "missing room name";
+        break;
+      }
+
+      Room::RoomType type = Room::RoomType::OTHER;
+      Room::Privacy privacy = Room::Privacy::PUBLIC;
+      parseCreateRoomMessage(packet.message, type, privacy);
+
+      Room draft(0, roomName, type, privacy);
+      if (!RoomManager::getInstance().createRoom(draft)) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "room already exists or create failed";
+        break;
+      }
+
+      auto created = RoomManager::getInstance().getRoom(roomName);
+      if (!created) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+        response.message = "create failed";
+        break;
+      }
+
+      rumorRoomCreated(connections, session.getUser().getUsername(), *created);
+      pushRoomDirectory(connections);
+
+      response.room = roomName;
+      response.message = created->serialize();
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+    } catch (...) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = "create failed";
+    }
+    break;
+  }
+
+    // room list is server-push only on the client port
+  case Packet::PacketType::ROOM_LIST: {
+    response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+    response.message = "unsupported on client port";
+    break;
+  }
+
+    // load recent message history for a room
+  case Packet::PacketType::LOAD_MESSAGE_HISTORY: {
+    if (!session.isAuthenticated()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "not authenticated";
+      break;
+    }
+
+    try {
+      const std::string roomName =
+          packet.room.empty() ? session.getRoom().getName() : packet.room;
+      auto room = RoomManager::getInstance().getRoom(roomName);
+      if (!room) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
+        response.message = "unknown room: " + roomName;
+        break;
+      }
+
+      const auto history = DatabaseManager::getInstance().loadHistory(room->getId());
+      response.room = roomName;
+      response.message = encodeHistory(history);
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+    } catch (...) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = "load history failed";
+    }
+    break;
+  }
+
     // update profile (username and/or password); email must match the session user
   case Packet::PacketType::UPDATE_USER: {
     if (!session.isAuthenticated()) {
@@ -307,7 +442,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       }
 
       User updated = DatabaseManager::getInstance().updateUser(currentUsername, newUsername,
-                                                              newPassword, email);
+                                                               newPassword, email);
       session.setUser(updated);
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);

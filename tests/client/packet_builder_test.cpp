@@ -194,6 +194,53 @@ TEST_CASE("PacketBuilder buildUpdateUser rejects empty username or email",
   }
 }
 
+// 14. buildCreateRoom maps fields
+TEST_CASE("PacketBuilder buildCreateRoom maps fields", "[packet_builder][create]") {
+  SECTION("defaults empty type/privacy") {
+    const Packet packet = PacketBuilder::buildCreateRoom("alice", "Labs");
+    REQUIRE(packet.type == Packet::PacketType::ROOM_CREATE);
+    REQUIRE(packet.sender == "alice");
+    REQUIRE(packet.room == "Labs");
+    REQUIRE(packet.message.empty());
+  }
+
+  SECTION("explicit type and privacy") {
+    const Packet packet = PacketBuilder::buildCreateRoom("alice", "Secure", "Security|PRIVATE");
+    REQUIRE(packet.type == Packet::PacketType::ROOM_CREATE);
+    REQUIRE(packet.message == "Security|PRIVATE");
+  }
+}
+
+TEST_CASE("PacketBuilder buildCreateRoom rejects empty arguments",
+          "[packet_builder][create][edge]") {
+  SECTION("empty username") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildCreateRoom("", "Labs"), std::invalid_argument);
+  }
+  SECTION("empty room") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildCreateRoom("alice", ""), std::invalid_argument);
+  }
+}
+
+TEST_CASE("PacketBuilder buildLoadMessageHistory maps fields", "[packet_builder][history]") {
+  const Packet packet = PacketBuilder::buildLoadMessageHistory("alice", "Lobby");
+  REQUIRE(packet.type == Packet::PacketType::LOAD_MESSAGE_HISTORY);
+  REQUIRE(packet.sender == "alice");
+  REQUIRE(packet.room == "Lobby");
+  REQUIRE(packet.message.empty());
+}
+
+TEST_CASE("PacketBuilder buildLoadMessageHistory rejects empty arguments",
+          "[packet_builder][history][edge]") {
+  SECTION("empty username") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildLoadMessageHistory("", "Lobby"),
+                      std::invalid_argument);
+  }
+  SECTION("empty room") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildLoadMessageHistory("alice", ""),
+                      std::invalid_argument);
+  }
+}
+
 // 13. defaults: empty receiver, responseCode 0, timestamp set
 TEST_CASE("PacketBuilder sets defaults and timestamp", "[packet_builder][edge]") {
   const Packet packet = PacketBuilder::buildLogin("alice", "secret");

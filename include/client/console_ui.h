@@ -25,7 +25,10 @@ public:
   static std::optional<Packet> showRegister();
 
   // showing the join room screen
-  static std::optional<Packet> showJoinRoom(const User &user);
+  static std::optional<Packet> showJoinRoom(const ClientState &state);
+
+  // showing the create room screen
+  static std::optional<Packet> showCreateRoom(const User &user);
 
   // showing the create message screen
   static std::optional<Packet> showCreateMessage(const User &user);

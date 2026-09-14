@@ -57,11 +57,9 @@ struct IoRedirect {
   IoRedirect &operator=(const IoRedirect &) = delete;
 };
 
-ClientState loggedInState() {
-  ClientState state;
+void makeLoggedIn(ClientState &state) {
   state.user = User("alice", "alice@example.com", User::UserType::USER);
   state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
-  return state;
 }
 
 } // namespace
@@ -92,14 +90,18 @@ TEST_CASE("ConsoleUI showUserDashboard without user returns -1", "[console_ui][m
 
 // 5. showUserDashboard accepts a valid choice
 TEST_CASE("ConsoleUI showUserDashboard accepts a valid choice", "[console_ui][menu]") {
+  ClientState state;
+  makeLoggedIn(state);
   IoRedirect io("4\n");
-  REQUIRE(ConsoleUI::showUserDashboard(loggedInState()) == 4);
+  REQUIRE(ConsoleUI::showUserDashboard(state) == 4);
 }
 
 // 6. showUserDashboard EOF returns Logout
 TEST_CASE("ConsoleUI showUserDashboard EOF returns Logout", "[console_ui][menu][edge]") {
+  ClientState state;
+  makeLoggedIn(state);
   IoRedirect io("");
-  REQUIRE(ConsoleUI::showUserDashboard(loggedInState()) == 5);
+  REQUIRE(ConsoleUI::showUserDashboard(state) == 7);
 }
 
 // 7. showLogin builds a LOGIN packet
@@ -149,9 +151,11 @@ TEST_CASE("ConsoleUI showRegister builds a REGISTER packet", "[console_ui][regis
 
 // 12. showJoinRoom builds a ROOM_JOIN packet
 TEST_CASE("ConsoleUI showJoinRoom builds a ROOM_JOIN packet", "[console_ui][join]") {
-  const User user("alice", "alice@example.com", User::UserType::USER);
+  ClientState state;
+  state.user = User("alice", "alice@example.com", User::UserType::USER);
+  state.setRooms({Room(2, "General", Room::RoomType::OTHER)});
   IoRedirect io("General\n");
-  const auto packet = ConsoleUI::showJoinRoom(user);
+  const auto packet = ConsoleUI::showJoinRoom(state);
 
   REQUIRE(packet.has_value());
   REQUIRE(packet->type == Packet::PacketType::ROOM_JOIN);
@@ -209,4 +213,17 @@ TEST_CASE("ConsoleUI showUpdateProfile back cancels", "[console_ui][update][edge
   const User user("alice", "alice@example.com", User::UserType::USER);
   IoRedirect io("3\n");
   REQUIRE_FALSE(ConsoleUI::showUpdateProfile(user).has_value());
+}
+
+// 18. showCreateRoom builds a ROOM_CREATE packet
+TEST_CASE("ConsoleUI showCreateRoom builds a ROOM_CREATE packet", "[console_ui][create]") {
+  const User user("alice", "alice@example.com", User::UserType::USER);
+  IoRedirect io("Labs\n");
+  const auto packet = ConsoleUI::showCreateRoom(user);
+
+  REQUIRE(packet.has_value());
+  REQUIRE(packet->type == Packet::PacketType::ROOM_CREATE);
+  REQUIRE(packet->sender == "alice");
+  REQUIRE(packet->room == "Labs");
+  REQUIRE(packet->message.empty());
 }

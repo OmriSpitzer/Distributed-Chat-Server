@@ -508,6 +508,29 @@ bool GossipManager::applyEvent(const Packet &event) {
     return true;
   }
 
+  // room created event — create locally if missing, then push directory to clients
+  if (type == "ROOM_CREATED") {
+    const std::string roomName = event.room;
+    if (roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_CREATED event");
+      return false;
+    }
+
+    if (!RoomManager::getInstance().getRoom(roomName)) {
+      const Room draft(0, roomName, Room::stringToRoomType(content), Room::stringToPrivacy(ts));
+      if (!RoomManager::getInstance().createRoom(draft)) {
+        Logger::logWarning("GossipManager", "ROOM_CREATED apply failed for " + roomName);
+        return false;
+      }
+    }
+
+    Packet push("server", "*", Packet::PacketType::ROOM_LIST, "",
+                Room::serializeList(RoomManager::getInstance().listRooms()), 0);
+    RoomManager::getInstance().broadcastAll(push, connections);
+    Logger::logInfo("GossipManager", "Applied ROOM_CREATED for " + roomName);
+    return true;
+  }
+
   // room join event
   if (type == "ROOM_JOIN") {
     const std::string newRoom = event.room.empty() ? "Lobby" : event.room;

@@ -16,6 +16,7 @@
 #include "utils/models/user.h"
 #include <atomic>
 #include <cstdint>
+#include <iostream>
 #include <optional>
 #include <string>
 
@@ -38,9 +39,24 @@ std::optional<Packet> Client::waitFor(Packet::PacketType expected) {
   }
 }
 
+// apply a room directory payload (login uses room field; pushes use message)
+void Client::applyRoomDirectory(const std::string &encoded) {
+  try {
+    state.setRooms(Room::deserializeList(encoded));
+  } catch (const std::exception &e) {
+    Logger::logWarning("Client " + id, std::string("Bad room directory: ") + e.what());
+  }
+}
+
 // start the client
 bool Client::start() {
   id = std::to_string(++next_client_id);
+
+  network.setPushHandler([this](const Packet &packet) {
+    if (packet.type == Packet::PacketType::ROOM_LIST) {
+      applyRoomDirectory(packet.message);
+    }
+  });
 
   // connect to the server
   if (!network.connect()) {
@@ -82,6 +98,7 @@ void Client::showDashboard() {
       if (auto user = handler.handlePacket(*response)) {
         state.user = *user;
         state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
+        applyRoomDirectory(response->room);
       } else if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
         Logger::logError("Client " + id, "Login failed: " + response->message);
       } else {
@@ -109,6 +126,7 @@ void Client::showDashboard() {
       if (auto user = handler.handlePacket(*response)) {
         state.user = *user;
         state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
+        applyRoomDirectory(response->room);
       } else if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
         Logger::logError("Client " + id, "Register failed: " + response->message);
       } else {
@@ -160,7 +178,7 @@ void Client::showDashboard() {
 
     // join room option
     case 2: {
-      std::optional<Packet> joinRoomPacket = ConsoleUI::showJoinRoom(*state.user);
+      std::optional<Packet> joinRoomPacket = ConsoleUI::showJoinRoom(state);
 
       if (!joinRoomPacket) {
         break;
@@ -245,8 +263,74 @@ void Client::showDashboard() {
       break;
     }
 
-    // logout option
+    // create room option
     case 5: {
+      std::optional<Packet> createRoomPacket = ConsoleUI::showCreateRoom(*state.user);
+      if (!createRoomPacket) {
+        break;
+      }
+
+      if (!network.sendPacket(*createRoomPacket)) {
+        break;
+      }
+
+      auto response = waitFor(Packet::PacketType::ROOM_CREATE);
+      if (!response) {
+        break;
+      }
+
+      if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        Logger::logInfo("Client " + id, "Room created: " + response->room);
+      } else {
+        Logger::logError("Client " + id, "Create room failed: " + response->message);
+      }
+      break;
+    }
+
+    // load message history option
+    case 6: {
+      if (!state.user || !state.currentRoom) {
+        break;
+      }
+
+      const std::string roomName = state.currentRoom->getName();
+      if (roomName.empty()) {
+        break;
+      }
+
+      Packet historyPacket;
+      try {
+        historyPacket =
+            PacketBuilder::buildLoadMessageHistory(state.user->getUsername(), roomName);
+      } catch (const std::invalid_argument &e) {
+        Logger::logError("Client " + id, e.what());
+        break;
+      }
+
+      if (!network.sendPacket(historyPacket)) {
+        break;
+      }
+
+      auto response = waitFor(Packet::PacketType::LOAD_MESSAGE_HISTORY);
+      if (!response) {
+        break;
+      }
+
+      if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        std::cout << ">> History for " << response->room << ":\n";
+        if (response->message.empty()) {
+          std::cout << "   (no messages)\n";
+        } else {
+          std::cout << response->message;
+        }
+      } else {
+        Logger::logError("Client " + id, "Load history failed: " + response->message);
+      }
+      break;
+    }
+
+    // logout option
+    case 7: {
       Packet logout = PacketBuilder::buildLogout(*state.user);
       if (!network.sendPacket(logout)) {
         break;

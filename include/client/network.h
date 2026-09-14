@@ -8,6 +8,7 @@
 #include "utils/models/packet.h"
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <queue>
@@ -19,6 +20,8 @@
 
 class Network {
 public:
+  using PushHandler = std::function<void(const Packet &)>;
+
   // constructor
   Network() = default;
 
@@ -44,6 +47,9 @@ public:
   // check if the network is connected
   bool isConnected() const;
 
+  // optional handler for unsolicited pushes (ROOM_LIST, etc.)
+  void setPushHandler(PushHandler handler);
+
 private:
   SOCKET clientSocket = INVALID_SOCKET; // connected TCP socket
   std::atomic<bool> connected{false};   // whether the network is connected
@@ -52,7 +58,8 @@ private:
   std::thread readerThread;             // reads the socket
   std::queue<Packet> incoming;          // packets waiting for receivePacket
   std::condition_variable incomingCv;   // wait for a queued packet
+  PushHandler pushHandler;              // optional push callback
 
-  // read loop: pong heartbeats, queue everything else
+  // read loop: pong heartbeats, apply pushes, queue everything else
   void readerLoop();
 };

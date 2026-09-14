@@ -74,3 +74,22 @@ Packet PacketBuilder::buildUpdateUser(std::string_view username, std::string_vie
 
   return Packet(username, "", Packet::PacketType::UPDATE_USER, email, password);
 }
+
+// build a create room packet
+Packet PacketBuilder::buildCreateRoom(std::string_view username, std::string_view room,
+                                      std::string_view typeAndPrivacy) {
+  if (username.empty() || room.empty()) {
+    throw std::invalid_argument("Username and room are required");
+  }
+
+  return Packet(username, "", Packet::PacketType::ROOM_CREATE, room, typeAndPrivacy);
+}
+
+// build a load message history packet
+Packet PacketBuilder::buildLoadMessageHistory(std::string_view username, std::string_view room) {
+  if (username.empty() || room.empty()) {
+    throw std::invalid_argument("Username and room are required");
+  }
+
+  return Packet(username, "", Packet::PacketType::LOAD_MESSAGE_HISTORY, room, "");
+}

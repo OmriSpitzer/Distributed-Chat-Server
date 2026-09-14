@@ -174,6 +174,19 @@ void Network::readerLoop() {
       continue;
     }
 
+    // unsolicited room directory push
+    if (packet->type == Packet::PacketType::ROOM_LIST && packet->responseCode == 0) {
+      PushHandler handler;
+      {
+        std::lock_guard<std::mutex> lock(mutex);
+        handler = pushHandler;
+      }
+      if (handler) {
+        handler(*packet);
+      }
+      continue;
+    }
+
     // add the packet to the incoming queue
     {
       std::lock_guard<std::mutex> lock(mutex);
@@ -185,3 +198,9 @@ void Network::readerLoop() {
 
 // check if the network is connected
 bool Network::isConnected() const { return connected; }
+
+// set push handler for unsolicited packets
+void Network::setPushHandler(PushHandler handler) {
+  std::lock_guard<std::mutex> lock(mutex);
+  pushHandler = std::move(handler);
+}

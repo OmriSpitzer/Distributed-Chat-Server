@@ -60,10 +60,13 @@ Gossip event bodies use five length-prefixed fields (`type`, `eventId`, `usernam
 
 | Type | Role |
 |------|------|
-| `LOGIN` / `REGISTER` / `LOGOUT` | Session lifecycle |
+| `LOGIN` / `REGISTER` / `LOGOUT` | Session lifecycle; login/register success puts room directory in `room` |
 | `ROOM_JOIN` / `ROOM_LEAVE` | Membership (`LEAVE` returns to Lobby) |
+| `ROOM_CREATE` | Create room (`room` = name, `message` = optional `type\|privacy`) |
+| `ROOM_LIST` | Server push of full directory (`responseCode == 0`, body in `message`) |
 | `MESSAGE` | Chat send (response) and room push (`responseCode == 0`) |
 | `HEARTBEAT` | Server `ping` / client `pong` |
+| `UPDATE_USER` | Profile update |
 | `GOSSIP_HELLO` / `GOSSIP_EVENT` / `GOSSIP_DIGEST` / `GOSSIP_PULL` | Peer port only |
 
 Responses use `200` success, `400` error, `404` not found, `500` internal.

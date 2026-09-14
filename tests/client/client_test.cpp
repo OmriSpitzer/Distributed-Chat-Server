@@ -362,7 +362,8 @@ TEST_CASE("Client login then logout", "[client][logout]") {
     client.showDashboard();
   }
   {
-    IoRedirect io("5\n");
+    // dashboard: 7 = Logout
+    IoRedirect io("7\n");
     client.showDashboard();
   }
 

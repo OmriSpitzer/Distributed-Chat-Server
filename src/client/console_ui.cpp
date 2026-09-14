@@ -9,6 +9,7 @@
 #include "client/client_state.h"
 #include "client/packet_builder.h"
 #include "utils/models/packet.h"
+#include "utils/models/room.h"
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -19,7 +20,7 @@ namespace {
 const int MIN_MENU_CHOICE = 1; // minimum menu choice
 const int MAX_MENU_CHOICE = 3; // maximum menu choice
 const int MIN_USER_CHOICE = 1; // minimum user dashboard choice
-const int MAX_USER_CHOICE = 5; // maximum user dashboard choice
+const int MAX_USER_CHOICE = 7; // maximum user dashboard choice
 
 std::optional<int> tryReadMenuChoice(int min, int max) {
   std::cout << "Enter your choice: ";
@@ -99,7 +100,9 @@ int ConsoleUI::showUserDashboard(const ClientState &state) {
     std::cout << "2. Join Room\n";
     std::cout << "3. Leave Room\n";
     std::cout << "4. Send Message\n";
-    std::cout << "5. Logout\n";
+    std::cout << "5. Create Room\n";
+    std::cout << "6. Load Message History\n";
+    std::cout << "7. Logout\n";
     std::cout << "--------------------------------\n";
 
     if (const auto answer = tryReadMenuChoice(MIN_USER_CHOICE, MAX_USER_CHOICE)) {
@@ -159,16 +162,45 @@ std::optional<Packet> ConsoleUI::showRegister() {
 }
 
 // showing the join room screen
-std::optional<Packet> ConsoleUI::showJoinRoom(const User &user) {
-  // TODO: show the list of available rooms
+std::optional<Packet> ConsoleUI::showJoinRoom(const ClientState &state) {
+  if (!state.user) {
+    return std::nullopt;
+  }
+
+  const auto rooms = state.getRooms();
+  std::cout << ">> Available rooms:\n";
+  if (rooms.empty()) {
+    std::cout << "   (none cached — type a room name anyway)\n";
+  } else {
+    for (const Room &room : rooms) {
+      std::cout << "   - " << room.getName() << " (" << Room::roomTypeToString(room.getType())
+                << ", " << Room::privacyToString(room.getPrivacy()) << ")\n";
+    }
+  }
+
   const auto roomName = readLine(">> Which room do you want to join? (type 'exit' to go back): ");
   if (!roomName) {
     return std::nullopt;
   }
 
-  // TODO: check if the room exists
   try {
-    return PacketBuilder::buildJoinRoom(user.getUsername(), *roomName);
+    return PacketBuilder::buildJoinRoom(state.user->getUsername(), *roomName);
+  } catch (const std::invalid_argument &e) {
+    std::cout << ">> " << e.what() << '\n';
+    return std::nullopt;
+  }
+}
+
+// showing the create room screen
+std::optional<Packet> ConsoleUI::showCreateRoom(const User &user) {
+  const auto roomName = readLine(">> New room name (type 'exit' to go back): ");
+  if (!roomName) {
+    return std::nullopt;
+  }
+
+  try {
+    // empty message => server defaults to Other|PUBLIC
+    return PacketBuilder::buildCreateRoom(user.getUsername(), *roomName);
   } catch (const std::invalid_argument &e) {
     std::cout << ">> " << e.what() << '\n';
     return std::nullopt;

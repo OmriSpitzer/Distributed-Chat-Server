@@ -291,3 +291,14 @@ bool RoomManager::broadcastAll(const Packet &packet, ConnectionManager &connecti
   }
   return ok;
 }
+
+// list all known rooms
+std::vector<Room> RoomManager::listRooms() const {
+  std::lock_guard<std::mutex> lock(mutex);
+  std::vector<Room> rooms;
+  rooms.reserve(knownRooms.size());
+  for (const auto &[_, room] : knownRooms) {
+    rooms.push_back(room);
+  }
+  return rooms;
+}

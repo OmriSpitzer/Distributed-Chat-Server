@@ -46,9 +46,9 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 ## 4. Client product gaps
 
 - [x] **Update profile** — dashboard choice 1 (`UPDATE_USER` via `PacketBuilder` / `ConsoleUI::showUpdateProfile`).
-- [ ] **Room directory** — console should list available rooms before join (`ConsoleUI::showJoinRoom`).
+- [x] **Room directory** — console should list available rooms before join (`ConsoleUI::showJoinRoom`).
 - [x] **Validate room exists** before sending `ROOM_JOIN` (or surface clear `404` from server).
-- [ ] **Message history** — server has `loadHistory`; client never requests or displays it after join.
+- [x] **Message history** — server has `loadHistory`; client requests via `LOAD_MESSAGE_HISTORY` (dashboard option 6).
 - [ ] **Pushed messages in UI** — reader logs room pushes; improve console presentation (“change visuals” TODO).
 - [ ] Refresh outdated `CLIENT.md` (still claims TCP stubs).
 
@@ -58,7 +58,7 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ## 5. Rooms & authorization
 
-- [ ] Wire protocol for `createRoom` / `deleteRoom` (RoomManager APIs exist; no client packet types yet).
+- [x] Wire protocol for `createRoom` (`ROOM_CREATE` + `ROOM_LIST` push; `deleteRoom` still unwired).
 - [ ] Enforce **PRIVATE** vs **PUBLIC** (schema supports it; join path does not).
 - [ ] Enforce **ADMIN / USER / GUEST** privileges (seed has ADMIN; no permission checks).
 - [x] Unique **email** constraint coverage and clear client errors (username uniqueness is stronger today).

@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include <winsock2.h>
 #ifdef ERROR
 #undef ERROR
@@ -58,6 +59,9 @@ public:
   // default rooms
   static const Room LOBBY;
   static const Room GENERAL;
+
+  // list all known rooms
+  std::vector<Room> listRooms() const;
 
 private:
   // constructor

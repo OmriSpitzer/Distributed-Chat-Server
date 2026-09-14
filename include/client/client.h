@@ -35,4 +35,7 @@ private:
 
   // waiting for a packet of a specific type
   std::optional<Packet> waitFor(Packet::PacketType expected);
+
+  // cache room directory from login reply or ROOM_LIST push
+  void applyRoomDirectory(const std::string &encoded);
 };
