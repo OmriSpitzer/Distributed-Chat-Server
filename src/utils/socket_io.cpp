@@ -38,13 +38,13 @@ SOCKET listenTo(std::uint16_t port) {
 
   // bind the socket to the address
   if (bind(socketFd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
-    closesocket(socketFd);
+    socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
 
   // listen for incoming connections
   if (listen(socketFd, SOMAXCONN) != 0) {
-    closesocket(socketFd);
+    socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
 
@@ -64,12 +64,12 @@ SOCKET connectTo(std::string_view host, std::uint16_t port) {
 
   const std::string hostStr(host);
   if (inet_pton(AF_INET, hostStr.c_str(), &address.sin_addr) != 1) {
-    closesocket(socketFd);
+    socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
 
   if (::connect(socketFd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
-    closesocket(socketFd);
+    socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
 
@@ -149,6 +149,22 @@ bool writePacket(SOCKET socket, const Packet &packet) {
   if (framed.empty())
     return false;
   return sendExact(socket, framed.data(), static_cast<int>(framed.size()));
+}
+
+// accept a connection from a listening socket
+SOCKET acceptFrom(SOCKET listeningSocket) {
+  if (listeningSocket == INVALID_SOCKET) {
+    return INVALID_SOCKET;
+  }
+  return ::accept(listeningSocket, nullptr, nullptr);
+}
+
+// close a socket
+void close(SOCKET socket) {
+  if (socket == INVALID_SOCKET) {
+    return;
+  }
+  ::closesocket(socket);
 }
 
 } // namespace socket_io

@@ -191,7 +191,7 @@ struct GossipFixture {
     }
     for (SOCKET socket : peerClients) {
       if (socket != INVALID_SOCKET) {
-        closesocket(socket);
+        socket_io::close(socket);
       }
     }
   }
@@ -217,7 +217,7 @@ struct GossipFixture {
     dest.sin_port = htons(peerPort);
     dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0) {
-      closesocket(client);
+      socket_io::close(client);
       return INVALID_SOCKET;
     }
 
@@ -655,7 +655,7 @@ TEST_CASE("GossipManager dial connects to listening peer", "[gossip_manager][dia
 
   std::atomic<bool> gotHello{false};
   std::thread acceptor([&] {
-    SOCKET peer = accept(listenFd, nullptr, nullptr);
+    SOCKET peer = socket_io::acceptFrom(listenFd);
     if (peer == INVALID_SOCKET) {
       return;
     }
@@ -666,7 +666,7 @@ TEST_CASE("GossipManager dial connects to listening peer", "[gossip_manager][dia
       Packet reply(unique("listener"), "*", Packet::PacketType::GOSSIP_HELLO);
       socket_io::writePacket(peer, reply);
     }
-    closesocket(peer);
+    socket_io::close(peer);
   });
 
   resetLogger();
@@ -682,7 +682,7 @@ TEST_CASE("GossipManager dial connects to listening peer", "[gossip_manager][dia
   }));
 
   gossip.stop();
-  closesocket(listenFd);
+  socket_io::close(listenFd);
   if (acceptor.joinable()) {
     acceptor.join();
   }

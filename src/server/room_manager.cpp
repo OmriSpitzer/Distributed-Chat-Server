@@ -42,7 +42,7 @@ std::optional<Room> RoomManager::getRoom(const std::string &name) const {
 }
 
 // remove a socket from a room
-void RoomManager::removeSocketLocked(int socket, const std::string &roomName) {
+void RoomManager::removeSocketLocked(SOCKET socket, const std::string &roomName) {
   auto it = members.find(roomName);
   if (it == members.end()) {
     return;
@@ -60,7 +60,7 @@ bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) 
   const std::string previousRoom = session.getRoom().getName();
   const std::string username = session.getUser().getUsername();
   const bool persist = session.isAuthenticated();
-  const int socket = session.getSocket();
+  const SOCKET socket = session.getSocket();
   int joinedRoomId = LOBBY.getId();
 
   // join the room
@@ -116,7 +116,7 @@ void RoomManager::leaveAll(ClientSession &session) {
   const std::string previousRoom = session.getRoom().getName();
   const std::string username = session.getUser().getUsername();
   const bool persist = session.isAuthenticated();
-  const int socket = session.getSocket();
+  const SOCKET socket = session.getSocket();
 
   // leave the room
   {
@@ -139,8 +139,8 @@ void RoomManager::leaveAll(ClientSession &session) {
 
 // broadcast a packet to all members of the room
 bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionManager &connections,
-                            int skipSocket) {
-  std::vector<int> sockets;
+                            SOCKET skipSocket) {
+  std::vector<SOCKET> sockets;
 
   // get the sockets
   {
@@ -153,7 +153,7 @@ bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionMa
 
   // broadcast the packet
   bool ok = true;
-  for (int socket : sockets) {
+  for (SOCKET socket : sockets) {
     if (socket == skipSocket) {
       continue;
     }
@@ -197,7 +197,7 @@ bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &con
 
   // delete the room
   int deletedRoomId = 0;
-  std::vector<int> sockets;
+  std::vector<SOCKET> sockets;
   {
     std::lock_guard<std::mutex> lock(mutex);
     auto roomIt = knownRooms.find(roomName);
@@ -218,7 +218,7 @@ bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &con
     knownRooms.erase(roomIt);
 
     // move the sockets to the lobby
-    for (int socket : sockets) {
+    for (SOCKET socket : sockets) {
       members[LOBBY.getName()].insert(socket);
     }
   }
@@ -234,7 +234,7 @@ bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &con
   // move live sessions to Lobby and persist membership for authenticated users
   auto sessions = connections.getSessions();
   DatabaseManager &db = DatabaseManager::getInstance();
-  for (int socket : sockets) {
+  for (SOCKET socket : sockets) {
     auto it = sessions.find(socket);
     if (it == sessions.end() || !it->second) {
       continue;
@@ -267,7 +267,7 @@ bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &con
 
 // broadcast a message to all members of all rooms
 bool RoomManager::broadcastAll(const Packet &packet, ConnectionManager &connections,
-                               int skipSocket) {
+                               SOCKET skipSocket) {
   std::vector<Room> rooms;
 
   // get all rooms

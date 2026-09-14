@@ -47,7 +47,7 @@ bool Network::connect() {
   }
 
   // set the client socket
-  clientSocket = static_cast<int>(socketFd);
+  clientSocket = socketFd;
   connected = true;
 
   // start the reader thread
@@ -61,16 +61,16 @@ void Network::disconnect() {
   const bool wasConnected = connected.exchange(false);
   incomingCv.notify_all();
 
-  int fd = -1;
+  SOCKET fd = INVALID_SOCKET;
   {
     std::lock_guard<std::mutex> lock(mutex);
     fd = clientSocket;
-    clientSocket = -1;
+    clientSocket = INVALID_SOCKET;
   }
 
   // close the client socket
-  if (fd != -1) {
-    closesocket(static_cast<SOCKET>(fd));
+  if (fd != INVALID_SOCKET) {
+    socket_io::close(fd);
   }
 
   // join the reader thread
@@ -102,17 +102,17 @@ void Network::disconnect() {
 bool Network::sendPacket(const Packet &packet) {
   // check if connected and the client socket is valid
   std::lock_guard<std::mutex> lock(mutex);
-  if (!connected || clientSocket == -1) {
+  if (!connected || clientSocket == INVALID_SOCKET) {
     Logger::logError("Network", "Not connected to the server");
     return false;
   }
 
   // send the packet to the server
-  if (!socket_io::writePacket(static_cast<SOCKET>(clientSocket), packet)) {
-    const int fd = clientSocket;
-    clientSocket = -1;
+  if (!socket_io::writePacket(clientSocket, packet)) {
+    const SOCKET fd = clientSocket;
+    clientSocket = INVALID_SOCKET;
     connected = false;
-    closesocket(static_cast<SOCKET>(fd));
+    socket_io::close(fd);
     incomingCv.notify_all();
 
     Logger::logError("Network", "Failed to send packet to the server");
@@ -140,17 +140,17 @@ std::optional<Packet> Network::receivePacket() {
 // read loop: pong heartbeats, queue everything else
 void Network::readerLoop() {
   while (connected) {
-    int fd = -1;
+    SOCKET fd = INVALID_SOCKET;
     {
       std::lock_guard<std::mutex> lock(mutex);
       fd = clientSocket;
     }
-    if (fd == -1) {
+    if (fd == INVALID_SOCKET) {
       break;
     }
 
     // read the packet from the server
-    std::optional<Packet> packet = socket_io::readPacket(static_cast<SOCKET>(fd));
+    std::optional<Packet> packet = socket_io::readPacket(fd);
     if (!packet) {
       connected = false;
       incomingCv.notify_all();

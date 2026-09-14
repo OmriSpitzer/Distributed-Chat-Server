@@ -11,12 +11,12 @@
 #include <mutex>
 
 // constructor
-ClientSession::ClientSession(int socket, const User &user, const Room &room)
+ClientSession::ClientSession(SOCKET socket, const User &user, const Room &room)
     : clientSocket(socket), user(user), room(room), authenticated(false),
       lastHeartbeatTime(std::chrono::steady_clock::now()) {}
 
 // getters
-int ClientSession::getSocket() const { return clientSocket; }
+SOCKET ClientSession::getSocket() const { return clientSocket; }
 User ClientSession::getUser() const {
   std::lock_guard<std::mutex> lock(stateMutex_);
   return user;

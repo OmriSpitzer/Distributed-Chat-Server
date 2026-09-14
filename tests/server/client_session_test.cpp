@@ -61,10 +61,10 @@ TEST_CASE("ClientSession constructor edge sockets", "[client_session][ctor][edge
     REQUIRE(session.getSocket() == 0);
   }
 
-  // negative socket
-  SECTION("negative socket") {
-    ClientSession session(-1, kAlice, kGeneral);
-    REQUIRE(session.getSocket() == -1);
+  // invalid socket sentinel
+  SECTION("invalid socket") {
+    ClientSession session(INVALID_SOCKET, kAlice, kGeneral);
+    REQUIRE(session.getSocket() == INVALID_SOCKET);
   }
 
   // large socket fd

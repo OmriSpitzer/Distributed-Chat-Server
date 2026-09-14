@@ -35,11 +35,9 @@ Prefer `TEXT` **+** `CHECK` against the known set (readable, stays stable if C++
 
 Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / cast `SOCKET`, split across `ConnectionManager`, `Network`, and gossip.
 
-- [ ] Introduce a small, explicit TCP API (listen / accept / connect / read-frame / write-frame / close) with one socket type end-to-end — no `int` ↔ `SOCKET` casts at call sites.
-- [ ] Keep packet framing (`[u32 BE size][payload]`) only in that layer; higher layers deal only in `Packet`.
-- [ ] Align client `Network` and server `ConnectionManager` on the same helpers.
-- [ ] Document ownership: Winsock startup/cleanup, who closes which socket, accept thread vs reader thread.
-- [ ] Non-blocking / timeout-aware reads are **optional** hardening — not required while thread-per-socket + `closesocket` wakeups work.
+- [x] Introduce a small, explicit TCP API (listen / accept / connect / read-frame / write-frame / close) with one socket type end-to-end — no `int` ↔ `SOCKET` casts at call sites.
+- [x] Keep packet framing (`[u32 BE size][payload]`) only in that layer; higher layers deal only in `Packet`.
+- [x] Align client `Network` and server `ConnectionManager` on the same helpers.
 
 ---
 

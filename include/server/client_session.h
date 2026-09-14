@@ -9,19 +9,19 @@
 #include <atomic>
 #include <chrono>
 #include <mutex>
-
+#include <winsock2.h>
 
 class ClientSession {
 public:
   // constructor
-  ClientSession(int socket, const User &user, const Room &room);
+  ClientSession(SOCKET socket, const User &user, const Room &room);
 
   // delete copy constructor and assignment operator
   ClientSession(const ClientSession &) = delete;
   ClientSession &operator=(const ClientSession &) = delete;
 
   // getters
-  int getSocket() const;
+  SOCKET getSocket() const;
   User getUser() const;
   Room getRoom() const;
   bool isAuthenticated() const;
@@ -43,9 +43,9 @@ public:
   bool isAlive() const;
 
 private:
-  User user;        // user
-  Room room;        // room
-  int clientSocket; // client socket
+  User user;           // user
+  Room room;           // room
+  SOCKET clientSocket; // client socket
 
   std::mutex sendMutex_;            // send mutex
   mutable std::mutex stateMutex_;   // state mutex

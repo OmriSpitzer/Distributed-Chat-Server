@@ -76,10 +76,10 @@ struct TestPeer {
 
   ~TestPeer() {
     if (peer != INVALID_SOCKET) {
-      closesocket(peer);
+      socket_io::close(peer);
     }
     if (listener != INVALID_SOCKET) {
-      closesocket(listener);
+      socket_io::close(listener);
     }
   }
 
@@ -101,7 +101,7 @@ struct TestPeer {
   }
 
   bool acceptOnce() {
-    peer = ::accept(listener, nullptr, nullptr);
+    peer = socket_io::acceptFrom(listener);
     return peer != INVALID_SOCKET;
   }
 };
@@ -249,7 +249,7 @@ TEST_CASE("Network peer close ends receive", "[network][receive][edge]") {
   Network network;
   REQUIRE(connectToPeer(network, server));
 
-  closesocket(server.peer);
+  socket_io::close(server.peer);
   server.peer = INVALID_SOCKET;
 
   const auto received = network.receivePacket();
@@ -267,7 +267,7 @@ TEST_CASE("Network send after peer close fails", "[network][send][edge]") {
   Network network;
   REQUIRE(connectToPeer(network, server));
 
-  closesocket(server.peer);
+  socket_io::close(server.peer);
   server.peer = INVALID_SOCKET;
 
   REQUIRE_FALSE(network.receivePacket().has_value());

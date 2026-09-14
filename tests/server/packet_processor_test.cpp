@@ -55,8 +55,8 @@ std::string unique(std::string_view prefix) {
   return std::string(prefix) + "_" + std::to_string(n) + "_" + std::to_string(now);
 }
 
-int nextFakeSocket() {
-  static std::atomic<int> next{70000};
+SOCKET nextFakeSocket() {
+  static std::atomic<SOCKET> next{70000};
   return next.fetch_add(1);
 }
 

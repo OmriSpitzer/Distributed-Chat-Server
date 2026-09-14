@@ -36,4 +36,9 @@ std::optional<Packet> readPacket(SOCKET socket);
 // write a packet to the socket
 bool writePacket(SOCKET socket, const Packet &packet);
 
+// accept a connection from a listening socket
+SOCKET acceptFrom(SOCKET listeningSocket);
+
+// close a socket
+void close(SOCKET socket);
 } // namespace socket_io

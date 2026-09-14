@@ -82,8 +82,8 @@ std::string unique(std::string_view prefix) {
   return std::string(prefix) + "_" + std::to_string(n) + "_" + std::to_string(now);
 }
 
-int nextFakeSocket() {
-  static std::atomic<int> next{60000};
+SOCKET nextFakeSocket() {
+  static std::atomic<SOCKET> next{60000};
   return next.fetch_add(1);
 }
 
@@ -143,7 +143,7 @@ bool setRecvTimeout(SOCKET socket, DWORD milliseconds) {
 struct TrackedSession {
   ClientSession session;
 
-  explicit TrackedSession(int socket, const User &user = User::anonymousUser(),
+  explicit TrackedSession(SOCKET socket, const User &user = User::anonymousUser(),
                           const Room &room = RoomManager::LOBBY)
       : session(socket, user, room) {}
 
@@ -178,7 +178,7 @@ struct NetFixture {
 
     for (SOCKET socket : clients) {
       if (socket != INVALID_SOCKET) {
-        closesocket(socket);
+        socket_io::close(socket);
       }
     }
     if (acceptThread.joinable()) {
@@ -200,12 +200,12 @@ struct NetFixture {
   // sessions are keyed by the server accept fd, not the client SOCKET
   ConnectedClient connectClient() {
     ConnectedClient out;
-    std::unordered_set<int> known;
+    std::unordered_set<SOCKET> known;
     for (const auto &entry : connections.getSessions()) {
       known.insert(entry.first);
     }
 
-    const SOCKET listenFd = static_cast<SOCKET>(connections.getListeningSocket());
+    const SOCKET listenFd = connections.getListeningSocket();
     sockaddr_in bound{};
     int boundLen = sizeof(bound);
     if (getsockname(listenFd, reinterpret_cast<sockaddr *>(&bound), &boundLen) != 0) {
@@ -222,7 +222,7 @@ struct NetFixture {
     dest.sin_port = bound.sin_port;
     dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0) {
-      closesocket(client);
+      socket_io::close(client);
       return out;
     }
 

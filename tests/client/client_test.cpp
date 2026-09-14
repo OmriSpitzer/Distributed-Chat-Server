@@ -83,10 +83,10 @@ struct TestPeer {
 
   ~TestPeer() {
     if (peer != INVALID_SOCKET) {
-      closesocket(peer);
+      socket_io::close(peer);
     }
     if (listener != INVALID_SOCKET) {
-      closesocket(listener);
+      socket_io::close(listener);
     }
   }
 
@@ -108,7 +108,7 @@ struct TestPeer {
   }
 
   bool acceptOnce() {
-    peer = ::accept(listener, nullptr, nullptr);
+    peer = socket_io::acceptFrom(listener);
     return peer != INVALID_SOCKET;
   }
 };
@@ -171,7 +171,7 @@ TEST_CASE("Client start fails when nothing is listening", "[client][start][edge]
   REQUIRE(getsockname(listener, reinterpret_cast<sockaddr *>(&bound), &boundLen) == 0);
   config::SERVER_HOST = "127.0.0.1";
   config::PORT = ntohs(bound.sin_port);
-  closesocket(listener);
+  socket_io::close(listener);
 
   Client client;
   REQUIRE_FALSE(client.start());

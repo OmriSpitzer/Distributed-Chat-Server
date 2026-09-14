@@ -17,6 +17,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <winsock2.h>
+
 
 class GossipManager {
 public:
@@ -40,20 +42,20 @@ public:
   void rumor(const Packet &packet);
 
 private:
-  ConnectionManager &connections;  // local client sockets for apply
-  int listeningSocket{-1};         // listening socket
-  std::atomic<bool> stopped{true}; // stopped listening
+  ConnectionManager &connections;         // local client sockets for apply
+  SOCKET listeningSocket{INVALID_SOCKET}; // listening socket
+  std::atomic<bool> stopped{true};        // stopped listening
 
   std::thread acceptThread;      // accept thread
   std::thread dialThread;        // dial thread
   std::thread antiEntropyThread; // anti-entropy thread
 
-  std::unordered_map<int, std::string> peers;         // socket -> remote NODE_ID
-  std::unordered_set<std::string> seenEvents;         // seen events
-  std::deque<std::string> recentEventIds;             // ordered ids for digests
-  std::unordered_map<std::string, Packet> eventLog;   // id -> full event for PULL
-  std::unordered_map<int, std::string> outboundAddrs; // socket -> "host:port"
-  std::unordered_set<int> openPeerSockets;            // all sockets with a live handlePeer
+  std::unordered_map<SOCKET, std::string> peers;         // socket -> remote NODE_ID
+  std::unordered_set<std::string> seenEvents;            // seen events
+  std::deque<std::string> recentEventIds;                // ordered ids for digests
+  std::unordered_map<std::string, Packet> eventLog;      // id -> full event for PULL
+  std::unordered_map<SOCKET, std::string> outboundAddrs; // socket -> "host:port"
+  std::unordered_set<SOCKET> openPeerSockets;            // all sockets with a live handlePeer
 
   mutable std::mutex peersMutex;         // peers mutex
   std::mutex sendMutex;                  // send mutex
@@ -73,7 +75,7 @@ private:
   std::mutex peerThreadsMutex;          // peer threads mutex
 
   // spawn a peer handler
-  void spawnPeerHandler(int fd);
+  void spawnPeerHandler(SOCKET fd);
 
   // accept loop
   void acceptLoop();
@@ -85,16 +87,16 @@ private:
   void antiEntropyLoop();
 
   // handle peer
-  void handlePeer(int peerSocket);
+  void handlePeer(SOCKET peerSocket);
 
   // send a packet to a peer
-  bool sendPacket(int socket, const Packet &packet);
+  bool sendPacket(SOCKET socket, const Packet &packet);
 
   // remove a peer
-  void removePeer(int socket);
+  void removePeer(SOCKET socket);
 
   // register a peer
-  bool registerPeer(int socket, const std::string &nodeId);
+  bool registerPeer(SOCKET socket, const std::string &nodeId);
 
   // INSERT OR IGNORE + local broadcast for chat MESSAGE events
   bool applyEvent(const Packet &event);

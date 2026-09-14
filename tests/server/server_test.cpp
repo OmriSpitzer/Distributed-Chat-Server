@@ -12,6 +12,7 @@
 #include "server/server.h"
 #include "utils/models/log_message.h"
 #include "utils/models/logger.h"
+#include "utils/socket_io.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
@@ -169,7 +170,7 @@ SOCKET occupyPort(std::uint16_t port) {
   BOOL exclusive = TRUE;
   if (setsockopt(socketFd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char *>(&exclusive),
                  sizeof(exclusive)) != 0) {
-    closesocket(socketFd);
+    socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
 
@@ -178,11 +179,11 @@ SOCKET occupyPort(std::uint16_t port) {
   address.sin_addr.s_addr = htonl(INADDR_ANY);
   address.sin_port = htons(port);
   if (bind(socketFd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
-    closesocket(socketFd);
+    socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
   if (listen(socketFd, 1) != 0) {
-    closesocket(socketFd);
+    socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
   return socketFd;
@@ -203,7 +204,7 @@ SOCKET connectClient(std::uint16_t port) {
     if (::connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) == 0) {
       return client;
     }
-    closesocket(client);
+    socket_io::close(client);
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
   } while (std::chrono::steady_clock::now() < deadline);
   return INVALID_SOCKET;
@@ -425,7 +426,7 @@ TEST_CASE("Server start fails when the client port is exclusive", "[server][star
   REQUIRE(countLogs(LogMessage::Type::INFO, startedMessage(fixture.port)) == 0);
   REQUIRE(countLogs(LogMessage::Type::INFO, "Server stopped") == 0);
 
-  closesocket(held);
+  socket_io::close(held);
 }
 
 // 12. client can connect after start
@@ -439,7 +440,7 @@ TEST_CASE("Server accept loop accepts a client", "[server][accept]") {
 
   const SOCKET client = connectClient(fixture.port);
   REQUIRE(client != INVALID_SOCKET);
-  closesocket(client);
+  socket_io::close(client);
 
   fixture.server.stop();
   REQUIRE_FALSE(fixture.server.isAlive());
@@ -464,7 +465,7 @@ TEST_CASE("Server typical start dashboard stop flow", "[server][flow]") {
   REQUIRE(text.find("Listening: yes") != std::string::npos);
   REQUIRE(text.find("Node id: " + fixture.nodeId) != std::string::npos);
 
-  closesocket(client);
+  socket_io::close(client);
   fixture.server.stop();
   REQUIRE_FALSE(fixture.server.isAlive());
   REQUIRE(countLogs(LogMessage::Type::INFO, "Server stopped") == 1);

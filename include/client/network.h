@@ -12,6 +12,7 @@
 #include <optional>
 #include <queue>
 #include <thread>
+#include <winsock2.h>
 
 class Network {
 public:
@@ -41,13 +42,13 @@ public:
   bool isConnected() const;
 
 private:
-  int clientSocket = -1;              // connected TCP socket
-  std::atomic<bool> connected{false}; // whether the network is connected
-  bool winsockStarted = false;        // whether this instance called WSAStartup
-  mutable std::mutex mutex;           // guards send, queue, and socket id
-  std::thread readerThread;           // reads the socket
-  std::queue<Packet> incoming;        // packets waiting for receivePacket
-  std::condition_variable incomingCv; // wait for a queued packet
+  SOCKET clientSocket = INVALID_SOCKET; // connected TCP socket
+  std::atomic<bool> connected{false};   // whether the network is connected
+  bool winsockStarted = false;          // whether this instance called WSAStartup
+  mutable std::mutex mutex;             // guards send, queue, and socket id
+  std::thread readerThread;             // reads the socket
+  std::queue<Packet> incoming;          // packets waiting for receivePacket
+  std::condition_variable incomingCv;   // wait for a queued packet
 
   // read loop: pong heartbeats, queue everything else
   void readerLoop();

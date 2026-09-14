@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <winsock2.h>
 
 // forward declaration of GossipManager
 class GossipManager;
@@ -30,9 +31,9 @@ public:
   void stopListening();
 
   // getters
-  int getListeningSocket() const;
+  SOCKET getListeningSocket() const;
   bool isListening() const;
-  std::unordered_map<int, std::shared_ptr<ClientSession>> getSessions() const;
+  std::unordered_map<SOCKET, std::shared_ptr<ClientSession>> getSessions() const;
 
   // delete copy
   ConnectionManager(const ConnectionManager &) = delete;
@@ -45,10 +46,10 @@ public:
   bool hasSession(const User &user) const;
 
   // send a packet to a connected client
-  bool sendPacket(int socket, const Packet &packet);
+  bool sendPacket(SOCKET socket, const Packet &packet);
 
   // close a client socket so its read loop exits
-  void closeClient(int socket);
+  void closeClient(SOCKET socket);
 
   // inject the gossip manager owned by Server (null when stopped)
   void setGossip(GossipManager *gossip);
@@ -59,17 +60,17 @@ public:
 private:
   GossipManager *gossip_{nullptr}; // gossip manager owned by Server
 
-  std::unordered_map<int, std::shared_ptr<ClientSession>> sessions; // sessions
-  int listeningSocket;                                              // listening socket
-  std::atomic<bool> listening{false};                               // is the server listening
-  mutable std::mutex sessionsMutex;                                 // sessions mutex
+  std::unordered_map<SOCKET, std::shared_ptr<ClientSession>> sessions; // sessions
+  SOCKET listeningSocket;                                              // listening socket
+  std::atomic<bool> listening{false};                                  // is the server listening
+  mutable std::mutex sessionsMutex;                                    // sessions mutex
 
   // handle the client
-  void handleClient(int clientSocket);
+  void handleClient(SOCKET clientSocket);
 
   // add new session
-  void addSession(int socket, std::shared_ptr<ClientSession> session);
+  void addSession(SOCKET socket, std::shared_ptr<ClientSession> session);
 
   // remove session
-  void removeSession(int socket);
+  void removeSession(SOCKET socket);
 };

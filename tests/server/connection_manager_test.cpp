@@ -169,7 +169,7 @@ struct Fixture {
     connections.setGossip(nullptr);
     for (SOCKET socket : clients) {
       if (socket != INVALID_SOCKET) {
-        closesocket(socket);
+        socket_io::close(socket);
       }
     }
     connections.stopListening();
@@ -195,7 +195,7 @@ struct Fixture {
   }
 
   SOCKET connectClient() {
-    const SOCKET listenFd = static_cast<SOCKET>(connections.getListeningSocket());
+    const SOCKET listenFd = connections.getListeningSocket();
     sockaddr_in bound{};
     int boundLen = sizeof(bound);
     if (getsockname(listenFd, reinterpret_cast<sockaddr *>(&bound), &boundLen) != 0) {
@@ -212,7 +212,7 @@ struct Fixture {
     dest.sin_port = bound.sin_port;
     dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (::connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0) {
-      closesocket(client);
+      socket_io::close(client);
       return INVALID_SOCKET;
     }
 
@@ -284,12 +284,12 @@ TEST_CASE("ConnectionManager start then stop", "[connection_manager][start][stop
   ConnectionManager connections;
   REQUIRE(connections.startListening(0));
   REQUIRE(connections.isListening());
-  REQUIRE(connections.getListeningSocket() != -1);
+  REQUIRE(connections.getListeningSocket() != INVALID_SOCKET);
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Listening on port"));
 
   connections.stopListening();
   REQUIRE_FALSE(connections.isListening());
-  REQUIRE(connections.getListeningSocket() == -1);
+  REQUIRE(connections.getListeningSocket() == INVALID_SOCKET);
 }
 
 // 4. double start
@@ -396,7 +396,7 @@ TEST_CASE("ConnectionManager sendPacket edges", "[connection_manager][send][edge
 
   auto sessions = fx.connections.getSessions();
   REQUIRE(sessions.size() == 1);
-  const int fd = sessions.begin()->first;
+  const SOCKET fd = sessions.begin()->first;
   sessions.begin()->second->markClosed();
   REQUIRE_FALSE(fx.connections.sendPacket(fd, hello));
   (void)client;
@@ -413,7 +413,7 @@ TEST_CASE("ConnectionManager closeClient removes session", "[connection_manager]
 
   auto sessions = fx.connections.getSessions();
   REQUIRE(sessions.size() == 1);
-  const int fd = sessions.begin()->first;
+  const SOCKET fd = sessions.begin()->first;
   fx.connections.closeClient(fd);
 
   REQUIRE(waitUntil(kAcceptWait, [&] {
@@ -486,7 +486,7 @@ TEST_CASE("ConnectionManager disconnect clears online without gossip",
   db().setOnline(user.getUsername(), config::NODE_ID);
   REQUIRE(db().isUserOnline(user.getUsername()));
 
-  closesocket(client);
+  socket_io::close(client);
   fx.clients.back() = INVALID_SOCKET;
   REQUIRE(waitUntil(kAcceptWait, [&] { return fx.connections.getSessions().empty(); }));
   REQUIRE_FALSE(db().isUserOnline(user.getUsername()));
@@ -508,7 +508,7 @@ TEST_CASE("ConnectionManager disconnect rumored logout with gossip",
   REQUIRE(fx.request(client, login)->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
   REQUIRE(db().isUserOnline(user.getUsername()));
 
-  closesocket(client);
+  socket_io::close(client);
   fx.clients.back() = INVALID_SOCKET;
   REQUIRE(waitUntil(kAcceptWait, [&] {
     return fx.connections.getSessions().empty() && !db().isUserOnline(user.getUsername());
@@ -571,7 +571,7 @@ TEST_CASE("ConnectionManager typical connect login message disconnect flow",
   }
   REQUIRE(found);
 
-  closesocket(client);
+  socket_io::close(client);
   fx.clients.back() = INVALID_SOCKET;
   REQUIRE(waitUntil(kAcceptWait, [&] {
     return fx.connections.getSessions().empty() && !db().isUserOnline(user.getUsername());
