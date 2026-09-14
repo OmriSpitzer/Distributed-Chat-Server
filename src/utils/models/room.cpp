@@ -5,16 +5,11 @@
  * @date 11-09-2026
  */
 #include "utils/models/room.h"
-#include <atomic>
 #include <ctime>
 #include <iostream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-
-namespace {
-std::atomic<uint64_t> next_room_id{0};
-}
 
 // type to string map
 static const std::unordered_map<Room::RoomType, std::string> typeMap{
@@ -63,9 +58,8 @@ static const std::unordered_map<std::string, Room::Privacy> stringToPrivacyMap{
 };
 
 // constructor
-Room::Room(std::string_view name, Room::RoomType type, Room::Privacy privacy)
-    : id(std::to_string(++next_room_id)), name(name), type(type), privacy(privacy),
-      created_at(std::time(nullptr)) {}
+Room::Room(int id, std::string_view name, Room::RoomType type, Room::Privacy privacy)
+    : id(id), name(name), type(type), privacy(privacy), created_at(std::time(nullptr)) {}
 
 // stream output operator
 std::ostream &operator<<(std::ostream &out, const Room &room) {
@@ -102,7 +96,11 @@ Room::Privacy Room::stringToPrivacy(std::string_view privacy) {
 }
 
 // getters
-std::string Room::getId() const { return this->id; }
+int Room::getId() const { return this->id; }
 std::string Room::getName() const { return this->name; }
 Room::RoomType Room::getType() const { return this->type; }
 Room::Privacy Room::getPrivacy() const { return this->privacy; }
+
+// equals operator
+bool Room::operator==(const Room &other) const { return this->id == other.id; }
+bool Room::operator!=(const Room &other) const { return this->id != other.id; }

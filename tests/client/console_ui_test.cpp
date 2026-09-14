@@ -60,7 +60,7 @@ struct IoRedirect {
 ClientState loggedInState() {
   ClientState state;
   state.user = User("alice", "alice@example.com", User::UserType::USER);
-  state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+  state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
   return state;
 }
 

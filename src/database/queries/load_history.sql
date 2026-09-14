@@ -1,7 +1,7 @@
-SELECT m.id, m.sender, m.content, m.created_at,
-       COALESCE(u.email, ''), COALESCE(u.user_type, 'GUEST')
+SELECT m.id, m.sender_username, m.content, m.created_at,
+       m.sender_email, COALESCE(u.user_type, 'GUEST')
 FROM messages m
-LEFT JOIN users u ON u.username = m.sender
-WHERE m.room = ?
+LEFT JOIN users u ON u.email = m.sender_email
+WHERE m.room_id = ?
 ORDER BY m.created_at DESC
 LIMIT 100;

@@ -316,7 +316,7 @@ TEST_CASE("PacketProcessor message success with pipes", "[packet_processor][mess
   REQUIRE(res.message == "ok");
 
   bool found = false;
-  for (const auto &m : db().loadHistory(RoomManager::LOBBY.getName())) {
+  for (const auto &m : db().loadHistory(RoomManager::LOBBY.getId())) {
     if (m.getContent() == body && m.getFrom().getUsername() == user.getUsername()) {
       found = true;
       break;
@@ -410,7 +410,7 @@ TEST_CASE("PacketProcessor typical register message logout flow", "[packet_proce
           static_cast<int>(RESPONSE_CODES::SUCCESS));
 
   bool found = false;
-  for (const auto &m : db().loadHistory(RoomManager::LOBBY.getName())) {
+  for (const auto &m : db().loadHistory(RoomManager::LOBBY.getId())) {
     if (m.getContent() == "flow-hi|ok" && m.getFrom().getUsername() == name) {
       found = true;
       break;

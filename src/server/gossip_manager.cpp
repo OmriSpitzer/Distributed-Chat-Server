@@ -520,13 +520,29 @@ bool GossipManager::applyEvent(const Packet &event) {
       return false;
     }
 
+    auto resolveId = [](const std::string &name) -> std::optional<int> {
+      auto room = RoomManager::getInstance().getRoom(name);
+      if (!room) {
+        return std::nullopt;
+      }
+      return room->getId();
+    };
+
+    const auto newId = resolveId(newRoom);
+    if (!newId) {
+      Logger::logWarning("GossipManager", "ROOM_JOIN unknown room: " + newRoom);
+      return false;
+    }
+
     // clear the membership if the previous room is not the same as the new room
     if (!prevRoom.empty() && prevRoom != newRoom) {
-      db.clearMembership(username, prevRoom);
+      if (const auto prevId = resolveId(prevRoom)) {
+        db.clearMembership(username, *prevId);
+      }
     }
 
     // set the membership
-    db.setMembership(username, newRoom, nodeId);
+    db.setMembership(username, *newId, nodeId);
     Logger::logInfo("GossipManager",
                     "Applied ROOM_JOIN for " + username + " -> " + newRoom + " on " + nodeId);
     return true;
@@ -542,8 +558,14 @@ bool GossipManager::applyEvent(const Packet &event) {
       return false;
     }
 
+    auto room = RoomManager::getInstance().getRoom(roomName);
+    if (!room) {
+      Logger::logWarning("GossipManager", "ROOM_LEAVE unknown room: " + roomName);
+      return false;
+    }
+
     // clear the membership
-    db.clearMembership(username, roomName);
+    db.clearMembership(username, room->getId());
     Logger::logInfo("GossipManager", "Applied ROOM_LEAVE for " + username + " from " + roomName);
     return true;
   }
@@ -562,13 +584,24 @@ bool GossipManager::applyEvent(const Packet &event) {
     return false;
   }
   const std::string roomName = event.room.empty() ? "Lobby" : event.room;
-  const User from(username, "", User::UserType::GUEST);
-  const Message msg(from, User::anonymousUser(), content, eventId, created);
+  auto room = RoomManager::getInstance().getRoom(roomName);
+  if (!room) {
+    Logger::logWarning("GossipManager", "MESSAGE unknown room: " + roomName);
+    return false;
+  }
+
+  // resolve sender from DB so email FK on messages.sender_email is satisfied
+  std::optional<User> sender = db.getUser(username);
+  if (!sender) {
+    Logger::logWarning("GossipManager", "MESSAGE unknown sender: " + username);
+    return false;
+  }
+  const Message msg(*sender, User::anonymousUser(), content, eventId, created);
 
   // save the message
   bool inserted = false;
   try {
-    inserted = db.saveMessage(msg, roomName);
+    inserted = db.saveMessage(msg, room->getId());
   } catch (const std::exception &e) {
     Logger::logWarning("GossipManager",
                        std::string("MESSAGE apply failed for ") + eventId + ": " + e.what());
@@ -577,11 +610,8 @@ bool GossipManager::applyEvent(const Packet &event) {
 
   // broadcast the message to the room
   if (inserted) {
-    std::optional<Room> room = RoomManager::getInstance().getRoom(roomName);
-    if (room) {
-      Packet push(username, "", Packet::PacketType::MESSAGE, roomName, content, 0);
-      RoomManager::getInstance().broadcast(*room, push, connections, -1);
-    }
+    Packet push(username, "", Packet::PacketType::MESSAGE, roomName, content, 0);
+    RoomManager::getInstance().broadcast(*room, push, connections, -1);
   }
   return true;
 }

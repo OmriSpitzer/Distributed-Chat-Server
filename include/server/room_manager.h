@@ -50,8 +50,9 @@ public:
   // delete an existing room
   bool deleteRoom(const std::string &roomName, ConnectionManager &connections);
 
-  // default lobby room
+  // default rooms
   static const Room LOBBY;
+  static const Room GENERAL;
 
 private:
   // constructor

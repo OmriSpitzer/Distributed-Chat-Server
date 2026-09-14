@@ -563,7 +563,7 @@ TEST_CASE("ConnectionManager typical connect login message disconnect flow",
   REQUIRE(msgRes->message == "ok");
 
   bool found = false;
-  for (const auto &m : db().loadHistory(RoomManager::LOBBY.getName())) {
+  for (const auto &m : db().loadHistory(RoomManager::LOBBY.getId())) {
     if (m.getContent() == "cm-hi|ok" && m.getFrom().getUsername() == user.getUsername()) {
       found = true;
       break;

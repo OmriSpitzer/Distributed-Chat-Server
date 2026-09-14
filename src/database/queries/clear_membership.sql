@@ -1,1 +1,1 @@
-DELETE FROM membership WHERE username = ? AND room = ?;
+DELETE FROM membership WHERE username = ? AND room_id = ?;

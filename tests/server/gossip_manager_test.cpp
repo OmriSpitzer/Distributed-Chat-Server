@@ -402,7 +402,8 @@ TEST_CASE("GossipManager rumor ROOM_JOIN and ROOM_LEAVE", "[gossip_manager][rumo
   REQUIRE(fixture.start());
 
   const std::string user = unique("joiner");
-  REQUIRE_NOTHROW(db().setMembership(user, "Lobby", "n1"));
+  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
+  REQUIRE_NOTHROW(db().setMembership(user, 1, "n1"));
 
   fixture.gossip->rumor(
       makeEvent("ROOM_JOIN", unique("rj"), user, "n2", "Lobby", "General"));
@@ -434,7 +435,7 @@ TEST_CASE("GossipManager rumor MESSAGE saves history", "[gossip_manager][rumor][
       makeEvent("MESSAGE", pipeMsgId, user, "hello|with|pipes", ts, "Lobby"));
 
   REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
-    const auto history = db().loadHistory("Lobby");
+    const auto history = db().loadHistory(1);
     bool plain = false;
     bool pipes = false;
     for (const auto &m : history) {
@@ -738,7 +739,7 @@ TEST_CASE("GossipManager typical LOGIN MESSAGE LOGOUT flow", "[gossip_manager][f
   const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)));
   fixture.gossip->rumor(makeEvent("MESSAGE", msgId, user, "flow-hi", ts, "Lobby"));
   REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
-    for (const auto &m : db().loadHistory("Lobby")) {
+    for (const auto &m : db().loadHistory(1)) {
       if (m.getId() == msgId) {
         return true;
       }

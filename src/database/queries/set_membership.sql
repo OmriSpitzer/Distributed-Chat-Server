@@ -1,2 +1,2 @@
-INSERT OR REPLACE INTO membership (username, room, node_id)
+INSERT OR REPLACE INTO membership (username, room_id, node_id)
 VALUES (?, ?, ?);

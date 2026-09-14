@@ -59,7 +59,7 @@ TEST_CASE("ClientState clear on empty state", "[client_state][clear][edge]") {
 TEST_CASE("ClientState clear after login session", "[client_state][clear]") {
   ClientState state;
   state.user = User("alice", "alice@example.com", User::UserType::USER);
-  state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+  state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
 
   REQUIRE(state.isLoggedIn());
   state.clear();
@@ -72,7 +72,7 @@ TEST_CASE("ClientState clear after login session", "[client_state][clear]") {
 // 5. room without user is not logged in
 TEST_CASE("ClientState room without user is not logged in", "[client_state][edge]") {
   ClientState state;
-  state.currentRoom = Room("General", Room::RoomType::OTHER);
+  state.currentRoom = Room(2, "General", Room::RoomType::OTHER);
 
   REQUIRE(state.currentRoom.has_value());
   REQUIRE_FALSE(state.user.has_value());
@@ -92,10 +92,10 @@ TEST_CASE("ClientState user without room is logged in", "[client_state][edge]") 
 TEST_CASE("ClientState replace user and room", "[client_state][edge]") {
   ClientState state;
   state.user = User("alice", "alice@example.com", User::UserType::USER);
-  state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+  state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
 
   state.user = User("bob", "bob@example.com", User::UserType::ADMIN);
-  state.currentRoom = Room("secure", Room::RoomType::SECURITY, Room::Privacy::PRIVATE);
+  state.currentRoom = Room(3, "secure", Room::RoomType::SECURITY, Room::Privacy::PRIVATE);
 
   REQUIRE(state.isLoggedIn());
   REQUIRE(state.user->getUsername() == "bob");
@@ -110,7 +110,7 @@ TEST_CASE("ClientState replace user and room", "[client_state][edge]") {
 TEST_CASE("ClientState clear is idempotent", "[client_state][clear][edge]") {
   ClientState state;
   state.user = User("alice", "alice@example.com", User::UserType::USER);
-  state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+  state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
 
   state.clear();
   state.clear();
@@ -146,13 +146,13 @@ TEST_CASE("ClientState anonymous and empty-field users", "[client_state][user][e
 TEST_CASE("ClientState Lobby room assignment", "[client_state][room][edge]") {
   ClientState state;
   state.user = User("alice", "alice@example.com", User::UserType::USER);
-  state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+  state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
 
   REQUIRE(state.isLoggedIn());
   REQUIRE(state.currentRoom->getName() == "Lobby");
   REQUIRE(state.currentRoom->getType() == Room::RoomType::LOBBY);
 
-  state.currentRoom = Room("", Room::RoomType::OTHER);
+  state.currentRoom = Room(0, "", Room::RoomType::OTHER);
   REQUIRE(state.currentRoom->getName().empty());
   REQUIRE(state.isLoggedIn());
 }

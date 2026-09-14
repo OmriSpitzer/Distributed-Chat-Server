@@ -39,8 +39,8 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 
 ### Room (`[room]`)
 
-- Room constructor stores metadata
-- Successive rooms receive unique ids
+- Room constructor stores metadata (explicit DB id)
+- Room equality compares id
 - Room copy keeps metadata
 - Room roomTypeToString
 - Room stringToRoomType
@@ -49,6 +49,10 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - Room stringToPrivacy
 - Room privacy conversion round-trip
 - Room stream output includes name, type, and privacy
+
+### DatabaseManager room APIs (`[database_manager][createRoom]`)
+
+- createRoom assigns SQLite AUTOINCREMENT id; getRoom / listRooms / deleteRoom round-trip
 
 ### Message (`[message]`)
 

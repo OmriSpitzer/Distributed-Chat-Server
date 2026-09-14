@@ -81,7 +81,7 @@ void Client::showDashboard() {
 
       if (auto user = handler.handlePacket(*response)) {
         state.user = *user;
-        state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+        state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
       } else if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
         Logger::logError("Client " + id, "Login failed: " + response->message);
       } else {
@@ -108,7 +108,7 @@ void Client::showDashboard() {
 
       if (auto user = handler.handlePacket(*response)) {
         state.user = *user;
-        state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+        state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
       } else if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
         Logger::logError("Client " + id, "Register failed: " + response->message);
       } else {
@@ -155,7 +155,7 @@ void Client::showDashboard() {
       }
 
       if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
-        state.currentRoom = Room(response->room);
+        state.currentRoom = Room(0, response->room);
         // TODO: change visuals
       } else {
         Logger::logError("Client " + id, "Join failed: " + response->message);
@@ -191,7 +191,7 @@ void Client::showDashboard() {
       }
 
       if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
-        state.currentRoom = Room("Lobby", Room::RoomType::LOBBY);
+        state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
         Logger::logInfo("Client " + id, "Left room " + roomName);
       } else {
         Logger::logError("Client " + id, "Failed to leave room " + roomName);

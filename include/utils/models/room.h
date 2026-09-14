@@ -32,7 +32,7 @@ public:
   };
 
   // constructor
-  Room(std::string_view name, Room::RoomType type = RoomType::OTHER,
+  Room(int id, std::string_view name, Room::RoomType type = RoomType::OTHER,
        Room::Privacy privacy = Privacy::PUBLIC);
 
   // stream output operator
@@ -45,15 +45,19 @@ public:
   static Room::Privacy stringToPrivacy(std::string_view privacy);
 
   // getters
-  std::string getId() const;
+  int getId() const;
   std::string getName() const;
   Room::RoomType getType() const;
   Room::Privacy getPrivacy() const;
 
+  // equals operator
+  bool operator==(const Room &other) const;
+  bool operator!=(const Room &other) const;
+
 private:
+  int id;                 // room id
   Room::RoomType type;    // room type
   Room::Privacy privacy;  // privacy type
-  std::string id;         // room id
   std::string name;       // room name
   std::time_t created_at; // creation time
 };

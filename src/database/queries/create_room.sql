@@ -1,0 +1,1 @@
+INSERT INTO rooms (name, type, privacy) VALUES (?, ?, ?);
