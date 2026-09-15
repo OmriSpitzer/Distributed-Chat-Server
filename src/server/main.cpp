@@ -6,6 +6,7 @@
  */
 
 #include "config/config.h"
+#include "server/gui/main_page.h"
 #include "server/server.h"
 #include <atomic>
 #include <condition_variable>
@@ -36,16 +37,29 @@ int main(int argc, char *argv[]) {
 
   // start the server and show the dashboard
   server.start();
-  server.dashboard();
 
-  // set the console control handler
-  SetConsoleCtrlHandler(onConsoleCtrl, TRUE);
+  if (true) {
+    // gui mode
+    // run the server GUI
+    const int rc = MainPage::run(argc, argv, server);
 
-  // wait for the server to stop
-  {
-    std::unique_lock lock(g_mu);
-    g_cv.wait(lock, [] { return g_stop.load(); });
+    server.stop();
+
+    return rc;
+  } else {
+    // console mode
+    server.dashboard();
+
+    // set the console control handler
+    SetConsoleCtrlHandler(onConsoleCtrl, TRUE);
+
+    // wait for the server to stop
+    {
+      std::unique_lock lock(g_mu);
+      g_cv.wait(lock, [] { return g_stop.load(); });
+    }
+    server.stop();
+
+    return 0;
   }
-  server.stop();
-  return 0;
 }

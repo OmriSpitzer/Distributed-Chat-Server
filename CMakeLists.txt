@@ -93,7 +93,7 @@ target_link_libraries(client_lib PUBLIC utils auth ws2_32 Threads::Threads)
 
 # Database Library
 add_library(sqlite3 STATIC src/database/sqlite/sqlite3.c)
-target_include_directories(sqlite3 PUBLIC src/database/sqlite)
+target_include_directories(sqlite3 PRIVATE src/database/sqlite)
 
 
 # SQL schema / query registry: "c_name:relative/path.sql"
@@ -147,6 +147,30 @@ file(WRITE "${CMAKE_BINARY_DIR}/generated/sql_schemas.h" "${_sql_schemas_h}")
 target_include_directories(server_lib PRIVATE "${CMAKE_BINARY_DIR}/generated")
 
 target_link_libraries(server_lib PUBLIC sqlite3)
+
+# Qt 6 (server GUI via chat_server)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+set(CMAKE_AUTOMOC ON)
+# chat_server was created above; enable moc on the target explicitly
+set_target_properties(chat_server PROPERTIES AUTOMOC ON)
+
+target_sources(chat_server PRIVATE
+  src/server/gui/main_page.cpp
+  src/server/gui/main_window.cpp
+  src/server/gui/panels/panel.cpp
+  src/server/gui/panels/log_panel.cpp
+  src/server/gui/panels/ports_panel.cpp
+  src/server/gui/panels/rooms_panel.cpp
+  src/server/gui/panels/users_panel.cpp
+  # headers with Q_OBJECT must be listed so AUTOMOC can scan them
+  include/server/gui/main_window.h
+  include/server/gui/panels/panel.h
+  include/server/gui/panels/log_panel.h
+  include/server/gui/panels/ports_panel.h
+  include/server/gui/panels/rooms_panel.h
+  include/server/gui/panels/users_panel.h
+)
+target_link_libraries(chat_server PRIVATE Qt6::Widgets)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ Libraries ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^

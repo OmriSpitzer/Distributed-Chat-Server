@@ -58,7 +58,7 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 ## 5. Rooms & authorization
 
 - [x] Wire protocol for `createRoom` (`ROOM_CREATE` + `ROOM_LIST` push; `deleteRoom` still unwired).
-- [ ] Enforce **PRIVATE** vs **PUBLIC** (schema supports it; join path does not).
+- [x] Enforce **PRIVATE** vs **PUBLIC** (schema supports it; join path does not).
 - [ ] Enforce **ADMIN / USER / GUEST** privileges (seed has ADMIN; no permission checks).
 - [x] Unique **email** constraint coverage and clear client errors (username uniqueness is stronger today).
 

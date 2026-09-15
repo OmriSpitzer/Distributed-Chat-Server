@@ -17,6 +17,9 @@
 #endif
 #include <winsock2.h>
 
+// get connections
+ConnectionManager &Server::connections() { return connectionManager; }
+
 // start the server
 void Server::start() {
   // check if the server is already running

@@ -22,7 +22,6 @@
 #undef ERROR
 #endif
 
-
 class GossipManager {
 public:
   // constructor
