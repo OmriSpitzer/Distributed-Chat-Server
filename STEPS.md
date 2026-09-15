@@ -108,7 +108,38 @@ Highest-value gaps:
 
 - [ ] Sync `SERVER.md` / `CLIENT.md` / `MODELS.md` with the current layered architecture (`architecture.md` is closer to truth).
 - [x] README “not in this tree” list: track profile, room directory, history UI, clearer TCP, DB enums as they land.
-- [ ] Decide product scope for later: WebSocket / GUI clients, shared remote DB (explicitly out of tree today).
+- [ ] Decide product scope for later: WebSocket / shared remote DB (GUI tracked in §11).
+
+---
+
+
+
+## 10. Visual GUI — server & client
+
+Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-only widgets; no Qt inside `server_lib` domain/transport beyond a `Server*` / singleton read from the GUI thread.
+
+### Server GUI
+
+- [x] Qt build wire-up (`find_package(Qt6 Widgets)`, AUTOMOC, `chat_server` sources).
+- [x] `MainPage` / `MainWindow` shell + abstract `Panel` base.
+- [x] **Ports** panel — `config::` node / ports / peers / db.
+- [x] **Users** panel — timer refresh from `Server::connections().getSessions()`.
+- [x] **Rooms** panel — timer refresh from `RoomManager::listRooms()`.
+- [x] **Log** panel — timer refresh from `Logger`.
+- [ ] Console ↔ GUI choice in `main` (real flag/prompt; not `if (true)`).
+- [ ] Live peer sockets on Ports (optional `GossipManager` snapshot getters).
+- [ ] Push updates (Logger sink / session events) instead of timer-only where it matters.
+- [ ] Polish UX (styles `.qss`, scroll behavior, empty states).
+
+
+
+### Client GUI
+
+- [ ] Qt client target (`chat_client_gui` or shared mode flag) beside console `chat_client`.
+- [ ] Screens mirroring `ConsoleUI`: home, login/register, dashboard, join/create room, messaging, profile, history.
+- [ ] Reuse `Client` / `PacketBuilder` / `PacketHandler` / `Network` — GUI is presentation only.
+- [ ] Show **pushed messages** live (pairs with §4 console push presentation).
+- [ ] GUI-thread rules: no widget updates from reader/network threads without queued signals.
 
 ---
 
@@ -123,4 +154,5 @@ Highest-value gaps:
 5. AuthZ (roles / private rooms)
 6. Use or delete `ThreadPool`
 7. Fill E2E / cluster test gaps
+8. Finish server GUI polish + console/GUI switch; then client GUI (§11)
 

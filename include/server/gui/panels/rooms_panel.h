@@ -6,18 +6,20 @@
 
 #pragma once
 #include "server/gui/panels/panel.h"
-
-class QListWidget;
-class QTimer;
+#include "utils/models/room.h"
+#include <QListWidget>
+#include <QTimer>
 
 class RoomsPanel : public Panel {
   Q_OBJECT
 public:
   explicit RoomsPanel(QWidget *parent = nullptr, Server *server = nullptr);
-
-  void refresh() override;
+  ~RoomsPanel() override = default;
 
 private:
-  QListWidget *list_{nullptr};
-  QTimer *refreshTimer_{nullptr};
+  QListWidget *roomsList{nullptr};
+  QTimer *refreshTimer{nullptr};
+
+  void refresh() override;
+  void addRoom(const Room &room);
 };

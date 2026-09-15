@@ -9,14 +9,14 @@
 #include <QListWidget>
 #include <QTimer>
 
-UsersPanel::UsersPanel(QWidget *parent, Server *server)
-    : Panel("Online users", parent, server) {
+UsersPanel::UsersPanel(QWidget *parent, Server *server) : Panel("Online users", parent, server) {
   usersList = new QListWidget(this);
-  bodyLayout()->addWidget(usersList, 1);
-
   refreshTimer = new QTimer(this);
+
+  getBodyLayout()->addWidget(usersList, 1);
+
   connect(refreshTimer, &QTimer::timeout, this, &UsersPanel::refresh);
-  refreshTimer->start(1000);
+  refreshTimer->start(REFRESH_INTERVAL);
   refresh();
 }
 
@@ -35,17 +35,20 @@ void UsersPanel::refresh() {
   }
 
   for (const auto &[sock, session] : sessions) {
+    (void)sock;
     if (!session) {
       continue;
     }
-    if (!session->isAuthenticated()) {
-      usersList->addItem(QString("socket %1 (unauthed)").arg(quintptr(sock)));
-      continue;
-    }
-    const User user = session->getUser();
-    const Room room = session->getRoom();
-    usersList->addItem(QString("%1 @ %2")
-                           .arg(QString::fromStdString(user.getUsername()))
-                           .arg(QString::fromStdString(room.getName())));
+    addUser(session->getUser(), session->getRoom(), session->isAuthenticated());
   }
+}
+
+void UsersPanel::addUser(const User &user, const Room &room, bool authenticated) {
+  QString formatted = QString("%1 @ %2")
+                          .arg(QString::fromStdString(user.getUsername()))
+                          .arg(QString::fromStdString(room.getName()));
+  if (!authenticated) {
+    formatted += " (un-authenticated)";
+  }
+  usersList->addItem(formatted);
 }

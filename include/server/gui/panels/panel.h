@@ -15,19 +15,28 @@ class Server;
 class Panel : public QWidget {
   Q_OBJECT
 public:
+  // constructor
   explicit Panel(const QString &title, QWidget *parent = nullptr, Server *server = nullptr);
+
+  // destructor
   ~Panel() override = default;
 
-  // refresh panel contents (GUI thread)
+protected:
+  // refresh interval
+  static constexpr int REFRESH_INTERVAL = 500;
+
+  // get the server instance
+  Server *server() const { return serverObject; }
+
+  // get the body layout
+  QVBoxLayout *getBodyLayout() const { return bodyLayout; }
+
+  // refresh the panel
   virtual void refresh() = 0;
 
-protected:
-  Server *server() const { return server_; }
-  QVBoxLayout *bodyLayout() const { return bodyLayout_; }
-
 private:
-  Server *server_{nullptr};
-  QLabel *titleLabel_{nullptr};
-  QVBoxLayout *rootLayout_{nullptr};
-  QVBoxLayout *bodyLayout_{nullptr};
+  Server *serverObject{nullptr};    // server instance
+  QLabel *titleLabel{nullptr};      // title label
+  QVBoxLayout *rootLayout{nullptr}; // root layout
+  QVBoxLayout *bodyLayout{nullptr}; // body layout
 };

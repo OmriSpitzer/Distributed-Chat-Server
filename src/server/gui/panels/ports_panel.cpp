@@ -1,5 +1,5 @@
 /**
- * Node / ports status panel implementation
+ * Node & ports status panel implementation
  *
  * @date 15-09-2026
  */
@@ -8,6 +8,7 @@
 #include "config/config.h"
 #include <QGridLayout>
 #include <QLabel>
+#include <QTimer>
 #include <sstream>
 
 namespace {
@@ -27,41 +28,45 @@ QLabel *makeKey(const QString &text, QWidget *parent) {
 
 } // namespace
 
-PortsPanel::PortsPanel(QWidget *parent, Server *server)
-    : Panel("Node & ports", parent, server) {
-  nodeLabel_ = makeValue(this);
-  clientPortLabel_ = makeValue(this);
-  peerPortLabel_ = makeValue(this);
-  peersLabel_ = makeValue(this);
-  dbLabel_ = makeValue(this);
-
+PortsPanel::PortsPanel(QWidget *parent, Server *server) : Panel("Node & ports", parent, server) {
+  nodeLabel = makeValue(this);
+  clientLabel = makeValue(this);
+  peerLabel = makeValue(this);
+  peersLabel = makeValue(this);
+  dbLabel = makeValue(this);
   auto *grid = new QGridLayout();
+  refreshTimer = new QTimer(this);
+
   grid->setHorizontalSpacing(24);
   grid->setVerticalSpacing(8);
+
   grid->addWidget(makeKey("Node ID", this), 0, 0);
-  grid->addWidget(nodeLabel_, 0, 1);
+  grid->addWidget(nodeLabel, 0, 1);
   grid->addWidget(makeKey("Client port", this), 1, 0);
-  grid->addWidget(clientPortLabel_, 1, 1);
+  grid->addWidget(clientLabel, 1, 1);
   grid->addWidget(makeKey("Peer port", this), 2, 0);
-  grid->addWidget(peerPortLabel_, 2, 1);
+  grid->addWidget(peerLabel, 2, 1);
   grid->addWidget(makeKey("Peers", this), 3, 0);
-  grid->addWidget(peersLabel_, 3, 1);
+  grid->addWidget(peersLabel, 3, 1);
   grid->addWidget(makeKey("Database", this), 4, 0);
-  grid->addWidget(dbLabel_, 4, 1);
+  grid->addWidget(dbLabel, 4, 1);
   grid->setColumnStretch(1, 1);
 
-  bodyLayout()->addLayout(grid);
+  getBodyLayout()->addLayout(grid);
+
+  connect(refreshTimer, &QTimer::timeout, this, &PortsPanel::refresh);
+  refreshTimer->start(REFRESH_INTERVAL);
   refresh();
 }
 
 void PortsPanel::refresh() {
-  nodeLabel_->setText(QString::fromStdString(config::NODE_ID));
-  clientPortLabel_->setText(QString::number(config::PORT));
-  peerPortLabel_->setText(QString::number(config::PEER_PORT));
-  dbLabel_->setText(QString::fromStdString(config::DB_PATH));
+  nodeLabel->setText(QString::fromStdString(config::NODE_ID));
+  clientLabel->setText(QString::number(config::PORT));
+  peerLabel->setText(QString::number(config::PEER_PORT));
+  dbLabel->setText(QString::fromStdString(config::DB_PATH));
 
   if (config::PEERS.empty()) {
-    peersLabel_->setText("(none)");
+    peersLabel->setText("(none)");
     return;
   }
 
@@ -72,5 +77,5 @@ void PortsPanel::refresh() {
     }
     oss << config::PEERS[i];
   }
-  peersLabel_->setText(QString::fromStdString(oss.str()));
+  peersLabel->setText(QString::fromStdString(oss.str()));
 }

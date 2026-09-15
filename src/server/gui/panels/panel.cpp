@@ -9,19 +9,19 @@
 #include <QVBoxLayout>
 
 Panel::Panel(const QString &title, QWidget *parent, Server *server)
-    : QWidget(parent), server_(server) {
+    : QWidget(parent), serverObject(server) {
   setObjectName("Panel");
 
-  rootLayout_ = new QVBoxLayout(this);
-  rootLayout_->setContentsMargins(16, 16, 16, 16);
-  rootLayout_->setSpacing(10);
+  rootLayout = new QVBoxLayout(this);
+  rootLayout->setContentsMargins(16, 16, 16, 16);
+  rootLayout->setSpacing(10);
 
-  titleLabel_ = new QLabel(title, this);
-  titleLabel_->setObjectName("SectionTitle");
-  rootLayout_->addWidget(titleLabel_);
+  titleLabel = new QLabel(title, this);
+  titleLabel->setObjectName("SectionTitle");
+  rootLayout->addWidget(titleLabel);
 
-  bodyLayout_ = new QVBoxLayout();
-  bodyLayout_->setContentsMargins(0, 0, 0, 0);
-  bodyLayout_->setSpacing(10);
-  rootLayout_->addLayout(bodyLayout_, 1);
+  bodyLayout = new QVBoxLayout();
+  bodyLayout->setContentsMargins(0, 0, 0, 0);
+  bodyLayout->setSpacing(10);
+  rootLayout->addLayout(bodyLayout, 1);
 }

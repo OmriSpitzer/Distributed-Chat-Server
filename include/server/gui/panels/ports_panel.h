@@ -1,25 +1,32 @@
 /**
- * Node / ports status panel
+ * Node & ports status panel
  *
  * @date 15-09-2026
  */
 
 #pragma once
 #include "server/gui/panels/panel.h"
+#include <QLabel>
+#include <QTimer>
 
-class QLabel;
 
 class PortsPanel : public Panel {
   Q_OBJECT
 public:
+  // constructor
   explicit PortsPanel(QWidget *parent = nullptr, Server *server = nullptr);
 
-  void refresh() override;
+  // destructor
+  ~PortsPanel() override = default;
 
 private:
-  QLabel *nodeLabel_{nullptr};
-  QLabel *clientPortLabel_{nullptr};
-  QLabel *peerPortLabel_{nullptr};
-  QLabel *peersLabel_{nullptr};
-  QLabel *dbLabel_{nullptr};
+  QLabel *nodeLabel{nullptr};    // node label
+  QLabel *clientLabel{nullptr};  // client label
+  QLabel *peerLabel{nullptr};    // peer label
+  QLabel *peersLabel{nullptr};   // peers label
+  QLabel *dbLabel{nullptr};      // db label
+  QTimer *refreshTimer{nullptr}; // timer for refreshing the ports
+
+  // refresh panel contents
+  void refresh() override;
 };

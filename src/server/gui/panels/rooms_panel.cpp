@@ -9,31 +9,36 @@
 #include <QListWidget>
 #include <QTimer>
 
-RoomsPanel::RoomsPanel(QWidget *parent, Server *server)
-    : Panel("Rooms", parent, server) {
-  list_ = new QListWidget(this);
-  bodyLayout()->addWidget(list_, 1);
+RoomsPanel::RoomsPanel(QWidget *parent, Server *server) : Panel("Rooms", parent, server) {
+  roomsList = new QListWidget(this);
+  refreshTimer = new QTimer(this);
 
-  refreshTimer_ = new QTimer(this);
-  connect(refreshTimer_, &QTimer::timeout, this, &RoomsPanel::refresh);
-  refreshTimer_->start(1000);
+  getBodyLayout()->addWidget(roomsList, 1);
+
+  connect(refreshTimer, &QTimer::timeout, this, &RoomsPanel::refresh);
+  refreshTimer->start(REFRESH_INTERVAL);
   refresh();
 }
 
 void RoomsPanel::refresh() {
-  list_->clear();
+  roomsList->clear();
 
   const std::vector<Room> rooms = RoomManager::getInstance().listRooms();
   if (rooms.empty()) {
-    list_->addItem("(no rooms)");
+    roomsList->addItem("(no rooms)");
     return;
   }
 
   for (const Room &room : rooms) {
-    list_->addItem(
-        QString("%1 — %2 / %3")
-            .arg(QString::fromStdString(room.getName()))
-            .arg(QString::fromStdString(Room::roomTypeToString(room.getType())))
-            .arg(QString::fromStdString(Room::privacyToString(room.getPrivacy()))));
+    addRoom(room);
   }
+}
+
+void RoomsPanel::addRoom(const Room &room) {
+  const QString formatted =
+      QString("%1 — %2 / %3")
+          .arg(QString::fromStdString(room.getName()))
+          .arg(QString::fromStdString(Room::roomTypeToString(room.getType())))
+          .arg(QString::fromStdString(Room::privacyToString(room.getPrivacy())));
+  roomsList->addItem(formatted);
 }
