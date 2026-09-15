@@ -12,10 +12,12 @@
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
 #include "server/gossip_manager.h"
+#include "server/room_manager.h"
 #include "utils/gossip_payload.h"
 #include "utils/models/log_message.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
+#include "utils/models/room.h"
 #include "utils/socket_io.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
@@ -391,6 +393,44 @@ TEST_CASE("GossipManager rumor USER_CREATED inserts user", "[gossip_manager][rum
   // duplicate apply for same username (new event id) should still succeed
   fixture.gossip->rumor(makeEvent("USER_CREATED", unique("uc2"), user, "secret", email));
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Applied USER_CREATED for " + user));
+
+  fixture.gossip->stop();
+}
+
+// 10b. rumor ROOM_CREATED seeds creator allow list; ROOM_ACL_ADD invites
+TEST_CASE("GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD", "[gossip_manager][rumor][acl]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  REQUIRE(fixture.start());
+
+  const std::string creator = unique("owner");
+  const std::string creatorEmail = creator + "@example.com";
+  const std::string guest = unique("guest");
+  const std::string guestEmail = guest + "@example.com";
+  const std::string roomName = unique("vault");
+
+  REQUIRE_NOTHROW(db().createUser(creator, "secret", creatorEmail));
+  REQUIRE_NOTHROW(db().createUser(guest, "secret", guestEmail));
+
+  fixture.gossip->rumor(makeEvent("ROOM_CREATED", unique("rc"), creator, "Other", "PRIVATE",
+                                  roomName));
+
+  REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
+    return RoomManager::getInstance().getRoom(roomName).has_value();
+  }));
+
+  const auto created = RoomManager::getInstance().getRoom(roomName);
+  REQUIRE(created.has_value());
+  REQUIRE(created->getPrivacy() == Room::Privacy::PRIVATE);
+  REQUIRE(db().isAllowListCreator(created->getId(), creatorEmail));
+  REQUIRE(db().isAllowed(created->getId(), creatorEmail));
+  REQUIRE_FALSE(db().isAllowed(created->getId(), guestEmail));
+
+  fixture.gossip->rumor(
+      makeEvent("ROOM_ACL_ADD", unique("acl"), guest, "0", "", roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return db().isAllowed(created->getId(), guestEmail); }));
+  REQUIRE_FALSE(db().isAllowListCreator(created->getId(), guestEmail));
 
   fixture.gossip->stop();
 }

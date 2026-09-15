@@ -102,7 +102,7 @@ TEST_CASE("Serializer round-trip all packet types", "[serializer][roundtrip]") {
   }
   SECTION("ROOM_CREATE") {
     requireRoundTrip(
-        makePacket(Packet::PacketType::ROOM_CREATE, "alice", "server", "Labs", "Other|PUBLIC"));
+        makePacket(Packet::PacketType::ROOM_CREATE, "alice", "server", "Labs", "PUBLIC"));
   }
   SECTION("ROOM_LIST") {
     requireRoundTrip(makePacket(Packet::PacketType::ROOM_LIST, "server", "*", "",
@@ -111,6 +111,10 @@ TEST_CASE("Serializer round-trip all packet types", "[serializer][roundtrip]") {
   SECTION("LOAD_MESSAGE_HISTORY") {
     requireRoundTrip(makePacket(Packet::PacketType::LOAD_MESSAGE_HISTORY, "alice", "server",
                                 "Lobby", "", 1, 0));
+  }
+  SECTION("ROOM_INVITE") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::ROOM_INVITE, "alice", "server", "Secure", "bob"));
   }
 }
 
@@ -238,11 +242,11 @@ TEST_CASE("Serializer serialize rejects invalid type", "[serializer][serialize][
     REQUIRE(Serializer::serialize(packet).empty());
   }
 
-  // first unused enum value after LOAD_MESSAGE_HISTORY
-  SECTION("first unused enum value after LOAD_MESSAGE_HISTORY") {
+  // first unused enum value after ROOM_INVITE
+  SECTION("first unused enum value after ROOM_INVITE") {
     Packet packet = makePacket(Packet::PacketType::MESSAGE);
     packet.type = static_cast<Packet::PacketType>(
-        static_cast<int>(Packet::PacketType::LOAD_MESSAGE_HISTORY) + 1);
+        static_cast<int>(Packet::PacketType::ROOM_INVITE) + 1);
     REQUIRE(Serializer::serialize(packet).empty());
   }
 }

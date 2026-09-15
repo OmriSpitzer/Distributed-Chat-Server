@@ -20,7 +20,7 @@ namespace {
 const int MIN_MENU_CHOICE = 1; // minimum menu choice
 const int MAX_MENU_CHOICE = 3; // maximum menu choice
 const int MIN_USER_CHOICE = 1; // minimum user dashboard choice
-const int MAX_USER_CHOICE = 7; // maximum user dashboard choice
+const int MAX_USER_CHOICE = 8; // maximum user dashboard choice
 
 std::optional<int> tryReadMenuChoice(int min, int max) {
   std::cout << "Enter your choice: ";
@@ -102,7 +102,8 @@ int ConsoleUI::showUserDashboard(const ClientState &state) {
     std::cout << "4. Send Message\n";
     std::cout << "5. Create Room\n";
     std::cout << "6. Load Message History\n";
-    std::cout << "7. Logout\n";
+    std::cout << "7. Invite to Room\n";
+    std::cout << "8. Logout\n";
     std::cout << "--------------------------------\n";
 
     if (const auto answer = tryReadMenuChoice(MIN_USER_CHOICE, MAX_USER_CHOICE)) {
@@ -193,14 +194,58 @@ std::optional<Packet> ConsoleUI::showJoinRoom(const ClientState &state) {
 
 // showing the create room screen
 std::optional<Packet> ConsoleUI::showCreateRoom(const User &user) {
+  std::cout << ">> Create room:\n";
+  std::cout << "1. Public Room\n";
+  std::cout << "2. Private Room\n";
+  std::cout << "3. Back\n";
+  std::cout << "--------------------------------\n";
+
+  const auto answer = tryReadMenuChoice(1, 3);
+  if (!answer || *answer == 3) {
+    return std::nullopt;
+  }
+
+  const auto roomPrivacy = *answer == 1 ? Room::privacyToString(Room::Privacy::PUBLIC)
+                                        : Room::privacyToString(Room::Privacy::PRIVATE);
+
   const auto roomName = readLine(">> New room name (type 'exit' to go back): ");
   if (!roomName) {
     return std::nullopt;
   }
 
   try {
-    // empty message => server defaults to Other|PUBLIC
-    return PacketBuilder::buildCreateRoom(user.getUsername(), *roomName);
+    return PacketBuilder::buildCreateRoom(user.getUsername(), *roomName, roomPrivacy);
+  } catch (const std::invalid_argument &e) {
+    std::cout << ">> " << e.what() << '\n';
+    return std::nullopt;
+  }
+}
+
+// showing the invite-to-room screen
+std::optional<Packet> ConsoleUI::showInviteToRoom(const ClientState &state) {
+  if (!state.user) {
+    return std::nullopt;
+  }
+
+  std::string room;
+  if (state.currentRoom && !state.currentRoom->getName().empty()) {
+    room = state.currentRoom->getName();
+    std::cout << ">> Inviting into current room: " << room << '\n';
+  } else {
+    const auto roomName = readLine(">> Room to invite into (type 'exit' to go back): ");
+    if (!roomName) {
+      return std::nullopt;
+    }
+    room = *roomName;
+  }
+
+  const auto invitee = readLine(">> Username to invite (type 'exit' to go back): ");
+  if (!invitee) {
+    return std::nullopt;
+  }
+
+  try {
+    return PacketBuilder::buildInviteToRoom(state.user->getUsername(), room, *invitee);
   } catch (const std::invalid_argument &e) {
     std::cout << ">> " << e.what() << '\n';
     return std::nullopt;

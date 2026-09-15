@@ -82,7 +82,8 @@ public:
   void clearAllMembership(std::string_view username);
 
   // create a new room
-  Room createRoom(std::string_view name, Room::RoomType type, Room::Privacy privacy);
+  Room createRoom(std::string_view name, Room::RoomType type, Room::Privacy privacy,
+                  std::string_view creatorEmail = "");
 
   // get a room by id
   Room getRoom(int id);
@@ -92,6 +93,21 @@ public:
 
   // delete a room
   void deleteRoom(int id);
+
+  // get the allow list for a room
+  std::vector<std::string> getAllowList(int roomId);
+
+  // true if email is on the room allow list
+  bool isAllowed(int roomId, std::string_view email);
+
+  // true if email is the allow-list creator for the room
+  bool isAllowListCreator(int roomId, std::string_view email);
+
+  // add a user to the allow list for a room (idempotent)
+  void addToAllowList(int roomId, std::string_view email, bool creator);
+
+  // remove a user from the allow list for a room
+  void removeFromAllowList(int roomId, std::string_view email);
 
   // delete copy constructor and assignment operator
   DatabaseManager(const DatabaseManager &) = delete;

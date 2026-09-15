@@ -165,7 +165,8 @@ int DatabaseManager::execute(const char *sql, std::initializer_list<std::string_
     for (const std::string_view param : params) {
       if (sqlite3_bind_text(stmt.get(), index, param.data(), static_cast<int>(param.size()),
                             SQLITE_TRANSIENT) != SQLITE_OK) {
-        throw std::runtime_error(std::string("Failed to bind SQL parameter: ") + sqlite3_errmsg(db));
+        throw std::runtime_error(std::string("Failed to bind SQL parameter: ") +
+                                 sqlite3_errmsg(db));
       }
       ++index;
     }
@@ -379,26 +380,34 @@ Message DatabaseManager::messageFromRow(const SqlRow &row) {
 }
 
 // create a new room — id comes from SQLite AUTOINCREMENT (last_insert_rowid)
-Room DatabaseManager::createRoom(std::string_view name, Room::RoomType type,
-                                 Room::Privacy privacy) {
+Room DatabaseManager::createRoom(std::string_view name, Room::RoomType type, Room::Privacy privacy,
+                                 std::string_view creatorEmail) {
   const std::string roomType = Room::roomTypeToString(type);
   const std::string privacyType = Room::privacyToString(privacy);
 
-  std::lock_guard<std::mutex> lock(mutex);
-  try {
-    StmtPtr stmt(prepareLocked(db::sql::create_room, {name, roomType, privacyType}));
-    const int rc = sqlite3_step(stmt.get());
-    if (rc == SQLITE_CONSTRAINT) {
-      throw ConstraintError("Room already exists");
+  Room created(0, name, type, privacy);
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    try {
+      StmtPtr stmt(prepareLocked(db::sql::create_room, {name, roomType, privacyType}));
+      const int rc = sqlite3_step(stmt.get());
+      if (rc == SQLITE_CONSTRAINT) {
+        throw ConstraintError("Room already exists");
+      }
+      if (rc != SQLITE_DONE) {
+        throw std::runtime_error(std::string("Failed to create room: ") + sqlite3_errmsg(db));
+      }
+      const int id = static_cast<int>(sqlite3_last_insert_rowid(db));
+      created = Room(id, name, type, privacy);
+    } catch (const ConstraintError &) {
+      throw;
     }
-    if (rc != SQLITE_DONE) {
-      throw std::runtime_error(std::string("Failed to create room: ") + sqlite3_errmsg(db));
-    }
-    const int id = static_cast<int>(sqlite3_last_insert_rowid(db));
-    return Room(id, name, type, privacy);
-  } catch (const ConstraintError &) {
-    throw;
   }
+
+  if (!creatorEmail.empty()) {
+    addToAllowList(created.getId(), creatorEmail, true);
+  }
+  return created;
 }
 
 // get a room by id
@@ -421,7 +430,7 @@ std::vector<Room> DatabaseManager::listRooms() {
   return rooms;
 }
 
-// delete a room (membership + messages cleared in delete_room.sql)
+// delete a room
 void DatabaseManager::deleteRoom(int id) {
   if (id < 3) {
     throw std::runtime_error("Cannot delete default rooms");
@@ -430,4 +439,37 @@ void DatabaseManager::deleteRoom(int id) {
   if (changes == 0) {
     throw ConstraintError("Room not found");
   }
+}
+
+// get the allow list for a room
+std::vector<std::string> DatabaseManager::getAllowList(int roomId) {
+  const SqlResult rows = query(db::sql::get_allow_list, {std::to_string(roomId)});
+  std::vector<std::string> allowList;
+  allowList.reserve(rows.size());
+  for (const SqlRow &row : rows) {
+    if (!row.empty()) {
+      allowList.push_back(row[0]);
+    }
+  }
+  return allowList;
+}
+
+// true if email is on the room allow list
+bool DatabaseManager::isAllowed(int roomId, std::string_view email) {
+  return !query(db::sql::is_allowed, {std::to_string(roomId), email}).empty();
+}
+
+// true if email is the allow-list creator for the room
+bool DatabaseManager::isAllowListCreator(int roomId, std::string_view email) {
+  return !query(db::sql::is_allow_list_creator, {std::to_string(roomId), email}).empty();
+}
+
+// add a user to the allow list for a room
+void DatabaseManager::addToAllowList(int roomId, std::string_view email, bool creator) {
+  execute(db::sql::add_user_allow_list, {std::to_string(roomId), email, creator ? "1" : "0"});
+}
+
+// remove a user from the allow list for a room
+void DatabaseManager::removeFromAllowList(int roomId, std::string_view email) {
+  execute(db::sql::remove_user_allow_list, {std::to_string(roomId), email});
 }

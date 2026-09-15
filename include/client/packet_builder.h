@@ -34,9 +34,13 @@ public:
   static Packet buildUpdateUser(std::string_view username, std::string_view password,
                                 std::string_view email);
 
-  // build a create room packet (message = "type|privacy", empty => Other|PUBLIC)
+  // build a create room packet
   static Packet buildCreateRoom(std::string_view username, std::string_view room,
-                                std::string_view typeAndPrivacy = "");
+                                std::string_view privacy);
+
+  // build an invite packet (message = invitee username)
+  static Packet buildInviteToRoom(std::string_view username, std::string_view room,
+                                  std::string_view inviteeUsername);
 
   // build a load message history packet for a room
   static Packet buildLoadMessageHistory(std::string_view username, std::string_view room);

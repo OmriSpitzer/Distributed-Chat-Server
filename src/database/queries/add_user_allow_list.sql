@@ -1,0 +1,1 @@
+INSERT OR IGNORE INTO allow_list (room_id, email, creator) VALUES (?, ?, ?);

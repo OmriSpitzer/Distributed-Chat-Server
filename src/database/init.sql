@@ -45,6 +45,16 @@ CREATE TABLE IF NOT EXISTS online_users (
   node_id  TEXT NOT NULL
 );
 
+-- Create room allowed users table
+CREATE TABLE IF NOT EXISTS allow_list (
+  room_id INTEGER NOT NULL,
+  email TEXT NOT NULL,
+  creator BOOLEAN NOT NULL,
+  PRIMARY KEY (room_id, email),
+  FOREIGN KEY (room_id) REFERENCES rooms(id),
+  FOREIGN KEY (email) REFERENCES users(email)
+);
+
 -- Populate users table
 INSERT OR IGNORE INTO users (username, email, password, user_type) VALUES
   ('omri', 'omri@gmail.com', '$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>', 'USER'),

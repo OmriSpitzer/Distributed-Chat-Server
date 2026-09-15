@@ -1,0 +1,1 @@
+SELECT email FROM allow_list WHERE room_id = ?;

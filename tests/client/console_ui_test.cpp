@@ -101,7 +101,7 @@ TEST_CASE("ConsoleUI showUserDashboard EOF returns Logout", "[console_ui][menu][
   ClientState state;
   makeLoggedIn(state);
   IoRedirect io("");
-  REQUIRE(ConsoleUI::showUserDashboard(state) == 7);
+  REQUIRE(ConsoleUI::showUserDashboard(state) == 8);
 }
 
 // 7. showLogin builds a LOGIN packet
@@ -218,12 +218,26 @@ TEST_CASE("ConsoleUI showUpdateProfile back cancels", "[console_ui][update][edge
 // 18. showCreateRoom builds a ROOM_CREATE packet
 TEST_CASE("ConsoleUI showCreateRoom builds a ROOM_CREATE packet", "[console_ui][create]") {
   const User user("alice", "alice@example.com", User::UserType::USER);
-  IoRedirect io("Labs\n");
-  const auto packet = ConsoleUI::showCreateRoom(user);
 
-  REQUIRE(packet.has_value());
-  REQUIRE(packet->type == Packet::PacketType::ROOM_CREATE);
-  REQUIRE(packet->sender == "alice");
-  REQUIRE(packet->room == "Labs");
-  REQUIRE(packet->message.empty());
+  SECTION("public room") {
+    IoRedirect io("1\nLabs\n");
+    const auto packet = ConsoleUI::showCreateRoom(user);
+
+    REQUIRE(packet.has_value());
+    REQUIRE(packet->type == Packet::PacketType::ROOM_CREATE);
+    REQUIRE(packet->sender == "alice");
+    REQUIRE(packet->room == "Labs");
+    REQUIRE(packet->message == "PUBLIC");
+  }
+
+  SECTION("private room") {
+    IoRedirect io("2\nSecure\n");
+    const auto packet = ConsoleUI::showCreateRoom(user);
+
+    REQUIRE(packet.has_value());
+    REQUIRE(packet->type == Packet::PacketType::ROOM_CREATE);
+    REQUIRE(packet->sender == "alice");
+    REQUIRE(packet->room == "Secure");
+    REQUIRE(packet->message == "PRIVATE");
+  }
 }

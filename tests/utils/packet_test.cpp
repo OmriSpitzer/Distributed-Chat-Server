@@ -154,10 +154,10 @@ TEST_CASE("Packet constructor stores all fields", "[packet][ctor]") {
   }
 
   SECTION("ROOM_CREATE") {
-    const Packet packet("alice", "server", Packet::PacketType::ROOM_CREATE, "Labs", "Other|PUBLIC");
+    const Packet packet("alice", "server", Packet::PacketType::ROOM_CREATE, "Labs", "PUBLIC");
     REQUIRE(packet.type == Packet::PacketType::ROOM_CREATE);
     REQUIRE(packet.room == "Labs");
-    REQUIRE(packet.message == "Other|PUBLIC");
+    REQUIRE(packet.message == "PUBLIC");
   }
 
   SECTION("ROOM_LIST") {
@@ -172,6 +172,13 @@ TEST_CASE("Packet constructor stores all fields", "[packet][ctor]") {
     const Packet packet("alice", "server", Packet::PacketType::LOAD_MESSAGE_HISTORY, "Lobby");
     REQUIRE(packet.type == Packet::PacketType::LOAD_MESSAGE_HISTORY);
     REQUIRE(packet.room == "Lobby");
+  }
+
+  SECTION("ROOM_INVITE") {
+    const Packet packet("alice", "server", Packet::PacketType::ROOM_INVITE, "Secure", "bob");
+    REQUIRE(packet.type == Packet::PacketType::ROOM_INVITE);
+    REQUIRE(packet.room == "Secure");
+    REQUIRE(packet.message == "bob");
   }
 }
 
@@ -495,6 +502,7 @@ TEST_CASE("Packet packetTypeToString", "[packet][packetTypeToString]") {
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_LIST) == "ROOM_LIST");
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::LOAD_MESSAGE_HISTORY) ==
           "LOAD_MESSAGE_HISTORY");
+  REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_INVITE) == "ROOM_INVITE");
 
   SECTION("invalid enum value defaults to DEFAULT") {
     const auto bogus = static_cast<Packet::PacketType>(999);
@@ -526,6 +534,7 @@ TEST_CASE("Packet stringToPacketType", "[packet][stringToPacketType]") {
   REQUIRE(Packet::stringToPacketType("ROOM_LIST") == Packet::PacketType::ROOM_LIST);
   REQUIRE(Packet::stringToPacketType("LOAD_MESSAGE_HISTORY") ==
           Packet::PacketType::LOAD_MESSAGE_HISTORY);
+  REQUIRE(Packet::stringToPacketType("ROOM_INVITE") == Packet::PacketType::ROOM_INVITE);
 
   SECTION("unknown / edge strings default to DEFAULT") {
     REQUIRE(Packet::stringToPacketType("") == Packet::PacketType::DEFAULT);
@@ -558,7 +567,8 @@ TEST_CASE("Packet type conversion round-trip", "[packet][type-roundtrip]") {
       Packet::PacketType::GOSSIP_HELLO,  Packet::PacketType::GOSSIP_EVENT,
       Packet::PacketType::GOSSIP_DIGEST, Packet::PacketType::GOSSIP_PULL,
       Packet::PacketType::UPDATE_USER,   Packet::PacketType::ROOM_CREATE,
-      Packet::PacketType::ROOM_LIST,     Packet::PacketType::LOAD_MESSAGE_HISTORY};
+      Packet::PacketType::ROOM_LIST,     Packet::PacketType::LOAD_MESSAGE_HISTORY,
+      Packet::PacketType::ROOM_INVITE};
 
   for (const auto type : types) {
     REQUIRE(Packet::stringToPacketType(Packet::packetTypeToString(type)) == type);

@@ -516,11 +516,28 @@ bool GossipManager::applyEvent(const Packet &event) {
       return false;
     }
 
-    if (!RoomManager::getInstance().getRoom(roomName)) {
+    std::string creatorEmail;
+    if (!username.empty()) {
+      if (auto creator = db.getUser(username)) {
+        creatorEmail = creator->getEmail();
+      } else {
+        Logger::logWarning("GossipManager", "ROOM_CREATED unknown creator username: " + username);
+      }
+    }
+
+    auto existing = RoomManager::getInstance().getRoom(roomName);
+    if (!existing) {
       const Room draft(0, roomName, Room::stringToRoomType(content), Room::stringToPrivacy(ts));
-      if (!RoomManager::getInstance().createRoom(draft)) {
+      if (!RoomManager::getInstance().createRoom(draft, creatorEmail)) {
         Logger::logWarning("GossipManager", "ROOM_CREATED apply failed for " + roomName);
         return false;
+      }
+    } else if (!creatorEmail.empty()) {
+      try {
+        db.addToAllowList(existing->getId(), creatorEmail, true);
+      } catch (const std::exception &e) {
+        Logger::logWarning("GossipManager", std::string("ROOM_CREATED ACL seed failed for ") +
+                                                roomName + ": " + e.what());
       }
     }
 
@@ -528,6 +545,39 @@ bool GossipManager::applyEvent(const Packet &event) {
                 Room::serializeList(RoomManager::getInstance().listRooms()), 0);
     RoomManager::getInstance().broadcastAll(push, connections);
     Logger::logInfo("GossipManager", "Applied ROOM_CREATED for " + roomName);
+    return true;
+  }
+
+  // allow-list add (invite / creator seed replication)
+  if (type == "ROOM_ACL_ADD") {
+    const std::string roomName = event.room;
+    if (username.empty() || roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_ACL_ADD event");
+      return false;
+    }
+
+    auto room = RoomManager::getInstance().getRoom(roomName);
+    if (!room) {
+      Logger::logWarning("GossipManager", "ROOM_ACL_ADD unknown room: " + roomName);
+      return false;
+    }
+
+    auto user = db.getUser(username);
+    if (!user) {
+      Logger::logWarning("GossipManager", "ROOM_ACL_ADD unknown user: " + username);
+      return false;
+    }
+
+    const bool asCreator = (content == "1");
+    try {
+      db.addToAllowList(room->getId(), user->getEmail(), asCreator);
+    } catch (const std::exception &e) {
+      Logger::logWarning("GossipManager", std::string("ROOM_ACL_ADD apply failed for ") + username +
+                                              " -> " + roomName + ": " + e.what());
+      return false;
+    }
+
+    Logger::logInfo("GossipManager", "Applied ROOM_ACL_ADD for " + username + " -> " + roomName);
     return true;
   }
 

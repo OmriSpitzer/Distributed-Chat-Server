@@ -196,28 +196,52 @@ TEST_CASE("PacketBuilder buildUpdateUser rejects empty username or email",
 
 // 14. buildCreateRoom maps fields
 TEST_CASE("PacketBuilder buildCreateRoom maps fields", "[packet_builder][create]") {
-  SECTION("defaults empty type/privacy") {
-    const Packet packet = PacketBuilder::buildCreateRoom("alice", "Labs");
+  SECTION("public privacy") {
+    const Packet packet = PacketBuilder::buildCreateRoom("alice", "Labs", "PUBLIC");
     REQUIRE(packet.type == Packet::PacketType::ROOM_CREATE);
     REQUIRE(packet.sender == "alice");
     REQUIRE(packet.room == "Labs");
-    REQUIRE(packet.message.empty());
+    REQUIRE(packet.message == "PUBLIC");
   }
 
-  SECTION("explicit type and privacy") {
-    const Packet packet = PacketBuilder::buildCreateRoom("alice", "Secure", "Security|PRIVATE");
+  SECTION("private privacy") {
+    const Packet packet = PacketBuilder::buildCreateRoom("alice", "Secure", "PRIVATE");
     REQUIRE(packet.type == Packet::PacketType::ROOM_CREATE);
-    REQUIRE(packet.message == "Security|PRIVATE");
+    REQUIRE(packet.message == "PRIVATE");
   }
 }
 
 TEST_CASE("PacketBuilder buildCreateRoom rejects empty arguments",
           "[packet_builder][create][edge]") {
   SECTION("empty username") {
-    REQUIRE_THROWS_AS(PacketBuilder::buildCreateRoom("", "Labs"), std::invalid_argument);
+    REQUIRE_THROWS_AS(PacketBuilder::buildCreateRoom("", "Labs", "PUBLIC"), std::invalid_argument);
   }
   SECTION("empty room") {
-    REQUIRE_THROWS_AS(PacketBuilder::buildCreateRoom("alice", ""), std::invalid_argument);
+    REQUIRE_THROWS_AS(PacketBuilder::buildCreateRoom("alice", "", "PUBLIC"), std::invalid_argument);
+  }
+}
+
+TEST_CASE("PacketBuilder buildInviteToRoom maps fields", "[packet_builder][invite]") {
+  const Packet packet = PacketBuilder::buildInviteToRoom("alice", "Secure", "bob");
+  REQUIRE(packet.type == Packet::PacketType::ROOM_INVITE);
+  REQUIRE(packet.sender == "alice");
+  REQUIRE(packet.room == "Secure");
+  REQUIRE(packet.message == "bob");
+}
+
+TEST_CASE("PacketBuilder buildInviteToRoom rejects empty arguments",
+          "[packet_builder][invite][edge]") {
+  SECTION("empty username") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildInviteToRoom("", "Secure", "bob"),
+                      std::invalid_argument);
+  }
+  SECTION("empty room") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildInviteToRoom("alice", "", "bob"),
+                      std::invalid_argument);
+  }
+  SECTION("empty invitee") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildInviteToRoom("alice", "Secure", ""),
+                      std::invalid_argument);
   }
 }
 

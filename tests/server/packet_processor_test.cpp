@@ -458,6 +458,18 @@ TEST_CASE("PacketProcessor ROOM_CREATE", "[packet_processor][create]") {
   REQUIRE(RoomManager::getInstance().getRoom(roomName).has_value());
   REQUIRE_NOTHROW(Room::deserialize(res.message));
 
+  SECTION("private privacy") {
+    const std::string privateName = unique("private");
+    Packet privateReq(user.getUsername(), "server", Packet::PacketType::ROOM_CREATE, privateName,
+                      "PRIVATE");
+    const Packet privateRes = process(privateReq, fx.session, fx.connections);
+    REQUIRE(privateRes.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    const auto created = RoomManager::getInstance().getRoom(privateName);
+    REQUIRE(created.has_value());
+    REQUIRE(created->getPrivacy() == Room::Privacy::PRIVATE);
+    REQUIRE(created->getType() == Room::RoomType::OTHER);
+  }
+
   SECTION("duplicate name fails") {
     Packet again(user.getUsername(), "server", Packet::PacketType::ROOM_CREATE, roomName, "");
     const Packet dup = process(again, fx.session, fx.connections);
@@ -476,6 +488,31 @@ TEST_CASE("PacketProcessor ROOM_CREATE", "[packet_processor][create]") {
     Packet list(user.getUsername(), "server", Packet::PacketType::ROOM_LIST, "", "");
     const Packet denied = process(list, fx.session, fx.connections);
     REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+  }
+
+  SECTION("private room: stranger denied until invited") {
+    const std::string privateName = unique("vault");
+    Packet privateReq(user.getUsername(), "server", Packet::PacketType::ROOM_CREATE, privateName,
+                      "PRIVATE");
+    REQUIRE(process(privateReq, fx.session, fx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::SUCCESS));
+
+    Fixture other;
+    const User guest = other.createUser("secret");
+    other.authenticate(guest);
+
+    Packet join(guest.getUsername(), "server", Packet::PacketType::ROOM_JOIN, privateName, "");
+    const Packet denied = process(join, other.session, other.connections);
+    REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+    REQUIRE(denied.message.find("not allowed") != std::string::npos);
+
+    Packet invite(user.getUsername(), "server", Packet::PacketType::ROOM_INVITE, privateName,
+                  guest.getUsername());
+    REQUIRE(process(invite, fx.session, fx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::SUCCESS));
+
+    const Packet joined = process(join, other.session, other.connections);
+    REQUIRE(joined.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
   }
 }
 

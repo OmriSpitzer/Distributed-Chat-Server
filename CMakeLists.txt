@@ -117,6 +117,11 @@ set(DB_SCHEMAS
   "get_room:src/database/queries/get_room.sql"
   "list_rooms:src/database/queries/list_rooms.sql"
   "delete_room:src/database/queries/delete_room.sql"
+  "get_allow_list:src/database/queries/get_allow_list.sql"
+  "add_user_allow_list:src/database/queries/add_user_allow_list.sql"
+  "remove_user_allow_list:src/database/queries/remove_user_allow_list.sql"
+  "is_allowed:src/database/queries/is_allowed.sql"
+  "is_allow_list_creator:src/database/queries/is_allow_list_creator.sql"
 )
 
 set(_sql_schemas_h "#pragma once\n\n// Generated - do not edit. Source: DB_SCHEMAS in CMakeLists.txt\nnamespace db::sql {\n\n")

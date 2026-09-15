@@ -10,6 +10,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -51,7 +52,7 @@ public:
                     SOCKET skipSocket = INVALID_SOCKET);
 
   // create a new room
-  bool createRoom(const Room &room);
+  bool createRoom(const Room &room, std::string_view creatorEmail = "");
 
   // delete an existing room
   bool deleteRoom(const std::string &roomName, ConnectionManager &connections);

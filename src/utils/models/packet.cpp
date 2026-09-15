@@ -28,6 +28,7 @@ static const std::unordered_map<Packet::PacketType, std::string> packet_type_to_
     {Packet::PacketType::ROOM_CREATE, "ROOM_CREATE"},
     {Packet::PacketType::ROOM_LIST, "ROOM_LIST"},
     {Packet::PacketType::LOAD_MESSAGE_HISTORY, "LOAD_MESSAGE_HISTORY"},
+    {Packet::PacketType::ROOM_INVITE, "ROOM_INVITE"},
 };
 
 // string to packet type map
@@ -48,6 +49,7 @@ static const std::unordered_map<std::string, Packet::PacketType> string_to_packe
     {"ROOM_CREATE", Packet::PacketType::ROOM_CREATE},
     {"ROOM_LIST", Packet::PacketType::ROOM_LIST},
     {"LOAD_MESSAGE_HISTORY", Packet::PacketType::LOAD_MESSAGE_HISTORY},
+    {"ROOM_INVITE", Packet::PacketType::ROOM_INVITE},
 };
 
 // constructor

@@ -1,0 +1,1 @@
+DELETE FROM allow_list WHERE room_id = ? AND email = ?;

@@ -167,7 +167,7 @@ bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionMa
 }
 
 // create a new room
-bool RoomManager::createRoom(const Room &room) {
+bool RoomManager::createRoom(const Room &room, std::string_view creatorEmail) {
   std::lock_guard<std::mutex> lock(mutex);
 
   // check if the room already exists
@@ -176,8 +176,8 @@ bool RoomManager::createRoom(const Room &room) {
   }
 
   try {
-    Room created = DatabaseManager::getInstance().createRoom(room.getName(), room.getType(),
-                                                             room.getPrivacy());
+    Room created = DatabaseManager::getInstance().createRoom(
+        room.getName(), room.getType(), room.getPrivacy(), creatorEmail);
     knownRooms.emplace(created.getName(), created);
     Logger::logInfo("RoomManager", "Room created: " + created.getName() +
                                        " id=" + std::to_string(created.getId()));

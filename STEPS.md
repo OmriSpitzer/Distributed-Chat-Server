@@ -50,7 +50,6 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 - [x] **Validate room exists** before sending `ROOM_JOIN` (or surface clear `404` from server).
 - [x] **Message history** — server has `loadHistory`; client requests via `LOAD_MESSAGE_HISTORY` (dashboard option 6).
 - [ ] **Pushed messages in UI** — reader logs room pushes; improve console presentation (“change visuals” TODO).
-- [ ] Refresh outdated `CLIENT.md` (still claims TCP stubs).
 
 ---
 

@@ -30,6 +30,9 @@ public:
   // showing the create room screen
   static std::optional<Packet> showCreateRoom(const User &user);
 
+  // showing the invite-to-room screen
+  static std::optional<Packet> showInviteToRoom(const ClientState &state);
+
   // showing the create message screen
   static std::optional<Packet> showCreateMessage(const User &user);
 

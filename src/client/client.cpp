@@ -329,8 +329,32 @@ void Client::showDashboard() {
       break;
     }
 
-    // logout option
+    // invite to room option
     case 7: {
+      std::optional<Packet> invitePacket = ConsoleUI::showInviteToRoom(state);
+      if (!invitePacket) {
+        break;
+      }
+
+      if (!network.sendPacket(*invitePacket)) {
+        break;
+      }
+
+      auto response = waitFor(Packet::PacketType::ROOM_INVITE);
+      if (!response) {
+        break;
+      }
+
+      if (response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+        Logger::logInfo("Client " + id, response->message);
+      } else {
+        Logger::logError("Client " + id, "Invite failed: " + response->message);
+      }
+      break;
+    }
+
+    // logout option
+    case 8: {
       Packet logout = PacketBuilder::buildLogout(*state.user);
       if (!network.sendPacket(logout)) {
         break;

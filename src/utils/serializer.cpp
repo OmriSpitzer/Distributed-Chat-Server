@@ -112,6 +112,7 @@ bool isValidPacketType(Packet::PacketType type) {
   case Packet::PacketType::ROOM_CREATE:
   case Packet::PacketType::ROOM_LIST:
   case Packet::PacketType::LOAD_MESSAGE_HISTORY:
+  case Packet::PacketType::ROOM_INVITE:
     return true;
   }
   return false;

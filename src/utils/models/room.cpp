@@ -61,7 +61,8 @@ static const std::unordered_map<std::string, Room::Privacy> stringToPrivacyMap{
 
 // constructor
 Room::Room(int id, std::string_view name, Room::RoomType type, Room::Privacy privacy)
-    : id(id), name(name), type(type), privacy(privacy), created_at(std::time(nullptr)) {}
+    : id(id), name(name), type(type), privacy(privacy), created_at(std::time(nullptr)),
+      creator_email() {}
 
 // stream output operator
 std::ostream &operator<<(std::ostream &out, const Room &room) {

@@ -66,9 +66,10 @@ public:
   static std::vector<Room> deserializeList(const std::string &serialized);
 
 private:
-  int id;                 // room id
-  Room::RoomType type;    // room type
-  Room::Privacy privacy;  // privacy type
-  std::string name;       // room name
-  std::time_t created_at; // creation time
+  int id;                    // room id
+  Room::RoomType type;       // room type
+  Room::Privacy privacy;     // privacy type
+  std::string name;          // room name
+  std::time_t created_at;    // creation time
+  std::string creator_email; // creator of the room
 };

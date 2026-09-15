@@ -323,6 +323,7 @@ TEST_CASE("socket_io writePacket / readPacket round-trip edges", "[socket_io][ro
         Packet::PacketType::GOSSIP_DIGEST, Packet::PacketType::GOSSIP_PULL,
         Packet::PacketType::UPDATE_USER,   Packet::PacketType::ROOM_CREATE,
         Packet::PacketType::ROOM_LIST,     Packet::PacketType::LOAD_MESSAGE_HISTORY,
+        Packet::PacketType::ROOM_INVITE,
     };
     for (Packet::PacketType type : types) {
       ConnectedPair typed;

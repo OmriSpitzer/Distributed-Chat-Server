@@ -75,6 +75,12 @@ void rumorRoomCreated(ConnectionManager &connections, const std::string &usernam
              Room::privacyToString(room.getPrivacy()), room.getName());
 }
 
+// replicate an allow-list add (invitee username; content "1" = creator)
+void rumorAclAdd(ConnectionManager &connections, const std::string &username,
+                 const std::string &roomName, bool creator) {
+  rumorEvent(connections, "ROOM_ACL_ADD", username, creator ? "1" : "0", "", roomName);
+}
+
 // encode the current room directory for clients
 std::string encodeRoomDirectory() {
   return Room::serializeList(RoomManager::getInstance().listRooms());
@@ -84,26 +90,6 @@ std::string encodeRoomDirectory() {
 void pushRoomDirectory(ConnectionManager &connections, SOCKET skipSocket = INVALID_SOCKET) {
   Packet push("server", "*", Packet::PacketType::ROOM_LIST, "", encodeRoomDirectory(), 0);
   RoomManager::getInstance().broadcastAll(push, connections, skipSocket);
-}
-
-// parse ROOM_CREATE message as "type|privacy" (both optional)
-bool parseCreateRoomMessage(std::string_view message, Room::RoomType &type,
-                            Room::Privacy &privacy) {
-  type = Room::RoomType::OTHER;
-  privacy = Room::Privacy::PUBLIC;
-  if (message.empty()) {
-    return true;
-  }
-
-  const std::size_t pipe = message.find('|');
-  if (pipe == std::string_view::npos) {
-    type = Room::stringToRoomType(message);
-    return true;
-  }
-
-  type = Room::stringToRoomType(message.substr(0, pipe));
-  privacy = Room::stringToPrivacy(message.substr(pipe + 1));
-  return true;
 }
 
 // encode history newest-first DB rows as oldest-first console lines
@@ -284,9 +270,18 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
     try {
       const std::string roomName = packet.room.empty() ? RoomManager::LOBBY.getName() : packet.room;
-      if (!RoomManager::getInstance().getRoom(roomName)) {
+      auto room = RoomManager::getInstance().getRoom(roomName);
+      if (!room) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
         response.message = "unknown room: " + roomName;
+        break;
+      }
+
+      DatabaseManager &db = DatabaseManager::getInstance();
+      const std::string email = session.getUser().getEmail();
+      if (room->getPrivacy() == Room::Privacy::PRIVATE && !db.isAllowed(room->getId(), email)) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "not allowed to join " + roomName;
         break;
       }
 
@@ -295,6 +290,10 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "failed to join " + roomName;
         break;
+      }
+
+      if (room->getPrivacy() == Room::Privacy::PUBLIC) {
+        db.addToAllowList(room->getId(), email, false);
       }
 
       rumorRoomJoin(connections, session.getUser().getUsername(), roomName, prevRoom);
@@ -354,12 +353,15 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
-      Room::RoomType type = Room::RoomType::OTHER;
-      Room::Privacy privacy = Room::Privacy::PUBLIC;
-      parseCreateRoomMessage(packet.message, type, privacy);
+      auto privacy = Room::Privacy::PUBLIC;
+      const auto type = Room::RoomType::OTHER;
+
+      if (!packet.message.empty()) {
+        privacy = Room::stringToPrivacy(packet.message);
+      }
 
       Room draft(0, roomName, type, privacy);
-      if (!RoomManager::getInstance().createRoom(draft)) {
+      if (!RoomManager::getInstance().createRoom(draft, session.getUser().getEmail())) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "room already exists or create failed";
         break;
@@ -385,6 +387,65 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
+    // invite a user to a private room (creator only)
+  case Packet::PacketType::ROOM_INVITE: {
+    if (!session.isAuthenticated()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "not authenticated";
+      break;
+    }
+
+    try {
+      const std::string roomName = packet.room.empty() ? session.getRoom().getName() : packet.room;
+      const std::string inviteeUsername = packet.message;
+      if (roomName.empty() || inviteeUsername.empty()) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "missing room or invitee username";
+        break;
+      }
+
+      auto room = RoomManager::getInstance().getRoom(roomName);
+      if (!room) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
+        response.message = "unknown room: " + roomName;
+        break;
+      }
+      if (room->getPrivacy() != Room::Privacy::PRIVATE) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "invite only allowed for private rooms";
+        break;
+      }
+
+      DatabaseManager &db = DatabaseManager::getInstance();
+      if (!db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "only the room creator can invite";
+        break;
+      }
+
+      auto invitee = db.getUser(inviteeUsername);
+      if (!invitee) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
+        response.message = "unknown user: " + inviteeUsername;
+        break;
+      }
+
+      db.addToAllowList(room->getId(), invitee->getEmail(), false);
+      rumorAclAdd(connections, inviteeUsername, roomName, false);
+
+      response.room = roomName;
+      response.message = "invited " + inviteeUsername;
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+    } catch (const DatabaseManager::ConstraintError &e) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = e.what();
+    } catch (...) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = "invite failed";
+    }
+    break;
+  }
+
     // room list is server-push only on the client port
   case Packet::PacketType::ROOM_LIST: {
     response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
@@ -401,8 +462,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
 
     try {
-      const std::string roomName =
-          packet.room.empty() ? session.getRoom().getName() : packet.room;
+      const std::string roomName = packet.room.empty() ? session.getRoom().getName() : packet.room;
       auto room = RoomManager::getInstance().getRoom(roomName);
       if (!room) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
