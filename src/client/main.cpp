@@ -32,13 +32,18 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // show the dashboard until disconnect or Ctrl+C
-  while (client.isAlive() && !g_stop.load()) {
-    client.showDashboard();
+  if (config::TEST_MODE) {
+    // console mode (original)
+    while (client.isAlive() && !g_stop.load()) {
+      client.showDashboard();
+    }
+    client.stop();
+
+    return 0;
+  } else {
+    // gui mode (Page stub)
+    const int rc = client.showDashboard_2(argc, argv);
+    client.stop();
+    return rc;
   }
-
-  // stop the client
-  client.stop();
-
-  return 0;
 }

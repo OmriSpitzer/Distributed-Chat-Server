@@ -172,6 +172,23 @@ target_sources(chat_server PRIVATE
 )
 target_link_libraries(chat_server PRIVATE Qt6::Widgets)
 
+# Qt 6 (client GUI via chat_client)
+set_target_properties(chat_client PROPERTIES AUTOMOC ON)
+target_sources(chat_client PRIVATE
+  src/client/gui/components/button.cpp
+  src/client/gui/components/pop_up_window.cpp
+  src/client/gui/components/header.cpp
+  src/client/gui/components/page.cpp
+  src/client/gui/pages/dashboard_page.cpp
+  src/client/gui/pages/main_page.cpp
+  include/client/gui/components/button.h
+  include/client/gui/components/pop_up_window.h
+  include/client/gui/components/header.h
+  include/client/gui/components/page.h
+  include/client/gui/pages/dashboard_page.h
+)
+target_link_libraries(chat_client PRIVATE Qt6::Widgets)
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ Libraries ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -241,7 +258,7 @@ add_executable(console_ui_test tests/client/console_ui_test.cpp src/client/conso
                src/client/packet_builder.cpp)
 target_link_libraries(console_ui_test PRIVATE utils Catch2::Catch2WithMain)
 
-add_executable(client_test tests/client/client_test.cpp)
+add_executable(client_test tests/client/client_test.cpp tests/client/main_page_stub.cpp)
 target_link_libraries(client_test PRIVATE client_lib Catch2::Catch2WithMain Threads::Threads)
 
 # ------------ Server connections ------------

@@ -38,15 +38,7 @@ int main(int argc, char *argv[]) {
   // start the server and show the dashboard
   server.start();
 
-  if (true) {
-    // gui mode
-    // run the server GUI
-    const int rc = MainPage::run(argc, argv, server);
-
-    server.stop();
-
-    return rc;
-  } else {
+  if (config::TEST_MODE) {
     // console mode
     server.dashboard();
 
@@ -61,5 +53,14 @@ int main(int argc, char *argv[]) {
     server.stop();
 
     return 0;
+
+  } else {
+    // gui mode
+    // run the server GUI
+    const int rc = MainPage::run(argc, argv, server);
+
+    server.stop();
+
+    return rc;
   }
 }

@@ -24,8 +24,11 @@ public:
   // check if the client is alive
   bool isAlive() const;
 
-  // showing the dashboard
+  // showing the dashboard (console)
   void showDashboard();
+
+  // showing the dashboard (Qt stub page)
+  int showDashboard_2(int argc, char *argv[]);
 
 private:
   std::string id;        // client id

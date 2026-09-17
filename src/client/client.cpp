@@ -7,6 +7,7 @@
 
 #include "client/client.h"
 #include "client/console_ui.h"
+#include "client/gui/pages/main_page.h"
 #include "client/packet_builder.h"
 #include "client/packet_handler.h"
 #include "utils/RESPONSE_CODES.h"
@@ -376,4 +377,9 @@ void Client::showDashboard() {
       break;
     }
   }
+}
+
+// showing the Qt dashboard (stub Page — no ConsoleUI loop)
+int Client::showDashboard_2(int argc, char *argv[]) {
+  return MainPage::run(argc, argv, *this);
 }
