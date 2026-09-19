@@ -30,6 +30,9 @@ public:
   // destructor
   ~Server();
 
+  // get connections
+  ConnectionManager &connections();
+
 private:
   ThreadPool threadPool{config::THREAD_COUNT};                    // worker threads
   ConnectionManager connectionManager{};                          // client connections

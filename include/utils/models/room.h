@@ -8,6 +8,7 @@
 #include <ctime>
 #include <string>
 #include <string_view>
+#include <vector>
 
 class Room {
 public:
@@ -32,7 +33,7 @@ public:
   };
 
   // constructor
-  Room(std::string_view name, Room::RoomType type = RoomType::OTHER,
+  Room(int id, std::string_view name, Room::RoomType type = RoomType::OTHER,
        Room::Privacy privacy = Privacy::PUBLIC);
 
   // stream output operator
@@ -45,15 +46,30 @@ public:
   static Room::Privacy stringToPrivacy(std::string_view privacy);
 
   // getters
-  std::string getId() const;
+  int getId() const;
   std::string getName() const;
   Room::RoomType getType() const;
   Room::Privacy getPrivacy() const;
 
+  // equals operator
+  bool operator==(const Room &other) const;
+  bool operator!=(const Room &other) const;
+
+  // serialize one room: room(id|name|type|privacy)
+  std::string serialize() const;
+
+  // deserialize one room
+  static Room deserialize(const std::string &serialized);
+
+  // serialize / deserialize a directory (semicolon-separated rooms)
+  static std::string serializeList(const std::vector<Room> &rooms);
+  static std::vector<Room> deserializeList(const std::string &serialized);
+
 private:
-  Room::RoomType type;    // room type
-  Room::Privacy privacy;  // privacy type
-  std::string id;         // room id
-  std::string name;       // room name
-  std::time_t created_at; // creation time
+  int id;                    // room id
+  Room::RoomType type;       // room type
+  Room::Privacy privacy;     // privacy type
+  std::string name;          // room name
+  std::time_t created_at;    // creation time
+  std::string creator_email; // creator of the room
 };

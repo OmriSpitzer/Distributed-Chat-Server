@@ -96,6 +96,26 @@ TEST_CASE("Serializer round-trip all packet types", "[serializer][roundtrip]") {
   SECTION("GOSSIP_PULL") {
     requireRoundTrip(makePacket(Packet::PacketType::GOSSIP_PULL, "node-a", "node-b", "", "pull"));
   }
+  SECTION("UPDATE_USER") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::UPDATE_USER, "alice", "server", "a@b.c", "secret"));
+  }
+  SECTION("ROOM_CREATE") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::ROOM_CREATE, "alice", "server", "Labs", "PUBLIC"));
+  }
+  SECTION("ROOM_LIST") {
+    requireRoundTrip(makePacket(Packet::PacketType::ROOM_LIST, "server", "*", "",
+                                "room(1|Lobby|Lobby|PUBLIC)", 1, 0));
+  }
+  SECTION("LOAD_MESSAGE_HISTORY") {
+    requireRoundTrip(makePacket(Packet::PacketType::LOAD_MESSAGE_HISTORY, "alice", "server",
+                                "Lobby", "", 1, 0));
+  }
+  SECTION("ROOM_INVITE") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::ROOM_INVITE, "alice", "server", "Secure", "bob"));
+  }
 }
 
 // 2. empty and whitespace fields
@@ -222,11 +242,11 @@ TEST_CASE("Serializer serialize rejects invalid type", "[serializer][serialize][
     REQUIRE(Serializer::serialize(packet).empty());
   }
 
-  // first unused enum value after GOSSIP_PULL
-  SECTION("first unused enum value after GOSSIP_PULL") {
+  // first unused enum value after ROOM_INVITE
+  SECTION("first unused enum value after ROOM_INVITE") {
     Packet packet = makePacket(Packet::PacketType::MESSAGE);
-    packet.type =
-        static_cast<Packet::PacketType>(static_cast<int>(Packet::PacketType::GOSSIP_PULL) + 1);
+    packet.type = static_cast<Packet::PacketType>(
+        static_cast<int>(Packet::PacketType::ROOM_INVITE) + 1);
     REQUIRE(Serializer::serialize(packet).empty());
   }
 }

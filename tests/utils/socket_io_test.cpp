@@ -1,10 +1,10 @@
 /**
  * Socket I/O unit tests
  *
- * @brief Includes: listenTo, sendExact / recvExact edges, writePacket frames
+ * @brief Includes: listenTo, connectTo, sendExact / recvExact edges, writePacket frames
  * matching Serializer, readPacket from Serializer frames, invalid / truncated /
  * oversize frames, peer close, back-to-back packets.
- * @date 12-09-2026
+ * @date 13-09-2026
  */
 
 #include "utils/models/packet.h"
@@ -23,14 +23,15 @@
 
 /**
  * 1. listenTo binds and accepts
- * 2. sendExact / recvExact edges
- * 3. writePacket frames match Serializer::serialize
- * 4. readPacket restores Serializer frames
- * 5. writePacket / readPacket round-trip edges
- * 6. writePacket rejects packets Serializer cannot serialize
- * 7. readPacket rejects empty / truncated / oversize frames
- * 8. peer close and invalid sockets
- * 9. back-to-back packets
+ * 2. connectTo reaches a listener
+ * 3. sendExact / recvExact edges
+ * 4. writePacket frames match Serializer::serialize
+ * 5. readPacket restores Serializer frames
+ * 6. writePacket / readPacket round-trip edges
+ * 7. writePacket rejects packets Serializer cannot serialize
+ * 8. readPacket rejects empty / truncated / oversize frames
+ * 9. peer close and invalid sockets
+ * 10. back-to-back packets
  */
 
 namespace {
@@ -65,11 +66,11 @@ struct ConnectedPair {
 
   ~ConnectedPair() {
     if (client != INVALID_SOCKET)
-      closesocket(client);
+      socket_io::close(client);
     if (server != INVALID_SOCKET)
-      closesocket(server);
+      socket_io::close(server);
     if (listener != INVALID_SOCKET)
-      closesocket(listener);
+      socket_io::close(listener);
   }
 
   bool open() {
@@ -82,18 +83,11 @@ struct ConnectedPair {
     if (getsockname(listener, reinterpret_cast<sockaddr *>(&bound), &boundLen) != 0)
       return false;
 
-    client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    client = socket_io::connectTo("127.0.0.1", ntohs(bound.sin_port));
     if (client == INVALID_SOCKET)
       return false;
 
-    sockaddr_in dest{};
-    dest.sin_family = AF_INET;
-    dest.sin_port = bound.sin_port;
-    dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    if (connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0)
-      return false;
-
-    server = accept(listener, nullptr, nullptr);
+    server = socket_io::acceptFrom(listener);
     return server != INVALID_SOCKET;
   }
 };
@@ -136,7 +130,7 @@ TEST_CASE("socket_io listenTo binds and accepts", "[socket_io][listen][edge]") {
   SECTION("port 0 succeeds") {
     SOCKET listener = socket_io::listenTo(0);
     REQUIRE(listener != INVALID_SOCKET);
-    closesocket(listener);
+    socket_io::close(listener);
   }
 
   SECTION("accepted connection is a distinct socket") {
@@ -147,7 +141,48 @@ TEST_CASE("socket_io listenTo binds and accepts", "[socket_io][listen][edge]") {
   }
 }
 
-// 2. sendExact / recvExact edges
+// 2. connectTo reaches a listener
+TEST_CASE("socket_io connectTo reaches a listener", "[socket_io][connect][edge]") {
+  REQUIRE(winsock().ok);
+
+  SECTION("loopback connect succeeds") {
+    SOCKET listener = socket_io::listenTo(0);
+    REQUIRE(listener != INVALID_SOCKET);
+
+    sockaddr_in bound{};
+    int boundLen = sizeof(bound);
+    REQUIRE(getsockname(listener, reinterpret_cast<sockaddr *>(&bound), &boundLen) == 0);
+
+    SOCKET client = socket_io::connectTo("127.0.0.1", ntohs(bound.sin_port));
+    REQUIRE(client != INVALID_SOCKET);
+
+    SOCKET server = socket_io::acceptFrom(listener);
+    REQUIRE(server != INVALID_SOCKET);
+
+    socket_io::close(client);
+    socket_io::close(server);
+    socket_io::close(listener);
+  }
+
+  SECTION("invalid host fails") {
+    REQUIRE(socket_io::connectTo("not-an-ip", 1) == INVALID_SOCKET);
+  }
+
+  SECTION("closed listener port fails") {
+    SOCKET listener = socket_io::listenTo(0);
+    REQUIRE(listener != INVALID_SOCKET);
+
+    sockaddr_in bound{};
+    int boundLen = sizeof(bound);
+    REQUIRE(getsockname(listener, reinterpret_cast<sockaddr *>(&bound), &boundLen) == 0);
+    const std::uint16_t port = ntohs(bound.sin_port);
+    socket_io::close(listener);
+
+    REQUIRE(socket_io::connectTo("127.0.0.1", port) == INVALID_SOCKET);
+  }
+}
+
+// 3. sendExact / recvExact edges
 TEST_CASE("socket_io sendExact / recvExact edges", "[socket_io][exact][edge]") {
   REQUIRE(winsock().ok);
   ConnectedPair pair;
@@ -191,7 +226,7 @@ TEST_CASE("socket_io sendExact / recvExact edges", "[socket_io][exact][edge]") {
 
   SECTION("peer closed before recvExact finishes") {
     REQUIRE(socket_io::sendExact(pair.client, "xy", 2));
-    closesocket(pair.client);
+    socket_io::close(pair.client);
     pair.client = INVALID_SOCKET;
     char buf[4]{};
     REQUIRE_FALSE(socket_io::recvExact(pair.server, buf, 4));
@@ -286,6 +321,9 @@ TEST_CASE("socket_io writePacket / readPacket round-trip edges", "[socket_io][ro
         Packet::PacketType::HEARTBEAT,     Packet::PacketType::REGISTER,
         Packet::PacketType::GOSSIP_HELLO,  Packet::PacketType::GOSSIP_EVENT,
         Packet::PacketType::GOSSIP_DIGEST, Packet::PacketType::GOSSIP_PULL,
+        Packet::PacketType::UPDATE_USER,   Packet::PacketType::ROOM_CREATE,
+        Packet::PacketType::ROOM_LIST,     Packet::PacketType::LOAD_MESSAGE_HISTORY,
+        Packet::PacketType::ROOM_INVITE,
     };
     for (Packet::PacketType type : types) {
       ConnectedPair typed;
@@ -346,7 +384,7 @@ TEST_CASE("socket_io readPacket rejects bad frames", "[socket_io][read][edge]") 
 
   SECTION("truncated length prefix") {
     REQUIRE(socket_io::sendExact(pair.client, "\x00\x00", 2));
-    closesocket(pair.client);
+    socket_io::close(pair.client);
     pair.client = INVALID_SOCKET;
     REQUIRE_FALSE(socket_io::readPacket(pair.server).has_value());
   }
@@ -356,7 +394,7 @@ TEST_CASE("socket_io readPacket rejects bad frames", "[socket_io][read][edge]") 
     const std::string framed = Serializer::serialize(packet);
     REQUIRE(framed.size() > 8);
     REQUIRE(socket_io::sendExact(pair.client, framed.data(), 8));
-    closesocket(pair.client);
+    socket_io::close(pair.client);
     pair.client = INVALID_SOCKET;
     REQUIRE_FALSE(socket_io::readPacket(pair.server).has_value());
   }
@@ -388,7 +426,7 @@ TEST_CASE("socket_io peer close and invalid sockets", "[socket_io][close][edge]"
   SECTION("readPacket when peer closed with no data") {
     ConnectedPair pair;
     REQUIRE(pair.open());
-    closesocket(pair.client);
+    socket_io::close(pair.client);
     pair.client = INVALID_SOCKET;
     REQUIRE_FALSE(socket_io::readPacket(pair.server).has_value());
   }

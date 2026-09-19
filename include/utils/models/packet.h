@@ -24,7 +24,12 @@ public:
     GOSSIP_HELLO,
     GOSSIP_EVENT,
     GOSSIP_DIGEST,
-    GOSSIP_PULL
+    GOSSIP_PULL,
+    UPDATE_USER,
+    ROOM_CREATE,
+    ROOM_LIST,
+    LOAD_MESSAGE_HISTORY,
+    ROOM_INVITE,
   };
 
   // constructors

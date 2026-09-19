@@ -1,19 +1,18 @@
 /**
  * ConsoleUI header file class
  *
- * @date 07-09-2026
+ * @date 13-09-2026
  */
-#pragma once
 
+#pragma once
 #include "client/client_state.h"
 #include "utils/models/packet.h"
 #include "utils/models/user.h"
 #include <optional>
-#include <string_view>
 
 class ConsoleUI {
 public:
-  // showing the welcome screen
+  // showing the home screen
   static int showHomeScreen();
 
   // showing user dashboard
@@ -26,8 +25,17 @@ public:
   static std::optional<Packet> showRegister();
 
   // showing the join room screen
-  static std::optional<Packet> showJoinRoom(const User &user);
+  static std::optional<Packet> showJoinRoom(const ClientState &state);
+
+  // showing the create room screen
+  static std::optional<Packet> showCreateRoom(const User &user);
+
+  // showing the invite-to-room screen
+  static std::optional<Packet> showInviteToRoom(const ClientState &state);
 
   // showing the create message screen
   static std::optional<Packet> showCreateMessage(const User &user);
+
+  // showing the update profile screen
+  static std::optional<Packet> showUpdateProfile(const User &user);
 };

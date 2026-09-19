@@ -16,14 +16,17 @@
 #include <exception>
 #include <vector>
 
-// default lobby room
-const Room RoomManager::LOBBY = Room("Lobby", Room::RoomType::LOBBY);
+// default rooms
+const Room RoomManager::LOBBY(1, "Lobby", Room::RoomType::LOBBY);
+const Room RoomManager::GENERAL(2, "General");
 
 // constructor
 RoomManager::RoomManager() {
-  knownRooms.emplace(LOBBY.getName(), LOBBY);
-  knownRooms.emplace("General", Room("General"));
-  knownRooms.emplace("Random", Room("Random"));
+  DatabaseManager &db = DatabaseManager::getInstance();
+  const std::vector<Room> defaultRooms = db.listRooms();
+  for (const Room &room : defaultRooms) {
+    knownRooms.emplace(room.getName(), room);
+  }
 }
 
 // room getter
@@ -39,7 +42,7 @@ std::optional<Room> RoomManager::getRoom(const std::string &name) const {
 }
 
 // remove a socket from a room
-void RoomManager::removeSocketLocked(int socket, const std::string &roomName) {
+void RoomManager::removeSocketLocked(SOCKET socket, const std::string &roomName) {
   auto it = members.find(roomName);
   if (it == members.end()) {
     return;
@@ -53,10 +56,12 @@ void RoomManager::removeSocketLocked(int socket, const std::string &roomName) {
 // join a room
 bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) {
   const std::string name = roomName.empty() ? LOBBY.getName() : roomName;
+  const int previousRoomId = session.getRoom().getId();
   const std::string previousRoom = session.getRoom().getName();
   const std::string username = session.getUser().getUsername();
   const bool persist = session.isAuthenticated();
-  const int socket = session.getSocket();
+  const SOCKET socket = session.getSocket();
+  int joinedRoomId = LOBBY.getId();
 
   // join the room
   {
@@ -70,6 +75,7 @@ bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) 
     // remove the socket from the previous room
     removeSocketLocked(socket, previousRoom);
     session.setRoom(roomIt->second);
+    joinedRoomId = roomIt->second.getId();
     members[name].insert(socket);
   }
 
@@ -77,10 +83,10 @@ bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) 
   if (persist) {
     try {
       DatabaseManager &db = DatabaseManager::getInstance();
-      if (previousRoom != name) {
-        db.clearMembership(username, previousRoom);
+      if (previousRoomId != joinedRoomId) {
+        db.clearMembership(username, previousRoomId);
       }
-      db.setMembership(username, name, config::NODE_ID);
+      db.setMembership(username, joinedRoomId, config::NODE_ID);
     } catch (const std::exception &e) {
       Logger::logError("RoomManager", "Failed to persist membership: " + std::string(e.what()));
 
@@ -110,7 +116,7 @@ void RoomManager::leaveAll(ClientSession &session) {
   const std::string previousRoom = session.getRoom().getName();
   const std::string username = session.getUser().getUsername();
   const bool persist = session.isAuthenticated();
-  const int socket = session.getSocket();
+  const SOCKET socket = session.getSocket();
 
   // leave the room
   {
@@ -133,8 +139,8 @@ void RoomManager::leaveAll(ClientSession &session) {
 
 // broadcast a packet to all members of the room
 bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionManager &connections,
-                            int skipSocket) {
-  std::vector<int> sockets;
+                            SOCKET skipSocket) {
+  std::vector<SOCKET> sockets;
 
   // get the sockets
   {
@@ -147,7 +153,7 @@ bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionMa
 
   // broadcast the packet
   bool ok = true;
-  for (int socket : sockets) {
+  for (SOCKET socket : sockets) {
     if (socket == skipSocket) {
       continue;
     }
@@ -161,7 +167,7 @@ bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionMa
 }
 
 // create a new room
-bool RoomManager::createRoom(const Room &room) {
+bool RoomManager::createRoom(const Room &room, std::string_view creatorEmail) {
   std::lock_guard<std::mutex> lock(mutex);
 
   // check if the room already exists
@@ -169,23 +175,37 @@ bool RoomManager::createRoom(const Room &room) {
     return false;
   }
 
-  // create the room
-  knownRooms.emplace(room.getName(), room);
-  Logger::logInfo("RoomManager", "Room created: " + room.getName());
-  return true;
+  try {
+    Room created = DatabaseManager::getInstance().createRoom(
+        room.getName(), room.getType(), room.getPrivacy(), creatorEmail);
+    knownRooms.emplace(created.getName(), created);
+    Logger::logInfo("RoomManager", "Room created: " + created.getName() +
+                                       " id=" + std::to_string(created.getId()));
+    return true;
+  } catch (const std::exception &e) {
+    Logger::logError("RoomManager", "Failed to create room: " + std::string(e.what()));
+    return false;
+  }
 }
 
 // delete an existing room
 bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &connections) {
-  // check if the room is the default lobby
-  if (roomName == LOBBY.getName()) {
+  // check if the room is a default room
+  if (roomName == LOBBY.getName() || roomName == GENERAL.getName()) {
     return false;
   }
 
   // delete the room
-  std::vector<int> sockets;
+  int deletedRoomId = 0;
+  std::vector<SOCKET> sockets;
   {
     std::lock_guard<std::mutex> lock(mutex);
+    auto roomIt = knownRooms.find(roomName);
+    if (roomIt == knownRooms.end()) {
+      return false;
+    }
+    deletedRoomId = roomIt->second.getId();
+
     auto memIt = members.find(roomName);
 
     // get the sockets
@@ -194,21 +214,27 @@ bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &con
       members.erase(memIt);
     }
 
-    // remove the room
-    if (knownRooms.erase(roomName) == 0 && sockets.empty()) {
-      return false;
-    }
+    // remove the room from memory
+    knownRooms.erase(roomIt);
 
     // move the sockets to the lobby
-    for (int socket : sockets) {
+    for (SOCKET socket : sockets) {
       members[LOBBY.getName()].insert(socket);
     }
+  }
+
+  // persist delete in DB
+  try {
+    DatabaseManager::getInstance().deleteRoom(deletedRoomId);
+  } catch (const std::exception &e) {
+    Logger::logError("RoomManager", "Failed to delete room from DB: " + std::string(e.what()));
+    return false;
   }
 
   // move live sessions to Lobby and persist membership for authenticated users
   auto sessions = connections.getSessions();
   DatabaseManager &db = DatabaseManager::getInstance();
-  for (int socket : sockets) {
+  for (SOCKET socket : sockets) {
     auto it = sessions.find(socket);
     if (it == sessions.end() || !it->second) {
       continue;
@@ -227,8 +253,8 @@ bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &con
     }
 
     try {
-      db.clearMembership(username, roomName);
-      db.setMembership(username, LOBBY.getName(), config::NODE_ID);
+      db.clearMembership(username, deletedRoomId);
+      db.setMembership(username, LOBBY.getId(), config::NODE_ID);
     } catch (const std::exception &e) {
       Logger::logError("RoomManager",
                        "Failed to persist Lobby move for " + username + ": " + e.what());
@@ -241,7 +267,7 @@ bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &con
 
 // broadcast a message to all members of all rooms
 bool RoomManager::broadcastAll(const Packet &packet, ConnectionManager &connections,
-                               int skipSocket) {
+                               SOCKET skipSocket) {
   std::vector<Room> rooms;
 
   // get all rooms
@@ -264,4 +290,15 @@ bool RoomManager::broadcastAll(const Packet &packet, ConnectionManager &connecti
     }
   }
   return ok;
+}
+
+// list all known rooms
+std::vector<Room> RoomManager::listRooms() const {
+  std::lock_guard<std::mutex> lock(mutex);
+  std::vector<Room> rooms;
+  rooms.reserve(knownRooms.size());
+  for (const auto &[_, room] : knownRooms) {
+    rooms.push_back(room);
+  }
+  return rooms;
 }

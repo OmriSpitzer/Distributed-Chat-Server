@@ -82,8 +82,8 @@ std::string unique(std::string_view prefix) {
   return std::string(prefix) + "_" + std::to_string(n) + "_" + std::to_string(now);
 }
 
-int nextFakeSocket() {
-  static std::atomic<int> next{60000};
+SOCKET nextFakeSocket() {
+  static std::atomic<SOCKET> next{60000};
   return next.fetch_add(1);
 }
 
@@ -99,7 +99,20 @@ DatabaseManager &db() {
   return *instance;
 }
 
-RoomManager &rooms() { return RoomManager::getInstance(); }
+// Always open the isolated test DB before constructing RoomManager (loads rooms from DB).
+RoomManager &rooms() {
+  db();
+  return RoomManager::getInstance();
+}
+
+// Extra seeded-style room used by join/broadcast tests (not in init.sql)
+void ensureRandomRoom() {
+  static const bool ready = [] {
+    rooms().createRoom(Room(0, "Random"));
+    return true;
+  }();
+  (void)ready;
+}
 
 User makeUser(std::string_view name) {
   return User(name, std::string(name) + "@example.com", User::UserType::USER);
@@ -130,7 +143,7 @@ bool setRecvTimeout(SOCKET socket, DWORD milliseconds) {
 struct TrackedSession {
   ClientSession session;
 
-  explicit TrackedSession(int socket, const User &user = User::anonymousUser(),
+  explicit TrackedSession(SOCKET socket, const User &user = User::anonymousUser(),
                           const Room &room = RoomManager::LOBBY)
       : session(socket, user, room) {}
 
@@ -157,12 +170,17 @@ struct NetFixture {
   NetFixture &operator=(const NetFixture &) = delete;
 
   ~NetFixture() {
+    // Wake accept + client reader threads, then wait until handleClient has removed
+    // every session. Those threads are detached; destroying ConnectionManager while
+    // they still run causes a use-after-free / segfault after Catch reports pass.
+    connections.stopListening();
+    waitUntil(kAcceptWait, [&] { return connections.getSessions().empty(); });
+
     for (SOCKET socket : clients) {
       if (socket != INVALID_SOCKET) {
-        closesocket(socket);
+        socket_io::close(socket);
       }
     }
-    connections.stopListening();
     if (acceptThread.joinable()) {
       acceptThread.join();
     }
@@ -182,12 +200,12 @@ struct NetFixture {
   // sessions are keyed by the server accept fd, not the client SOCKET
   ConnectedClient connectClient() {
     ConnectedClient out;
-    std::unordered_set<int> known;
+    std::unordered_set<SOCKET> known;
     for (const auto &entry : connections.getSessions()) {
       known.insert(entry.first);
     }
 
-    const SOCKET listenFd = static_cast<SOCKET>(connections.getListeningSocket());
+    const SOCKET listenFd = connections.getListeningSocket();
     sockaddr_in bound{};
     int boundLen = sizeof(bound);
     if (getsockname(listenFd, reinterpret_cast<sockaddr *>(&bound), &boundLen) != 0) {
@@ -204,7 +222,7 @@ struct NetFixture {
     dest.sin_port = bound.sin_port;
     dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0) {
-      closesocket(client);
+      socket_io::close(client);
       return out;
     }
 
@@ -229,7 +247,10 @@ struct NetFixture {
 
 // 1. singleton identity
 TEST_CASE("RoomManager singleton identity", "[room_manager][singleton]") {
-  REQUIRE(&rooms() == &RoomManager::getInstance());
+  // Call rooms() first so db() sets an isolated DB_PATH before RoomManager/DatabaseManager
+  // construct. Evaluating getInstance() first would open the default data/*.db (often stale).
+  RoomManager &viaHelper = rooms();
+  REQUIRE(&viaHelper == &RoomManager::getInstance());
 }
 
 // 2. getRoom edges
@@ -243,7 +264,6 @@ TEST_CASE("RoomManager getRoom edges", "[room_manager][getRoom][edge]") {
   REQUIRE(byName->getName() == RoomManager::LOBBY.getName());
 
   REQUIRE(rooms().getRoom("General"));
-  REQUIRE(rooms().getRoom("Random"));
   REQUIRE_FALSE(rooms().getRoom(unique("missing")));
   REQUIRE_FALSE(rooms().getRoom("general")); // case-sensitive
 }
@@ -251,13 +271,14 @@ TEST_CASE("RoomManager getRoom edges", "[room_manager][getRoom][edge]") {
 // 3. createRoom edges
 TEST_CASE("RoomManager createRoom edges", "[room_manager][createRoom][edge]") {
   const std::string name = unique("room");
-  Room room(name);
+  Room room(0, name);
 
   REQUIRE(rooms().createRoom(room));
   REQUIRE_FALSE(rooms().createRoom(room));
-  REQUIRE_FALSE(rooms().createRoom(Room(name)));
+  REQUIRE_FALSE(rooms().createRoom(Room(0, name)));
   REQUIRE_FALSE(rooms().createRoom(RoomManager::LOBBY));
   REQUIRE(rooms().getRoom(name));
+  REQUIRE(rooms().getRoom(name)->getId() > 0);
 
   ConnectionManager connections;
   REQUIRE(rooms().deleteRoom(name, connections));
@@ -288,6 +309,7 @@ TEST_CASE("RoomManager joinRoom unknown and empty name", "[room_manager][joinRoo
 
 // 6. joinRoom moves between rooms
 TEST_CASE("RoomManager joinRoom moves between rooms", "[room_manager][joinRoom]") {
+  ensureRandomRoom();
   TrackedSession a(nextFakeSocket());
   TrackedSession b(nextFakeSocket());
 
@@ -347,8 +369,10 @@ TEST_CASE("RoomManager leaveAll removes membership without Lobby insert",
 TEST_CASE("RoomManager authenticated join persists and leaveAll clears",
           "[room_manager][joinRoom][leaveAll][db]") {
   db(); // ensure isolated DB before first persist
+  ensureRandomRoom();
 
   const std::string name = unique("auth");
+  REQUIRE_NOTHROW(db().createUser(name, "secret", name + "@example.com"));
   TrackedSession tracked(nextFakeSocket(), makeUser(name));
   tracked.get().setAuthenticated(true);
 
@@ -367,7 +391,7 @@ TEST_CASE("RoomManager authenticated join persists and leaveAll clears",
 TEST_CASE("RoomManager broadcast empty room succeeds", "[room_manager][broadcast][edge]") {
   ConnectionManager connections;
   const std::string name = unique("empty");
-  REQUIRE(rooms().createRoom(Room(name)));
+  REQUIRE(rooms().createRoom(Room(0, name)));
 
   auto room = rooms().getRoom(name);
   REQUIRE(room);
@@ -391,7 +415,7 @@ TEST_CASE("RoomManager broadcast delivers and respects skipSocket",
   REQUIRE(c2.session);
 
   const std::string name = unique("bcast");
-  REQUIRE(rooms().createRoom(Room(name)));
+  REQUIRE(rooms().createRoom(Room(0, name)));
   REQUIRE(rooms().joinRoom(name, *c1.session));
   REQUIRE(rooms().joinRoom(name, *c2.session));
 
@@ -419,6 +443,7 @@ TEST_CASE("RoomManager broadcast delivers and respects skipSocket",
 // 12. broadcastAll fans out
 TEST_CASE("RoomManager broadcastAll fans out across rooms", "[room_manager][broadcastAll]") {
   REQUIRE(winsock().ok);
+  ensureRandomRoom();
   NetFixture net;
   REQUIRE(net.listen());
 
@@ -460,11 +485,12 @@ TEST_CASE("RoomManager deleteRoom moves members to Lobby", "[room_manager][delet
 
   db();
   const std::string user = unique("del");
+  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
   connected.session->setUser(makeUser(user));
   connected.session->setAuthenticated(true);
 
   const std::string name = unique("doomed");
-  REQUIRE(rooms().createRoom(Room(name)));
+  REQUIRE(rooms().createRoom(Room(0, name)));
   REQUIRE(rooms().joinRoom(name, *connected.session));
   REQUIRE(connected.session->getRoom().getName() == name);
 
@@ -485,6 +511,7 @@ TEST_CASE("RoomManager deleteRoom moves members to Lobby", "[room_manager][delet
 
 // 14. concurrent joins
 TEST_CASE("RoomManager concurrent joins are safe", "[room_manager][joinRoom][concurrent]") {
+  ensureRandomRoom();
   constexpr int kThreads = 8;
   std::vector<std::unique_ptr<TrackedSession>> sessions;
   sessions.reserve(kThreads);
@@ -527,11 +554,12 @@ TEST_CASE("RoomManager typical create join leave delete flow", "[room_manager][f
 
   db();
   const std::string user = unique("flow");
+  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
   connected.session->setUser(makeUser(user));
   connected.session->setAuthenticated(true);
 
   const std::string name = unique("flowroom");
-  REQUIRE(rooms().createRoom(Room(name, Room::RoomType::OTHER, Room::Privacy::PUBLIC)));
+  REQUIRE(rooms().createRoom(Room(0, name, Room::RoomType::OTHER, Room::Privacy::PUBLIC)));
   REQUIRE(rooms().joinRoom(name, *connected.session));
   REQUIRE(connected.session->getRoom().getName() == name);
 

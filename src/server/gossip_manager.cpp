@@ -25,11 +25,11 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <winsock2.h>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <winsock2.h>
 #include <ws2tcpip.h>
 
 // parse host and port from a string
@@ -80,7 +80,7 @@ void GossipManager::start() {
   }
 
   // start the accept, dial, and anti-entropy threads
-  listeningSocket = static_cast<int>(socketFd);
+  listeningSocket = socketFd;
   stopped = false;
   acceptThread = std::thread([this] { acceptLoop(); });
   dialThread = std::thread([this] { dialLoop(); });
@@ -96,9 +96,9 @@ void GossipManager::stop() {
     return;
 
   // stop listening on the peer port
-  if (listeningSocket != -1) {
-    closesocket(static_cast<SOCKET>(listeningSocket));
-    listeningSocket = -1;
+  if (listeningSocket != INVALID_SOCKET) {
+    socket_io::close(listeningSocket);
+    listeningSocket = INVALID_SOCKET;
   }
 
   // notify the dial and anti-entropy threads
@@ -106,7 +106,7 @@ void GossipManager::stop() {
   antiEntropyCv.notify_all();
 
   // close all peer sockets (registered or still handshaking)
-  std::vector<int> sockets;
+  std::vector<SOCKET> sockets;
   {
     std::lock_guard lock(peersMutex);
     sockets.assign(openPeerSockets.begin(), openPeerSockets.end());
@@ -114,8 +114,8 @@ void GossipManager::stop() {
     peers.clear();
     outboundAddrs.clear();
   }
-  for (int fd : sockets)
-    closesocket(static_cast<SOCKET>(fd));
+  for (SOCKET fd : sockets)
+    socket_io::close(fd);
 
   // join the accept, dial, and anti-entropy threads
   if (acceptThread.joinable())
@@ -143,12 +143,12 @@ void GossipManager::stop() {
 void GossipManager::acceptLoop() {
   while (!stopped) {
     // accept a new peer
-    SOCKET peer = accept(static_cast<SOCKET>(listeningSocket), nullptr, nullptr);
+    SOCKET peer = socket_io::acceptFrom(listeningSocket);
     if (peer == INVALID_SOCKET)
       break;
 
     // send a hello packet to the peer
-    int fd = static_cast<int>(peer);
+    SOCKET fd = peer;
     {
       std::lock_guard lock(peersMutex);
       openPeerSockets.insert(fd);
@@ -196,30 +196,15 @@ void GossipManager::dialLoop() {
       }
 
       // create a socket to connect to the peer
-      SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+      SOCKET sock = socket_io::connectTo(host, port);
       if (sock == INVALID_SOCKET)
         continue;
 
-      // set the address of the peer
-      sockaddr_in address{};
-      address.sin_family = AF_INET;
-      address.sin_port = htons(port);
-      if (inet_pton(AF_INET, host.c_str(), &address.sin_addr) != 1) {
-        closesocket(sock);
-        continue;
-      }
-
-      // connect to the peer
-      if (connect(sock, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
-        closesocket(sock);
-        continue;
-      }
-
       // send a hello packet to the peer
-      const int fd = static_cast<int>(sock);
+      const SOCKET fd = sock;
       Packet hello(config::NODE_ID, "*", Packet::PacketType::GOSSIP_HELLO);
       if (!sendPacket(fd, hello)) {
-        closesocket(sock);
+        socket_io::close(sock);
         continue;
       }
 
@@ -262,7 +247,7 @@ void GossipManager::antiEntropyLoop() {
     }
 
     // send the digest to all peers
-    std::vector<int> sockets;
+    std::vector<SOCKET> sockets;
     {
       std::lock_guard lock(peersMutex);
       sockets.reserve(peers.size());
@@ -270,15 +255,15 @@ void GossipManager::antiEntropyLoop() {
         sockets.push_back(entry.first);
       }
     }
-    for (int fd : sockets) {
+    for (SOCKET fd : sockets) {
       sendPacket(fd, digest);
     }
   }
 }
 
 // handle a peer
-void GossipManager::handlePeer(int peerSocket) {
-  SOCKET sock = static_cast<SOCKET>(peerSocket);
+void GossipManager::handlePeer(SOCKET peerSocket) {
+  SOCKET sock = peerSocket;
   bool registered = false;
   bool reject = false;
 
@@ -406,13 +391,13 @@ void GossipManager::handlePeer(int peerSocket) {
     shouldClose = openPeerSockets.erase(peerSocket) > 0;
   }
   if (shouldClose) {
-    closesocket(sock);
+    socket_io::close(sock);
   }
   Logger::logInfo("GossipManager", "Peer disconnected socket " + std::to_string(peerSocket));
 }
 
 // register a peer
-bool GossipManager::registerPeer(int socket, const std::string &nodeId) {
+bool GossipManager::registerPeer(SOCKET socket, const std::string &nodeId) {
   // check if the peer is the local node
   if (nodeId == config::NODE_ID)
     return false;
@@ -523,6 +508,79 @@ bool GossipManager::applyEvent(const Packet &event) {
     return true;
   }
 
+  // room created event — create locally if missing, then push directory to clients
+  if (type == "ROOM_CREATED") {
+    const std::string roomName = event.room;
+    if (roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_CREATED event");
+      return false;
+    }
+
+    std::string creatorEmail;
+    if (!username.empty()) {
+      if (auto creator = db.getUser(username)) {
+        creatorEmail = creator->getEmail();
+      } else {
+        Logger::logWarning("GossipManager", "ROOM_CREATED unknown creator username: " + username);
+      }
+    }
+
+    auto existing = RoomManager::getInstance().getRoom(roomName);
+    if (!existing) {
+      const Room draft(0, roomName, Room::stringToRoomType(content), Room::stringToPrivacy(ts));
+      if (!RoomManager::getInstance().createRoom(draft, creatorEmail)) {
+        Logger::logWarning("GossipManager", "ROOM_CREATED apply failed for " + roomName);
+        return false;
+      }
+    } else if (!creatorEmail.empty()) {
+      try {
+        db.addToAllowList(existing->getId(), creatorEmail, true);
+      } catch (const std::exception &e) {
+        Logger::logWarning("GossipManager", std::string("ROOM_CREATED ACL seed failed for ") +
+                                                roomName + ": " + e.what());
+      }
+    }
+
+    Packet push("server", "*", Packet::PacketType::ROOM_LIST, "",
+                Room::serializeList(RoomManager::getInstance().listRooms()), 0);
+    RoomManager::getInstance().broadcastAll(push, connections);
+    Logger::logInfo("GossipManager", "Applied ROOM_CREATED for " + roomName);
+    return true;
+  }
+
+  // allow-list add (invite / creator seed replication)
+  if (type == "ROOM_ACL_ADD") {
+    const std::string roomName = event.room;
+    if (username.empty() || roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_ACL_ADD event");
+      return false;
+    }
+
+    auto room = RoomManager::getInstance().getRoom(roomName);
+    if (!room) {
+      Logger::logWarning("GossipManager", "ROOM_ACL_ADD unknown room: " + roomName);
+      return false;
+    }
+
+    auto user = db.getUser(username);
+    if (!user) {
+      Logger::logWarning("GossipManager", "ROOM_ACL_ADD unknown user: " + username);
+      return false;
+    }
+
+    const bool asCreator = (content == "1");
+    try {
+      db.addToAllowList(room->getId(), user->getEmail(), asCreator);
+    } catch (const std::exception &e) {
+      Logger::logWarning("GossipManager", std::string("ROOM_ACL_ADD apply failed for ") + username +
+                                              " -> " + roomName + ": " + e.what());
+      return false;
+    }
+
+    Logger::logInfo("GossipManager", "Applied ROOM_ACL_ADD for " + username + " -> " + roomName);
+    return true;
+  }
+
   // room join event
   if (type == "ROOM_JOIN") {
     const std::string newRoom = event.room.empty() ? "Lobby" : event.room;
@@ -535,13 +593,36 @@ bool GossipManager::applyEvent(const Packet &event) {
       return false;
     }
 
+    auto resolveId = [](const std::string &name) -> std::optional<int> {
+      auto room = RoomManager::getInstance().getRoom(name);
+      if (!room) {
+        return std::nullopt;
+      }
+      return room->getId();
+    };
+
+    const auto newId = resolveId(newRoom);
+    if (!newId) {
+      Logger::logWarning("GossipManager", "ROOM_JOIN unknown room: " + newRoom);
+      return false;
+    }
+
     // clear the membership if the previous room is not the same as the new room
     if (!prevRoom.empty() && prevRoom != newRoom) {
-      db.clearMembership(username, prevRoom);
+      if (const auto prevId = resolveId(prevRoom)) {
+        db.clearMembership(username, *prevId);
+      }
+    }
+
+    // guests / unknown usernames are not in users — membership FK would throw
+    if (!db.getUser(username)) {
+      Logger::logInfo("GossipManager",
+                      "ROOM_JOIN skipped DB membership for unknown user " + username);
+      return true;
     }
 
     // set the membership
-    db.setMembership(username, newRoom, nodeId);
+    db.setMembership(username, *newId, nodeId);
     Logger::logInfo("GossipManager",
                     "Applied ROOM_JOIN for " + username + " -> " + newRoom + " on " + nodeId);
     return true;
@@ -557,8 +638,14 @@ bool GossipManager::applyEvent(const Packet &event) {
       return false;
     }
 
+    auto room = RoomManager::getInstance().getRoom(roomName);
+    if (!room) {
+      Logger::logWarning("GossipManager", "ROOM_LEAVE unknown room: " + roomName);
+      return false;
+    }
+
     // clear the membership
-    db.clearMembership(username, roomName);
+    db.clearMembership(username, room->getId());
     Logger::logInfo("GossipManager", "Applied ROOM_LEAVE for " + username + " from " + roomName);
     return true;
   }
@@ -577,13 +664,24 @@ bool GossipManager::applyEvent(const Packet &event) {
     return false;
   }
   const std::string roomName = event.room.empty() ? "Lobby" : event.room;
-  const User from(username, "", User::UserType::GUEST);
-  const Message msg(from, User::anonymousUser(), content, eventId, created);
+  auto room = RoomManager::getInstance().getRoom(roomName);
+  if (!room) {
+    Logger::logWarning("GossipManager", "MESSAGE unknown room: " + roomName);
+    return false;
+  }
+
+  // resolve sender from DB so email FK on messages.sender_email is satisfied
+  std::optional<User> sender = db.getUser(username);
+  if (!sender) {
+    Logger::logWarning("GossipManager", "MESSAGE unknown sender: " + username);
+    return false;
+  }
+  const Message msg(*sender, User::anonymousUser(), content, eventId, created);
 
   // save the message
   bool inserted = false;
   try {
-    inserted = db.saveMessage(msg, roomName);
+    inserted = db.saveMessage(msg, room->getId());
   } catch (const std::exception &e) {
     Logger::logWarning("GossipManager",
                        std::string("MESSAGE apply failed for ") + eventId + ": " + e.what());
@@ -592,11 +690,9 @@ bool GossipManager::applyEvent(const Packet &event) {
 
   // broadcast the message to the room
   if (inserted) {
-    std::optional<Room> room = RoomManager::getInstance().getRoom(roomName);
-    if (room) {
-      Packet push(username, "", Packet::PacketType::MESSAGE, roomName, content, 0);
-      RoomManager::getInstance().broadcast(*room, push, connections, -1);
-    }
+    Packet push(username, "", Packet::PacketType::MESSAGE, roomName, content, 0);
+    push.timestamp = static_cast<std::uint64_t>(created);
+    RoomManager::getInstance().broadcast(*room, push, connections, -1);
   }
   return true;
 }
@@ -629,7 +725,7 @@ void GossipManager::rumor(const Packet &event) {
   applyEvent(out);
 
   // send the packet to all peers
-  std::vector<int> sockets;
+  std::vector<SOCKET> sockets;
   {
     std::lock_guard lock(peersMutex);
     sockets.reserve(peers.size());
@@ -639,7 +735,7 @@ void GossipManager::rumor(const Packet &event) {
   }
 
   // send the packet to all peers
-  for (int fd : sockets) {
+  for (SOCKET fd : sockets) {
     if (!sendPacket(fd, out)) {
       Logger::logWarning("GossipManager", "Failed to rumor to socket " + std::to_string(fd));
     }
@@ -647,20 +743,20 @@ void GossipManager::rumor(const Packet &event) {
 }
 
 // send a packet
-bool GossipManager::sendPacket(int socket, const Packet &packet) {
+bool GossipManager::sendPacket(SOCKET socket, const Packet &packet) {
   std::lock_guard lock(sendMutex);
-  return socket_io::writePacket(static_cast<SOCKET>(socket), packet);
+  return socket_io::writePacket(socket, packet);
 }
 
 // remove a peer
-void GossipManager::removePeer(int socket) {
+void GossipManager::removePeer(SOCKET socket) {
   std::lock_guard lock(peersMutex);
   peers.erase(socket);
   outboundAddrs.erase(socket);
 }
 
 // spawn a peer handler
-void GossipManager::spawnPeerHandler(int fd) {
+void GossipManager::spawnPeerHandler(SOCKET fd) {
   std::lock_guard lock(peerThreadsMutex);
   peerThreads.emplace_back([this, fd] { handlePeer(fd); });
 }

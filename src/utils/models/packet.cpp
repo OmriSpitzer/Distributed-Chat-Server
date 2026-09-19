@@ -24,6 +24,11 @@ static const std::unordered_map<Packet::PacketType, std::string> packet_type_to_
     {Packet::PacketType::GOSSIP_EVENT, "GOSSIP_EVENT"},
     {Packet::PacketType::GOSSIP_DIGEST, "GOSSIP_DIGEST"},
     {Packet::PacketType::GOSSIP_PULL, "GOSSIP_PULL"},
+    {Packet::PacketType::UPDATE_USER, "UPDATE_USER"},
+    {Packet::PacketType::ROOM_CREATE, "ROOM_CREATE"},
+    {Packet::PacketType::ROOM_LIST, "ROOM_LIST"},
+    {Packet::PacketType::LOAD_MESSAGE_HISTORY, "LOAD_MESSAGE_HISTORY"},
+    {Packet::PacketType::ROOM_INVITE, "ROOM_INVITE"},
 };
 
 // string to packet type map
@@ -40,6 +45,11 @@ static const std::unordered_map<std::string, Packet::PacketType> string_to_packe
     {"GOSSIP_EVENT", Packet::PacketType::GOSSIP_EVENT},
     {"GOSSIP_DIGEST", Packet::PacketType::GOSSIP_DIGEST},
     {"GOSSIP_PULL", Packet::PacketType::GOSSIP_PULL},
+    {"UPDATE_USER", Packet::PacketType::UPDATE_USER},
+    {"ROOM_CREATE", Packet::PacketType::ROOM_CREATE},
+    {"ROOM_LIST", Packet::PacketType::ROOM_LIST},
+    {"LOAD_MESSAGE_HISTORY", Packet::PacketType::LOAD_MESSAGE_HISTORY},
+    {"ROOM_INVITE", Packet::PacketType::ROOM_INVITE},
 };
 
 // constructor

@@ -14,7 +14,7 @@
 #include "utils/gossip_payload.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
-#include "utils/serializer.h"
+#include "utils/models/room.h"
 #include "utils/socket_io.h"
 #include <atomic>
 #include <cstdint>
@@ -32,7 +32,7 @@
 #include <winsock2.h>
 
 // constructor
-ConnectionManager::ConnectionManager() : listeningSocket(-1) {}
+ConnectionManager::ConnectionManager() : listeningSocket(INVALID_SOCKET) {}
 
 // destructor
 ConnectionManager::~ConnectionManager() { stopListening(); }
@@ -61,7 +61,7 @@ bool ConnectionManager::startListening(std::uint16_t port) {
     return false;
   }
 
-  listeningSocket = static_cast<int>(socketFd);
+  listeningSocket = socketFd;
   listening.store(true);
   Logger::logInfo("ConnectionManager", "Listening on port " + std::to_string(port));
   return true;
@@ -75,34 +75,34 @@ void ConnectionManager::stopListening() {
     return;
   }
 
-  if (listeningSocket != -1) {
-    closesocket(static_cast<SOCKET>(listeningSocket));
-    listeningSocket = -1;
+  if (listeningSocket != INVALID_SOCKET) {
+    socket_io::close(listeningSocket);
+    listeningSocket = INVALID_SOCKET;
   }
 
-  std::vector<int> clientSockets;
+  std::vector<SOCKET> clientSockets;
   {
     std::lock_guard<std::mutex> lock(sessionsMutex);
     clientSockets.reserve(sessions.size());
     for (const auto &entry : sessions) {
-      clientSockets.push_back(entry.first);
+      clientSockets.push_back(entry.second->getSocket());
     }
   }
 
   // close all client sockets
-  for (int fd : clientSockets) {
+  for (SOCKET fd : clientSockets) {
     closeClient(fd);
   }
 }
 
 // get listening socket
-int ConnectionManager::getListeningSocket() const { return listeningSocket; }
+SOCKET ConnectionManager::getListeningSocket() const { return listeningSocket; }
 
 // check if listening
 bool ConnectionManager::isListening() const { return listening.load(); }
 
 // get sessions
-std::unordered_map<int, std::shared_ptr<ClientSession>> ConnectionManager::getSessions() const {
+std::unordered_map<SOCKET, std::shared_ptr<ClientSession>> ConnectionManager::getSessions() const {
   std::lock_guard<std::mutex> lock(sessionsMutex);
   return sessions;
 }
@@ -110,18 +110,47 @@ std::unordered_map<int, std::shared_ptr<ClientSession>> ConnectionManager::getSe
 // accept loop
 void ConnectionManager::acceptLoop() {
   while (listening.load()) {
-    SOCKET client = accept(static_cast<SOCKET>(listeningSocket), nullptr, nullptr);
+    SOCKET client = socket_io::acceptFrom(listeningSocket);
 
     // check if the client socket is valid
     if (client == INVALID_SOCKET) {
       break;
     }
 
-    int fd = static_cast<int>(client);
+    SOCKET fd = client;
     Logger::logInfo("ConnectionManager", "New client connected socket " + std::to_string(fd));
 
     // add the new client session (non-copyable: mutex + atomic closed flag)
-    addSession(fd, std::make_shared<ClientSession>(fd, User::anonymousUser(), RoomManager::LOBBY));
+    auto session = std::make_shared<ClientSession>(fd, User::anonymousUser(), RoomManager::LOBBY);
+    addSession(fd, session);
+
+    // register in Lobby membership so room broadcasts reach this socket
+    if (!RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *session)) {
+      Logger::logWarning("ConnectionManager",
+                         "Failed to place new client in Lobby, socket " + std::to_string(fd));
+      closeClient(fd);
+      removeSession(fd);
+      continue;
+    }
+
+    // push connect snapshot: anon user (sender), Lobby (room), directory (message)
+    std::vector<Room> directory = RoomManager::getInstance().listRooms();
+    if (directory.empty()) {
+      directory = {RoomManager::LOBBY, RoomManager::GENERAL};
+    }
+    Packet welcome("server", session->getUser().serialize(), Packet::PacketType::ROOM_LIST,
+                   RoomManager::LOBBY.getName(), Room::serializeList(directory), 0);
+    if (!sendPacket(fd, welcome)) {
+      Logger::logWarning("ConnectionManager",
+                         "Failed to send connect welcome, socket " + std::to_string(fd));
+      closeClient(fd);
+      removeSession(fd);
+      continue;
+    }
+
+    Logger::logInfo("ConnectionManager", "Sent connect welcome with " +
+                                             std::to_string(directory.size()) + " rooms, socket " +
+                                             std::to_string(fd));
 
     // handle the client in a new thread
     std::thread([this, fd] { handleClient(fd); }).detach();
@@ -129,12 +158,10 @@ void ConnectionManager::acceptLoop() {
 }
 
 // handle the client
-void ConnectionManager::handleClient(int clientSocket) {
-  SOCKET sock = static_cast<SOCKET>(clientSocket);
-
+void ConnectionManager::handleClient(SOCKET clientSocket) {
   while (listening.load()) {
     // read a packet from the client socket
-    std::optional<Packet> packet = socket_io::readPacket(sock);
+    std::optional<Packet> packet = socket_io::readPacket(clientSocket);
 
     // check if the packet is valid
     if (!packet) {
@@ -177,13 +204,13 @@ void ConnectionManager::handleClient(int clientSocket) {
 }
 
 // add new session
-void ConnectionManager::addSession(int socket, std::shared_ptr<ClientSession> session) {
+void ConnectionManager::addSession(SOCKET socket, std::shared_ptr<ClientSession> session) {
   std::lock_guard<std::mutex> lock(sessionsMutex);
   sessions[socket] = std::move(session);
 }
 
 // remove session
-void ConnectionManager::removeSession(int socket) {
+void ConnectionManager::removeSession(SOCKET socket) {
   // find the session for the client socket
   std::shared_ptr<ClientSession> session;
   {
@@ -250,14 +277,7 @@ bool ConnectionManager::hasSession(const User &user) const {
 }
 
 // send a packet to a connected client
-bool ConnectionManager::sendPacket(int socket, const Packet &packet) {
-  std::string framed = Serializer::serialize(packet);
-
-  // check if the framed packet is empty
-  if (framed.empty()) {
-    return false;
-  }
-
+bool ConnectionManager::sendPacket(SOCKET socket, const Packet &packet) {
   std::shared_ptr<ClientSession> session;
   {
     std::lock_guard<std::mutex> lock(sessionsMutex);
@@ -267,22 +287,19 @@ bool ConnectionManager::sendPacket(int socket, const Packet &packet) {
     }
     session = it->second;
   }
-
   if (session->isClosed()) {
     return false;
   }
-
   // per-socket lock: heartbeats / broadcasts / replies can run in parallel across clients
   std::lock_guard<std::mutex> lock(session->sendMutex());
   if (session->isClosed()) {
     return false;
   }
-  return socket_io::sendExact(static_cast<SOCKET>(socket), framed.data(),
-                              static_cast<int>(framed.size()));
+  return socket_io::writePacket(socket, packet);
 }
 
 // close a client socket so its read loop exits (at most once)
-void ConnectionManager::closeClient(int socket) {
+void ConnectionManager::closeClient(SOCKET socket) {
   std::shared_ptr<ClientSession> session;
   {
     std::lock_guard<std::mutex> lock(sessionsMutex);
@@ -295,6 +312,6 @@ void ConnectionManager::closeClient(int socket) {
 
   std::lock_guard<std::mutex> send(session->sendMutex());
   if (session->markClosed()) {
-    closesocket(static_cast<SOCKET>(socket));
+    socket_io::close(socket);
   }
 }

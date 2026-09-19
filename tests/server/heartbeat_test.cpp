@@ -142,7 +142,7 @@ struct Fixture {
     heartbeat.stop();
     for (SOCKET socket : clients) {
       if (socket != INVALID_SOCKET) {
-        closesocket(socket);
+        socket_io::close(socket);
       }
     }
     connections.stopListening();
@@ -163,7 +163,7 @@ struct Fixture {
   }
 
   SOCKET connectClient() {
-    const SOCKET listenFd = static_cast<SOCKET>(connections.getListeningSocket());
+    const SOCKET listenFd = connections.getListeningSocket();
     sockaddr_in bound{};
     int boundLen = sizeof(bound);
     if (getsockname(listenFd, reinterpret_cast<sockaddr *>(&bound), &boundLen) != 0) {
@@ -180,7 +180,7 @@ struct Fixture {
     dest.sin_port = bound.sin_port;
     dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0) {
-      closesocket(client);
+      socket_io::close(client);
       return INVALID_SOCKET;
     }
 

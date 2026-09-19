@@ -169,7 +169,7 @@ struct Fixture {
     connections.setGossip(nullptr);
     for (SOCKET socket : clients) {
       if (socket != INVALID_SOCKET) {
-        closesocket(socket);
+        socket_io::close(socket);
       }
     }
     connections.stopListening();
@@ -195,7 +195,7 @@ struct Fixture {
   }
 
   SOCKET connectClient() {
-    const SOCKET listenFd = static_cast<SOCKET>(connections.getListeningSocket());
+    const SOCKET listenFd = connections.getListeningSocket();
     sockaddr_in bound{};
     int boundLen = sizeof(bound);
     if (getsockname(listenFd, reinterpret_cast<sockaddr *>(&bound), &boundLen) != 0) {
@@ -212,7 +212,7 @@ struct Fixture {
     dest.sin_port = bound.sin_port;
     dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (::connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0) {
-      closesocket(client);
+      socket_io::close(client);
       return INVALID_SOCKET;
     }
 
@@ -221,8 +221,18 @@ struct Fixture {
     if (!waitUntil(kAcceptWait, [&] { return connections.getSessions().size() >= expected; })) {
       return INVALID_SOCKET;
     }
+
+    // drain connect welcome (ROOM_LIST with anon user + room directory)
+    REQUIRE(setRecvTimeout(client, 2000));
+    const auto welcome = socket_io::readPacket(client);
+    if (!welcome || welcome->type != Packet::PacketType::ROOM_LIST) {
+      return INVALID_SOCKET;
+    }
+    lastWelcome = *welcome;
     return client;
   }
+
+  std::optional<Packet> lastWelcome;
 
   User createUser(std::string_view password = "secret") {
     const std::string name = unique("user");
@@ -284,12 +294,12 @@ TEST_CASE("ConnectionManager start then stop", "[connection_manager][start][stop
   ConnectionManager connections;
   REQUIRE(connections.startListening(0));
   REQUIRE(connections.isListening());
-  REQUIRE(connections.getListeningSocket() != -1);
+  REQUIRE(connections.getListeningSocket() != INVALID_SOCKET);
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Listening on port"));
 
   connections.stopListening();
   REQUIRE_FALSE(connections.isListening());
-  REQUIRE(connections.getListeningSocket() == -1);
+  REQUIRE(connections.getListeningSocket() == INVALID_SOCKET);
 }
 
 // 4. double start
@@ -343,6 +353,17 @@ TEST_CASE("ConnectionManager accept creates anonymous Lobby session",
   REQUIRE_FALSE(session->isAuthenticated());
   REQUIRE(session->getRoom().getName() == RoomManager::LOBBY.getName());
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "New client connected"));
+
+  REQUIRE(fx.lastWelcome.has_value());
+  REQUIRE(fx.lastWelcome->type == Packet::PacketType::ROOM_LIST);
+  REQUIRE(fx.lastWelcome->room == RoomManager::LOBBY.getName());
+  REQUIRE(fx.lastWelcome->sender == "server");
+  const User welcomeUser = User::deserialize(fx.lastWelcome->receiver);
+  REQUIRE(welcomeUser.getUserType() == User::UserType::GUEST);
+  REQUIRE(welcomeUser.getUsername().rfind("anon", 0) == 0);
+  REQUIRE(welcomeUser == session->getUser());
+  REQUIRE_FALSE(fx.lastWelcome->message.empty());
+  REQUIRE(fx.lastWelcome->message.rfind("room(", 0) == 0);
 }
 
 // 8. client ping receives pong
@@ -396,7 +417,7 @@ TEST_CASE("ConnectionManager sendPacket edges", "[connection_manager][send][edge
 
   auto sessions = fx.connections.getSessions();
   REQUIRE(sessions.size() == 1);
-  const int fd = sessions.begin()->first;
+  const SOCKET fd = sessions.begin()->first;
   sessions.begin()->second->markClosed();
   REQUIRE_FALSE(fx.connections.sendPacket(fd, hello));
   (void)client;
@@ -413,7 +434,7 @@ TEST_CASE("ConnectionManager closeClient removes session", "[connection_manager]
 
   auto sessions = fx.connections.getSessions();
   REQUIRE(sessions.size() == 1);
-  const int fd = sessions.begin()->first;
+  const SOCKET fd = sessions.begin()->first;
   fx.connections.closeClient(fd);
 
   REQUIRE(waitUntil(kAcceptWait, [&] {
@@ -486,7 +507,7 @@ TEST_CASE("ConnectionManager disconnect clears online without gossip",
   db().setOnline(user.getUsername(), config::NODE_ID);
   REQUIRE(db().isUserOnline(user.getUsername()));
 
-  closesocket(client);
+  socket_io::close(client);
   fx.clients.back() = INVALID_SOCKET;
   REQUIRE(waitUntil(kAcceptWait, [&] { return fx.connections.getSessions().empty(); }));
   REQUIRE_FALSE(db().isUserOnline(user.getUsername()));
@@ -508,7 +529,7 @@ TEST_CASE("ConnectionManager disconnect rumored logout with gossip",
   REQUIRE(fx.request(client, login)->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
   REQUIRE(db().isUserOnline(user.getUsername()));
 
-  closesocket(client);
+  socket_io::close(client);
   fx.clients.back() = INVALID_SOCKET;
   REQUIRE(waitUntil(kAcceptWait, [&] {
     return fx.connections.getSessions().empty() && !db().isUserOnline(user.getUsername());
@@ -563,7 +584,7 @@ TEST_CASE("ConnectionManager typical connect login message disconnect flow",
   REQUIRE(msgRes->message == "ok");
 
   bool found = false;
-  for (const auto &m : db().loadHistory(RoomManager::LOBBY.getName())) {
+  for (const auto &m : db().loadHistory(RoomManager::LOBBY.getId())) {
     if (m.getContent() == "cm-hi|ok" && m.getFrom().getUsername() == user.getUsername()) {
       found = true;
       break;
@@ -571,7 +592,7 @@ TEST_CASE("ConnectionManager typical connect login message disconnect flow",
   }
   REQUIRE(found);
 
-  closesocket(client);
+  socket_io::close(client);
   fx.clients.back() = INVALID_SOCKET;
   REQUIRE(waitUntil(kAcceptWait, [&] {
     return fx.connections.getSessions().empty() && !db().isUserOnline(user.getUsername());

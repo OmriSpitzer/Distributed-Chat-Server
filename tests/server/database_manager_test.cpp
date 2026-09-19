@@ -10,6 +10,7 @@
 #include "config/config.h"
 #include "server/database_manager.h"
 #include "utils/models/message.h"
+#include "utils/models/room.h"
 #include "utils/models/user.h"
 #include <algorithm>
 #include <atomic>
@@ -44,11 +45,12 @@
  * 16. membership no-throw edges
  * 17. concurrent writes
  * 18. typical register / login / logout flow
+ * 19. createRoom assigns AUTOINCREMENT id; get/list/delete round-trip
  */
 
 namespace {
 constexpr const char *kAuthFailed = "Invalid username or password";
-constexpr const char *kLobby = "Lobby";
+constexpr int kLobbyId = 1; // matches init.sql seed Lobby row
 constexpr const char *kSeedHash = "$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>";
 
 std::string unique(std::string_view prefix) {
@@ -355,11 +357,11 @@ TEST_CASE("DatabaseManager saveMessage success and duplicate id",
   const User from = createUniqueUser();
   const Message first = makeStored(from, "hello", unique("msg"), 1'700'000'000);
 
-  REQUIRE(database.saveMessage(first, kLobby));
-  REQUIRE_FALSE(database.saveMessage(first, kLobby));
+  REQUIRE(database.saveMessage(first, kLobbyId));
+  REQUIRE_FALSE(database.saveMessage(first, kLobbyId));
 
   const Message sameId = makeStored(from, "changed", first.getId(), 1'700'000'001);
-  REQUIRE_FALSE(database.saveMessage(sameId, kLobby));
+  REQUIRE_FALSE(database.saveMessage(sameId, kLobbyId));
 }
 
 // 11. saveMessage foreign keys
@@ -369,22 +371,22 @@ TEST_CASE("DatabaseManager saveMessage foreign keys", "[database_manager][saveMe
   const Message ok = makeStored(from, "fk", unique("fk"), 1'700'000'010);
 
   SECTION("unknown room") {
-    REQUIRE_THROWS_AS(database.saveMessage(ok, unique("room")), DatabaseManager::ConstraintError);
+    REQUIRE_THROWS_AS(database.saveMessage(ok, 999999), DatabaseManager::ConstraintError);
   }
 
-  SECTION("empty room is not Lobby") {
-    REQUIRE_THROWS_AS(database.saveMessage(ok, ""), DatabaseManager::ConstraintError);
+  SECTION("zero room id is not Lobby") {
+    REQUIRE_THROWS_AS(database.saveMessage(ok, 0), DatabaseManager::ConstraintError);
   }
 
   SECTION("unknown sender") {
     const User ghost(unique("ghost"), "g@mail.test", User::UserType::USER);
     const Message msg = makeStored(ghost, "hi", unique("ghostmsg"), 1'700'000'011);
-    REQUIRE_THROWS_AS(database.saveMessage(msg, kLobby), DatabaseManager::ConstraintError);
+    REQUIRE_THROWS_AS(database.saveMessage(msg, kLobbyId), DatabaseManager::ConstraintError);
   }
 
   SECTION("anonymous sender is not a users row") {
     const Message msg = makeStored(User::anonymousUser(), "hi", unique("anonmsg"), 1'700'000'012);
-    REQUIRE_THROWS_AS(database.saveMessage(msg, kLobby), DatabaseManager::ConstraintError);
+    REQUIRE_THROWS_AS(database.saveMessage(msg, kLobbyId), DatabaseManager::ConstraintError);
   }
 }
 
@@ -396,13 +398,13 @@ TEST_CASE("DatabaseManager saveMessage content edges", "[database_manager][saveM
 
   auto saved = [&](std::string_view content, std::time_t ts) {
     const Message msg = makeStored(from, content, unique("c"), ts);
-    REQUIRE(database.saveMessage(msg, kLobby));
+    REQUIRE(database.saveMessage(msg, kLobbyId));
     return msg;
   };
 
   SECTION("empty content") {
     const Message msg = saved("", base);
-    const auto history = database.loadHistory(kLobby);
+    const auto history = database.loadHistory(kLobbyId);
     const auto it = std::find_if(history.begin(), history.end(),
                                  [&](const Message &row) { return row.getId() == msg.getId(); });
     REQUIRE(it != history.end());
@@ -412,7 +414,7 @@ TEST_CASE("DatabaseManager saveMessage content edges", "[database_manager][saveM
   SECTION("unicode and quotes") {
     const std::string content = "שלום '\"\\; --";
     const Message msg = saved(content, base + 1);
-    const auto history = database.loadHistory(kLobby);
+    const auto history = database.loadHistory(kLobbyId);
     const auto it = std::find_if(history.begin(), history.end(),
                                  [&](const Message &row) { return row.getId() == msg.getId(); });
     REQUIRE(it != history.end());
@@ -422,7 +424,7 @@ TEST_CASE("DatabaseManager saveMessage content edges", "[database_manager][saveM
   SECTION("long content") {
     const std::string content(20'000, 'm');
     const Message msg = saved(content, base + 2);
-    const auto history = database.loadHistory(kLobby);
+    const auto history = database.loadHistory(kLobbyId);
     const auto it = std::find_if(history.begin(), history.end(),
                                  [&](const Message &row) { return row.getId() == msg.getId(); });
     REQUIRE(it != history.end());
@@ -434,7 +436,7 @@ TEST_CASE("DatabaseManager saveMessage content edges", "[database_manager][saveM
     content.push_back('\0');
     content += "world";
     const Message msg = saved(content, base + 3);
-    const auto history = database.loadHistory(kLobby);
+    const auto history = database.loadHistory(kLobbyId);
     const auto it = std::find_if(history.begin(), history.end(),
                                  [&](const Message &row) { return row.getId() == msg.getId(); });
     REQUIRE(it != history.end());
@@ -452,17 +454,17 @@ TEST_CASE("DatabaseManager loadHistory order and reconstruct",
   const Message middle = makeStored(from, "middle", unique("h"), base + 5);
   const Message newest = makeStored(from, "newest", unique("h"), base + 10);
 
-  REQUIRE(database.saveMessage(older, kLobby));
-  REQUIRE(database.saveMessage(newest, kLobby));
-  REQUIRE(database.saveMessage(middle, kLobby));
+  REQUIRE(database.saveMessage(older, kLobbyId));
+  REQUIRE(database.saveMessage(newest, kLobbyId));
+  REQUIRE(database.saveMessage(middle, kLobbyId));
 
   SECTION("unknown room is empty") {
-    REQUIRE(database.loadHistory(unique("noroom")).empty());
-    REQUIRE(database.loadHistory("").empty());
+    REQUIRE(database.loadHistory(999999).empty());
+    REQUIRE(database.loadHistory(0).empty());
   }
 
   SECTION("newest first among inserted ids") {
-    const auto history = database.loadHistory(kLobby);
+    const auto history = database.loadHistory(kLobbyId);
     std::vector<std::string> ids;
     for (const Message &row : history) {
       if (row.getId() == newest.getId() || row.getId() == middle.getId() ||
@@ -477,7 +479,7 @@ TEST_CASE("DatabaseManager loadHistory order and reconstruct",
   }
 
   SECTION("reconstructed sender fields") {
-    const auto history = database.loadHistory(kLobby);
+    const auto history = database.loadHistory(kLobbyId);
     const auto it = std::find_if(history.begin(), history.end(), [&](const Message &row) {
       return row.getId() == newest.getId();
     });
@@ -504,10 +506,10 @@ TEST_CASE("DatabaseManager loadHistory limit", "[database_manager][loadHistory][
   for (int i = 0; i < 101; ++i) {
     const std::string id = unique("lim");
     ids.push_back(id);
-    REQUIRE(database.saveMessage(makeStored(from, std::to_string(i), id, base + i), kLobby));
+    REQUIRE(database.saveMessage(makeStored(from, std::to_string(i), id, base + i), kLobbyId));
   }
 
-  const auto history = database.loadHistory(kLobby);
+  const auto history = database.loadHistory(kLobbyId);
   REQUIRE(history.size() == 100);
 
   std::unordered_set<std::string> returned;
@@ -561,24 +563,29 @@ TEST_CASE("DatabaseManager online presence", "[database_manager][online][edge]")
   }
 }
 
-// 16. membership no-throw edges
+// 16. membership edges (username must exist — FK to users)
 TEST_CASE("DatabaseManager membership edges", "[database_manager][membership][edge]") {
   DatabaseManager &database = db();
-  const std::string name = unique("member");
+  const User member = createUniqueUser();
+  const std::string name = member.getUsername();
 
-  REQUIRE_NOTHROW(database.setMembership(name, kLobby, "node-a"));
-  REQUIRE_NOTHROW(database.setMembership(name, kLobby, "node-b"));
-  REQUIRE_NOTHROW(database.setMembership(name, unique("room"), "node-a"));
-  REQUIRE_NOTHROW(database.setMembership("", "", ""));
-  REQUIRE_NOTHROW(database.clearMembership(name, unique("missing-room")));
-  REQUIRE_NOTHROW(database.clearMembership(unique("nobody"), kLobby));
+  REQUIRE_NOTHROW(database.setMembership(name, kLobbyId, "node-a"));
+  REQUIRE_NOTHROW(database.setMembership(name, kLobbyId, "node-b"));
+  REQUIRE_THROWS_AS(database.setMembership(name, 999999, "node-a"),
+                    DatabaseManager::ConstraintError);
+  REQUIRE_THROWS_AS(database.setMembership(unique("ghost"), kLobbyId, "node-a"),
+                    DatabaseManager::ConstraintError);
+  REQUIRE_THROWS_AS(database.setMembership("", 0, ""), DatabaseManager::ConstraintError);
+  REQUIRE_NOTHROW(database.clearMembership(name, 999999));
+  REQUIRE_NOTHROW(database.clearMembership(unique("nobody"), kLobbyId));
   REQUIRE_NOTHROW(database.clearAllMembership(name));
   REQUIRE_NOTHROW(database.clearAllMembership(unique("nobody")));
   REQUIRE_NOTHROW(database.clearAllMembership(""));
 
   const std::string unicode = unique("חבר");
-  REQUIRE_NOTHROW(database.setMembership(unicode, kLobby, "צומת"));
-  REQUIRE_NOTHROW(database.clearMembership(unicode, kLobby));
+  REQUIRE_NOTHROW(database.createUser(unicode, "secret", unicode + "@example.com"));
+  REQUIRE_NOTHROW(database.setMembership(unicode, kLobbyId, "צומת"));
+  REQUIRE_NOTHROW(database.clearMembership(unicode, kLobbyId));
 }
 
 // 17. concurrent writes
@@ -598,7 +605,7 @@ TEST_CASE("DatabaseManager concurrent writes", "[database_manager][thread]") {
       for (int i = 0; i < kEach; ++i) {
         const std::string id = unique("par");
         const Message msg = makeStored(from, "c", id, 9'800'000'000 + t * kEach + i);
-        if (database.saveMessage(msg, kLobby)) {
+        if (database.saveMessage(msg, kLobbyId)) {
           saved.fetch_add(1);
         }
       }
@@ -636,13 +643,13 @@ TEST_CASE("DatabaseManager typical register login logout flow", "[database_manag
   REQUIRE(std::holds_alternative<User>(login));
 
   database.setOnline(name, config::NODE_ID);
-  database.setMembership(name, kLobby, config::NODE_ID);
+  database.setMembership(name, kLobbyId, config::NODE_ID);
   REQUIRE(database.isUserOnline(name));
 
   const Message msg = makeStored(created, "hello lobby", unique("flowmsg"), 9'900'000'000);
-  REQUIRE(database.saveMessage(msg, kLobby));
+  REQUIRE(database.saveMessage(msg, kLobbyId));
 
-  const auto history = database.loadHistory(kLobby);
+  const auto history = database.loadHistory(kLobbyId);
   const auto it = std::find_if(history.begin(), history.end(),
                                [&](const Message &row) { return row.getId() == msg.getId(); });
   REQUIRE(it != history.end());
@@ -652,4 +659,81 @@ TEST_CASE("DatabaseManager typical register login logout flow", "[database_manag
   database.clearAllMembership(name);
   REQUIRE_FALSE(database.isUserOnline(name));
   REQUIRE(database.userExists(name));
+}
+
+// 19. createRoom assigns AUTOINCREMENT id; getRoom / listRooms round-trip
+TEST_CASE("DatabaseManager createRoom assigns id and round-trips",
+          "[database_manager][createRoom][room]") {
+  DatabaseManager &database = db();
+  const std::string name = unique("dbroom");
+
+  const Room created =
+      database.createRoom(name, Room::RoomType::QA, Room::Privacy::PRIVATE);
+  REQUIRE(created.getId() >= 3); // seed uses 1=Lobby, 2=General
+  REQUIRE(created.getName() == name);
+  REQUIRE(created.getType() == Room::RoomType::QA);
+  REQUIRE(created.getPrivacy() == Room::Privacy::PRIVATE);
+
+  const Room loaded = database.getRoom(created.getId());
+  REQUIRE(loaded == created);
+  REQUIRE(loaded.getName() == name);
+
+  bool found = false;
+  for (const Room &row : database.listRooms()) {
+    if (row.getId() == created.getId()) {
+      found = true;
+      REQUIRE(row.getName() == name);
+      break;
+    }
+  }
+  REQUIRE(found);
+
+  REQUIRE_THROWS_AS(database.createRoom(name, Room::RoomType::OTHER, Room::Privacy::PUBLIC),
+                    DatabaseManager::ConstraintError);
+
+  REQUIRE_NOTHROW(database.deleteRoom(created.getId()));
+  REQUIRE_THROWS_AS(database.getRoom(created.getId()), std::runtime_error);
+  REQUIRE_THROWS_AS(database.deleteRoom(1), std::runtime_error); // seed Lobby
+  REQUIRE_THROWS_AS(database.deleteRoom(2), std::runtime_error); // seed General
+}
+
+// 20. updateUser password and username
+TEST_CASE("DatabaseManager updateUser password and username", "[database_manager][updateUser]") {
+  DatabaseManager &database = db();
+  const std::string name = unique("upd");
+  const std::string email = name + "@mail.test";
+  database.createUser(name, "oldpw", email);
+
+  SECTION("password change keeps username") {
+    const User updated = database.updateUser(name, name, "newpw", email);
+    REQUIRE(updated.getUsername() == name);
+    REQUIRE(updated.getEmail() == email);
+
+    const auto ok = database.loginUser(name, "newpw");
+    REQUIRE(std::holds_alternative<User>(ok));
+    const auto bad = database.loginUser(name, "oldpw");
+    REQUIRE(std::holds_alternative<std::string>(bad));
+  }
+
+  SECTION("username rename and empty password keeps hash") {
+    const std::string renamed = unique("renamed");
+    const User updated = database.updateUser(name, renamed, "", email);
+    REQUIRE(updated.getUsername() == renamed);
+    REQUIRE_FALSE(database.userExists(name));
+    REQUIRE(database.userExists(renamed));
+
+    const auto ok = database.loginUser(renamed, "oldpw");
+    REQUIRE(std::holds_alternative<User>(ok));
+  }
+
+  SECTION("taken username is rejected") {
+    const std::string other = unique("other");
+    database.createUser(other, "pw", other + "@mail.test");
+    REQUIRE_THROWS_AS(database.updateUser(name, other, "", email),
+                      DatabaseManager::ConstraintError);
+  }
+
+  SECTION("email mismatch is rejected") {
+    REQUIRE_THROWS_AS(database.updateUser(name, name, "pw", "wrong@mail.test"), std::runtime_error);
+  }
 }

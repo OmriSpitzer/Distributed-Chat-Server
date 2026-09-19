@@ -6,6 +6,7 @@
 
 #pragma once
 #include "utils/models/message.h"
+#include "utils/models/room.h"
 #include "utils/models/user.h"
 #include <initializer_list>
 #include <mutex>
@@ -48,21 +49,25 @@ public:
   User createUser(const std::string_view &username, const std::string_view &password,
                   const std::string_view &email);
 
+  // update username and/or password for an existing user (empty password = keep current)
+  User updateUser(const std::string_view &currentUsername, const std::string_view &newUsername,
+                  const std::string_view &newPassword, const std::string_view &email);
+
   // authenticate: returns User or an error string
   std::variant<User, std::string> loginUser(const std::string_view &username,
                                             const std::string_view &password);
 
   // INSERT OR IGNORE — returns true if a new row was written
-  bool saveMessage(const Message &message, std::string_view room);
+  bool saveMessage(const Message &message, int roomId);
 
   // messages for a room, newest first
-  std::vector<Message> loadHistory(std::string_view room);
+  std::vector<Message> loadHistory(int roomId);
 
   // persist which node currently holds this user's socket in the room
-  void setMembership(std::string_view username, std::string_view room, std::string_view nodeId);
+  void setMembership(std::string_view username, int roomId, std::string_view nodeId);
 
   // drop a membership row
-  void clearMembership(std::string_view username, std::string_view room);
+  void clearMembership(std::string_view username, int roomId);
 
   // true if username has a cluster presence row
   bool isUserOnline(std::string_view username);
@@ -75,6 +80,34 @@ public:
 
   // drop all room membership rows for username
   void clearAllMembership(std::string_view username);
+
+  // create a new room
+  Room createRoom(std::string_view name, Room::RoomType type, Room::Privacy privacy,
+                  std::string_view creatorEmail = "");
+
+  // get a room by id
+  Room getRoom(int id);
+
+  // list all rooms
+  std::vector<Room> listRooms();
+
+  // delete a room
+  void deleteRoom(int id);
+
+  // get the allow list for a room
+  std::vector<std::string> getAllowList(int roomId);
+
+  // true if email is on the room allow list
+  bool isAllowed(int roomId, std::string_view email);
+
+  // true if email is the allow-list creator for the room
+  bool isAllowListCreator(int roomId, std::string_view email);
+
+  // add a user to the allow list for a room (idempotent)
+  void addToAllowList(int roomId, std::string_view email, bool creator);
+
+  // remove a user from the allow list for a room
+  void removeFromAllowList(int roomId, std::string_view email);
 
   // delete copy constructor and assignment operator
   DatabaseManager(const DatabaseManager &) = delete;
@@ -105,5 +138,12 @@ private:
   // INSERT / UPDATE / DELETE — returns sqlite3_changes()
   int execute(const char *sql, std::initializer_list<std::string_view> params = {});
 
+  // convert a SQL row to a User object
   static User userFromRow(const SqlRow &row);
+
+  // convert a SQL row to a Room object
+  static Room roomFromRow(const SqlRow &row);
+
+  // convert a SQL row to a Message object
+  static Message messageFromRow(const SqlRow &row);
 };

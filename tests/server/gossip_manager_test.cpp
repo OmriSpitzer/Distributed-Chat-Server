@@ -12,10 +12,12 @@
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
 #include "server/gossip_manager.h"
+#include "server/room_manager.h"
 #include "utils/gossip_payload.h"
 #include "utils/models/log_message.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
+#include "utils/models/room.h"
 #include "utils/socket_io.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
@@ -191,7 +193,7 @@ struct GossipFixture {
     }
     for (SOCKET socket : peerClients) {
       if (socket != INVALID_SOCKET) {
-        closesocket(socket);
+        socket_io::close(socket);
       }
     }
   }
@@ -217,7 +219,7 @@ struct GossipFixture {
     dest.sin_port = htons(peerPort);
     dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) != 0) {
-      closesocket(client);
+      socket_io::close(client);
       return INVALID_SOCKET;
     }
 
@@ -395,6 +397,44 @@ TEST_CASE("GossipManager rumor USER_CREATED inserts user", "[gossip_manager][rum
   fixture.gossip->stop();
 }
 
+// 10b. rumor ROOM_CREATED seeds creator allow list; ROOM_ACL_ADD invites
+TEST_CASE("GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD", "[gossip_manager][rumor][acl]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  REQUIRE(fixture.start());
+
+  const std::string creator = unique("owner");
+  const std::string creatorEmail = creator + "@example.com";
+  const std::string guest = unique("guest");
+  const std::string guestEmail = guest + "@example.com";
+  const std::string roomName = unique("vault");
+
+  REQUIRE_NOTHROW(db().createUser(creator, "secret", creatorEmail));
+  REQUIRE_NOTHROW(db().createUser(guest, "secret", guestEmail));
+
+  fixture.gossip->rumor(makeEvent("ROOM_CREATED", unique("rc"), creator, "Other", "PRIVATE",
+                                  roomName));
+
+  REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
+    return RoomManager::getInstance().getRoom(roomName).has_value();
+  }));
+
+  const auto created = RoomManager::getInstance().getRoom(roomName);
+  REQUIRE(created.has_value());
+  REQUIRE(created->getPrivacy() == Room::Privacy::PRIVATE);
+  REQUIRE(db().isAllowListCreator(created->getId(), creatorEmail));
+  REQUIRE(db().isAllowed(created->getId(), creatorEmail));
+  REQUIRE_FALSE(db().isAllowed(created->getId(), guestEmail));
+
+  fixture.gossip->rumor(
+      makeEvent("ROOM_ACL_ADD", unique("acl"), guest, "0", "", roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return db().isAllowed(created->getId(), guestEmail); }));
+  REQUIRE_FALSE(db().isAllowListCreator(created->getId(), guestEmail));
+
+  fixture.gossip->stop();
+}
+
 // 10. rumor ROOM_JOIN / ROOM_LEAVE
 TEST_CASE("GossipManager rumor ROOM_JOIN and ROOM_LEAVE", "[gossip_manager][rumor][room]") {
   REQUIRE(winsock().ok);
@@ -402,7 +442,8 @@ TEST_CASE("GossipManager rumor ROOM_JOIN and ROOM_LEAVE", "[gossip_manager][rumo
   REQUIRE(fixture.start());
 
   const std::string user = unique("joiner");
-  REQUIRE_NOTHROW(db().setMembership(user, "Lobby", "n1"));
+  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
+  REQUIRE_NOTHROW(db().setMembership(user, 1, "n1"));
 
   fixture.gossip->rumor(
       makeEvent("ROOM_JOIN", unique("rj"), user, "n2", "Lobby", "General"));
@@ -434,7 +475,7 @@ TEST_CASE("GossipManager rumor MESSAGE saves history", "[gossip_manager][rumor][
       makeEvent("MESSAGE", pipeMsgId, user, "hello|with|pipes", ts, "Lobby"));
 
   REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
-    const auto history = db().loadHistory("Lobby");
+    const auto history = db().loadHistory(1);
     bool plain = false;
     bool pipes = false;
     for (const auto &m : history) {
@@ -654,7 +695,7 @@ TEST_CASE("GossipManager dial connects to listening peer", "[gossip_manager][dia
 
   std::atomic<bool> gotHello{false};
   std::thread acceptor([&] {
-    SOCKET peer = accept(listenFd, nullptr, nullptr);
+    SOCKET peer = socket_io::acceptFrom(listenFd);
     if (peer == INVALID_SOCKET) {
       return;
     }
@@ -665,7 +706,7 @@ TEST_CASE("GossipManager dial connects to listening peer", "[gossip_manager][dia
       Packet reply(unique("listener"), "*", Packet::PacketType::GOSSIP_HELLO);
       socket_io::writePacket(peer, reply);
     }
-    closesocket(peer);
+    socket_io::close(peer);
   });
 
   resetLogger();
@@ -681,7 +722,7 @@ TEST_CASE("GossipManager dial connects to listening peer", "[gossip_manager][dia
   }));
 
   gossip.stop();
-  closesocket(listenFd);
+  socket_io::close(listenFd);
   if (acceptor.joinable()) {
     acceptor.join();
   }
@@ -738,7 +779,7 @@ TEST_CASE("GossipManager typical LOGIN MESSAGE LOGOUT flow", "[gossip_manager][f
   const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)));
   fixture.gossip->rumor(makeEvent("MESSAGE", msgId, user, "flow-hi", ts, "Lobby"));
   REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
-    for (const auto &m : db().loadHistory("Lobby")) {
+    for (const auto &m : db().loadHistory(1)) {
       if (m.getId() == msgId) {
         return true;
       }

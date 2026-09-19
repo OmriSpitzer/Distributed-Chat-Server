@@ -93,7 +93,7 @@ target_link_libraries(client_lib PUBLIC utils auth ws2_32 Threads::Threads)
 
 # Database Library
 add_library(sqlite3 STATIC src/database/sqlite/sqlite3.c)
-target_include_directories(sqlite3 PUBLIC src/database/sqlite)
+target_include_directories(sqlite3 PRIVATE src/database/sqlite)
 
 
 # SQL schema / query registry: "c_name:relative/path.sql"
@@ -102,6 +102,8 @@ set(DB_SCHEMAS
   "get_user:src/database/queries/get_user.sql"
   "login_user:src/database/queries/login_user.sql"
   "create_user:src/database/queries/create_user.sql"
+  "update_user_password:src/database/queries/update_user_password.sql"
+  "update_user:src/database/queries/update_user.sql"
   "user_exists:src/database/queries/user_exists.sql"
   "save_message:src/database/queries/save_message.sql"
   "load_history:src/database/queries/load_history.sql"
@@ -111,6 +113,15 @@ set(DB_SCHEMAS
   "set_online:src/database/queries/set_online.sql"
   "clear_online:src/database/queries/clear_online.sql"
   "clear_all_membership:src/database/queries/clear_all_membership.sql"
+  "create_room:src/database/queries/create_room.sql"
+  "get_room:src/database/queries/get_room.sql"
+  "list_rooms:src/database/queries/list_rooms.sql"
+  "delete_room:src/database/queries/delete_room.sql"
+  "get_allow_list:src/database/queries/get_allow_list.sql"
+  "add_user_allow_list:src/database/queries/add_user_allow_list.sql"
+  "remove_user_allow_list:src/database/queries/remove_user_allow_list.sql"
+  "is_allowed:src/database/queries/is_allowed.sql"
+  "is_allow_list_creator:src/database/queries/is_allow_list_creator.sql"
 )
 
 set(_sql_schemas_h "#pragma once\n\n// Generated - do not edit. Source: DB_SCHEMAS in CMakeLists.txt\nnamespace db::sql {\n\n")
@@ -136,6 +147,47 @@ file(WRITE "${CMAKE_BINARY_DIR}/generated/sql_schemas.h" "${_sql_schemas_h}")
 target_include_directories(server_lib PRIVATE "${CMAKE_BINARY_DIR}/generated")
 
 target_link_libraries(server_lib PUBLIC sqlite3)
+
+# Qt 6 (server GUI via chat_server)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+set(CMAKE_AUTOMOC ON)
+# chat_server was created above; enable moc on the target explicitly
+set_target_properties(chat_server PROPERTIES AUTOMOC ON)
+
+target_sources(chat_server PRIVATE
+  src/server/gui/main_page.cpp
+  src/server/gui/main_window.cpp
+  src/server/gui/panels/panel.cpp
+  src/server/gui/panels/log_panel.cpp
+  src/server/gui/panels/ports_panel.cpp
+  src/server/gui/panels/rooms_panel.cpp
+  src/server/gui/panels/users_panel.cpp
+  # headers with Q_OBJECT must be listed so AUTOMOC can scan them
+  include/server/gui/main_window.h
+  include/server/gui/panels/panel.h
+  include/server/gui/panels/log_panel.h
+  include/server/gui/panels/ports_panel.h
+  include/server/gui/panels/rooms_panel.h
+  include/server/gui/panels/users_panel.h
+)
+target_link_libraries(chat_server PRIVATE Qt6::Widgets)
+
+# Qt 6 (client GUI via chat_client)
+set_target_properties(chat_client PROPERTIES AUTOMOC ON)
+target_sources(chat_client PRIVATE
+  src/client/gui/components/button.cpp
+  src/client/gui/components/pop_up_window.cpp
+  src/client/gui/components/header.cpp
+  src/client/gui/components/page.cpp
+  src/client/gui/pages/dashboard_page.cpp
+  src/client/gui/pages/main_page.cpp
+  include/client/gui/components/button.h
+  include/client/gui/components/pop_up_window.h
+  include/client/gui/components/header.h
+  include/client/gui/components/page.h
+  include/client/gui/pages/dashboard_page.h
+)
+target_link_libraries(chat_client PRIVATE Qt6::Widgets)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ Libraries ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^
@@ -187,6 +239,27 @@ target_link_libraries(gossip_payload_test PRIVATE utils Catch2::Catch2WithMain)
 add_executable(authentication_test tests/auth/authentication_test.cpp)
 target_link_libraries(authentication_test PRIVATE auth Catch2::Catch2WithMain)
 
+# ------------ Client connections ------------
+add_executable(client_state_test tests/client/client_state_test.cpp)
+target_link_libraries(client_state_test PRIVATE utils Catch2::Catch2WithMain)
+
+add_executable(packet_builder_test tests/client/packet_builder_test.cpp
+               src/client/packet_builder.cpp)
+target_link_libraries(packet_builder_test PRIVATE utils Catch2::Catch2WithMain)
+
+add_executable(packet_handler_test tests/client/packet_handler_test.cpp
+               src/client/packet_handler.cpp)
+target_link_libraries(packet_handler_test PRIVATE utils Catch2::Catch2WithMain)
+
+add_executable(network_test tests/client/network_test.cpp src/client/network.cpp)
+target_link_libraries(network_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(console_ui_test tests/client/console_ui_test.cpp src/client/console_ui.cpp
+               src/client/packet_builder.cpp)
+target_link_libraries(console_ui_test PRIVATE utils Catch2::Catch2WithMain)
+
+add_executable(client_test tests/client/client_test.cpp tests/client/main_page_stub.cpp)
+target_link_libraries(client_test PRIVATE client_lib Catch2::Catch2WithMain Threads::Threads)
 
 # ------------ Server connections ------------
 add_executable(client_session_test tests/server/client_session_test.cpp src/server/client_session.cpp)
@@ -217,25 +290,33 @@ list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
 # ------------ Utils tests ------------
-#catch_discover_tests(user_test)
-#catch_discover_tests(room_test)
-#catch_discover_tests(serializer_test)
-#catch_discover_tests(socket_io_test)
-#catch_discover_tests(message_test)
-#catch_discover_tests(log_message_test)
-#catch_discover_tests(logger_test)
-#catch_discover_tests(packet_test)
-#catch_discover_tests(gossip_payload_test)
+catch_discover_tests(user_test)
+catch_discover_tests(room_test)
+catch_discover_tests(serializer_test)
+catch_discover_tests(socket_io_test)
+catch_discover_tests(message_test)
+catch_discover_tests(log_message_test)
+catch_discover_tests(logger_test)
+catch_discover_tests(packet_test)
+catch_discover_tests(gossip_payload_test)
 catch_discover_tests(authentication_test)
 
+# ------------ Client tests ------------
+catch_discover_tests(client_state_test)
+catch_discover_tests(packet_builder_test)
+catch_discover_tests(packet_handler_test)
+catch_discover_tests(network_test)
+catch_discover_tests(console_ui_test)
+catch_discover_tests(client_test)
+
 # ------------ Server tests ------------
-#catch_discover_tests(client_session_test)
-#catch_discover_tests(database_manager_test)
-#catch_discover_tests(heartbeat_test)
-#catch_discover_tests(room_manager_test)
-#catch_discover_tests(gossip_manager_test)
-#catch_discover_tests(packet_processor_test)
-#catch_discover_tests(connection_manager_test)
+catch_discover_tests(client_session_test)
+catch_discover_tests(database_manager_test)
+catch_discover_tests(heartbeat_test)
+catch_discover_tests(room_manager_test)
+catch_discover_tests(gossip_manager_test)
+catch_discover_tests(packet_processor_test)
+catch_discover_tests(connection_manager_test)
 catch_discover_tests(server_test)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

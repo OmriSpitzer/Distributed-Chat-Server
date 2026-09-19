@@ -35,9 +35,9 @@
 static const User kAnon = User::anonymousUser();
 static const User kAlice("alice", "alice@example.com", User::UserType::USER);
 static const User kBob("bob", "bob@example.com", User::UserType::ADMIN);
-static const Room kLobby("Lobby", Room::RoomType::LOBBY);
-static const Room kGeneral("General", Room::RoomType::OTHER);
-static const Room kSecure("secure", Room::RoomType::SECURITY, Room::Privacy::PRIVATE);
+static const Room kLobby(1, "Lobby", Room::RoomType::LOBBY);
+static const Room kGeneral(2, "General", Room::RoomType::OTHER);
+static const Room kSecure(3, "secure", Room::RoomType::SECURITY, Room::Privacy::PRIVATE);
 
 // 1. constructor defaults
 TEST_CASE("ClientSession constructor defaults", "[client_session][ctor]") {
@@ -61,10 +61,10 @@ TEST_CASE("ClientSession constructor edge sockets", "[client_session][ctor][edge
     REQUIRE(session.getSocket() == 0);
   }
 
-  // negative socket
-  SECTION("negative socket") {
-    ClientSession session(-1, kAlice, kGeneral);
-    REQUIRE(session.getSocket() == -1);
+  // invalid socket sentinel
+  SECTION("invalid socket") {
+    ClientSession session(INVALID_SOCKET, kAlice, kGeneral);
+    REQUIRE(session.getSocket() == INVALID_SOCKET);
   }
 
   // large socket fd

@@ -10,8 +10,14 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
+#include <winsock2.h>
+#ifdef ERROR
+#undef ERROR
+#endif
 
 class ClientSession;
 class ConnectionManager;
@@ -39,29 +45,34 @@ public:
 
   // broadcast a packet to all members of the room
   bool broadcast(const Room &room, const Packet &packet, ConnectionManager &connections,
-                 int skipSocket = -1);
+                 SOCKET skipSocket = INVALID_SOCKET);
 
   // broadcast a message to all members of all rooms
-  bool broadcastAll(const Packet &packet, ConnectionManager &connections, int skipSocket = -1);
+  bool broadcastAll(const Packet &packet, ConnectionManager &connections,
+                    SOCKET skipSocket = INVALID_SOCKET);
 
   // create a new room
-  bool createRoom(const Room &room);
+  bool createRoom(const Room &room, std::string_view creatorEmail = "");
 
   // delete an existing room
   bool deleteRoom(const std::string &roomName, ConnectionManager &connections);
 
-  // default lobby room
+  // default rooms
   static const Room LOBBY;
+  static const Room GENERAL;
+
+  // list all known rooms
+  std::vector<Room> listRooms() const;
 
 private:
   // constructor
   RoomManager();
 
   std::unordered_map<std::string, Room> knownRooms; // mapped all known rooms
-  std::unordered_map<std::string, std::unordered_set<int>>
+  std::unordered_map<std::string, std::unordered_set<SOCKET>>
       members;              // mapped all members of all rooms
   mutable std::mutex mutex; // mutex
 
   // remove a socket from a room
-  void removeSocketLocked(int socket, const std::string &roomName);
+  void removeSocketLocked(SOCKET socket, const std::string &roomName);
 };

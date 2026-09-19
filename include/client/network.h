@@ -1,21 +1,27 @@
 /**
  * Network header file class
  *
- * @date 07-09-2026
+ * @date 13-09-2026
  */
+
 #pragma once
 #include "utils/models/packet.h"
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <queue>
-#include <string>
-#include <string_view>
 #include <thread>
+#include <winsock2.h>
+#ifdef ERROR
+#undef ERROR
+#endif
 
 class Network {
 public:
+  using PushHandler = std::function<void(const Packet &)>;
+
   // constructor
   Network() = default;
 
@@ -33,7 +39,7 @@ public:
   void disconnect();
 
   // sending a packet to the main server
-  bool sendPacket(const Packet &packet, std::string_view message);
+  bool sendPacket(const Packet &packet);
 
   // receiving a packet from the server
   std::optional<Packet> receivePacket();
@@ -41,15 +47,19 @@ public:
   // check if the network is connected
   bool isConnected() const;
 
-private:
-  int clientSocket = -1;              // connected TCP socket
-  std::atomic<bool> connected{false}; // whether the network is connected
-  bool winsockStarted = false;        // whether this instance called WSAStartup
-  mutable std::mutex mutex;           // guards send, queue, and socket id
-  std::thread readerThread;           // reads the socket
-  std::queue<Packet> incoming;        // packets waiting for receivePacket
-  std::condition_variable incomingCv; // wait for a queued packet
+  // optional handler for unsolicited pushes (ROOM_LIST, etc.)
+  void setPushHandler(PushHandler handler);
 
-  // read loop: pong heartbeats, queue everything else
+private:
+  SOCKET clientSocket = INVALID_SOCKET; // connected TCP socket
+  std::atomic<bool> connected{false};   // whether the network is connected
+  bool winsockStarted = false;          // whether this instance called WSAStartup
+  mutable std::mutex mutex;             // guards send, queue, and socket id
+  std::thread readerThread;             // reads the socket
+  std::queue<Packet> incoming;          // packets waiting for receivePacket
+  std::condition_variable incomingCv;   // wait for a queued packet
+  PushHandler pushHandler;              // optional push callback
+
+  // read loop: pong heartbeats, apply pushes, queue everything else
   void readerLoop();
 };

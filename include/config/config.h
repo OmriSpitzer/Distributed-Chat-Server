@@ -40,6 +40,9 @@ inline constexpr int HEARTBEAT_INTERVAL = 5000;
 // heartbeat timeout in milliseconds
 inline constexpr int HEARTBEAT_TIMEOUT = 10000;
 
+// check if in test mode
+inline bool TEST_MODE = false;
+
 // print the usage of the program
 inline void printUsage(const char *program) {
   std::cerr << "Usage: " << program << " [options]\n"
@@ -49,6 +52,7 @@ inline void printUsage(const char *program) {
             << "  --peer-port N         gossip listen port (default: 5557)\n"
             << "  --peers H:P,H:P       other nodes' gossip addresses\n"
             << "  --db PATH             database path (default: data/node-1.db)\n"
+            << "  --test                run in test mode\n"
             << "  --help                show this help\n";
 }
 
@@ -168,6 +172,12 @@ inline bool parseArgs(int argc, char *argv[]) {
         return false;
       }
       DB_PATH = value;
+      continue;
+    }
+
+    // test mode config
+    if (arg == "--test") {
+      TEST_MODE = true;
       continue;
     }
 
