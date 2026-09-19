@@ -55,12 +55,6 @@ CREATE TABLE IF NOT EXISTS allow_list (
   FOREIGN KEY (email) REFERENCES users(email)
 );
 
--- Populate users table
-INSERT OR IGNORE INTO users (username, email, password, user_type) VALUES
-  ('omri', 'omri@gmail.com', '$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>', 'USER'),
-  ('spitzer', 'spitzer@gmail.com', '$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>', 'USER'),
-  ('admin', 'admin@gmail.com', '$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>', 'ADMIN');
-
 -- Populate rooms table
 INSERT OR IGNORE INTO rooms (id, name, type, privacy) VALUES
   (1, 'Lobby', 'Lobby', 'PUBLIC'),
