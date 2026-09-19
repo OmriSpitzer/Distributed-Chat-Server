@@ -1,7 +1,7 @@
 /**
  * ClientState unit tests
  *
- * @brief Includes: default empty, isLoggedIn from user only, clear empty / after session,
+ * @brief Includes: default empty, isLoggedIn from non-guest user, clear empty / after session,
  * room without user, user without room, replace user / room, clear is idempotent,
  * anonymous / empty-field user, Lobby room.
  * @date 13-09-2026
@@ -14,7 +14,7 @@
 
 /**
  * 1. default state is empty
- * 2. isLoggedIn follows user only
+ * 2. isLoggedIn follows non-guest user
  * 3. clear on empty state
  * 4. clear after login session
  * 5. room without user is not logged in
@@ -35,8 +35,8 @@ TEST_CASE("ClientState default state is empty", "[client_state][ctor][edge]") {
   REQUIRE(state.getRooms().empty());
 }
 
-// 2. isLoggedIn follows user only
-TEST_CASE("ClientState isLoggedIn follows user only", "[client_state][login][edge]") {
+// 2. isLoggedIn follows non-guest user
+TEST_CASE("ClientState isLoggedIn follows non-guest user", "[client_state][login][edge]") {
   ClientState state;
 
   state.user = User("alice", "alice@example.com", User::UserType::USER);
@@ -129,7 +129,7 @@ TEST_CASE("ClientState anonymous and empty-field users", "[client_state][user][e
   SECTION("anonymous user") {
     const User anon = User::anonymousUser();
     state.user = anon;
-    REQUIRE(state.isLoggedIn());
+    REQUIRE_FALSE(state.isLoggedIn());
     REQUIRE(state.user->getUsername() == anon.getUsername());
     REQUIRE(state.user->getEmail() == anon.getEmail());
     REQUIRE(state.user->getUserType() == User::UserType::GUEST);
@@ -138,7 +138,7 @@ TEST_CASE("ClientState anonymous and empty-field users", "[client_state][user][e
 
   SECTION("empty username and email") {
     state.user = User("", "", User::UserType::GUEST);
-    REQUIRE(state.isLoggedIn());
+    REQUIRE_FALSE(state.isLoggedIn());
     REQUIRE(state.user->getUsername().empty());
     REQUIRE(state.user->getEmail().empty());
   }

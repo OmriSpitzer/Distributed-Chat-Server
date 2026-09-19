@@ -49,5 +49,10 @@ PopUpWindow::PopUpWindow(const QString &title, QWidget *form, QWidget *parent, Q
 // run the pop-up window
 bool PopUpWindow::run(QWidget *parent, const QString &title, QWidget *form, QWidget *focus) {
   PopUpWindow dialog(title, form, parent, focus);
-  return dialog.exec() == QDialog::Accepted;
+  const bool accepted = dialog.exec() == QDialog::Accepted;
+  // form was reparented into the dialog; detach so the caller can still read fields
+  if (form) {
+    form->setParent(nullptr);
+  }
+  return accepted;
 }

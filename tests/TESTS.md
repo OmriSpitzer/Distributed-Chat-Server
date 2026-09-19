@@ -192,7 +192,7 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 ### ClientState (`[client_state]`)
 
 - ClientState default state is empty
-- ClientState isLoggedIn follows user only
+- ClientState isLoggedIn follows non-guest user
 - ClientState clear on empty state
 - ClientState clear after login session
 - ClientState room without user is not logged in
@@ -373,9 +373,9 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - PacketProcessor login success
 - PacketProcessor login rejects already online
 - PacketProcessor logout
-- PacketProcessor message auth and empty
+- PacketProcessor message auth and empty (guest can send; empty rejected)
 - PacketProcessor message success with pipes
-- PacketProcessor room join leave edges
+- PacketProcessor room join leave edges (guest public join/leave; guest denied private; unknown room)
 - PacketProcessor room join and leave
 - PacketProcessor response envelope
 - PacketProcessor typical register message logout flow

@@ -40,9 +40,9 @@
  * 7. login success
  * 8. login rejected when already online
  * 9. logout anonymous and authenticated
- * 10. message requires auth / rejects empty
+ * 10. message rejects empty; guests may send
  * 11. message success including pipes
- * 12. room join / leave auth and unknown room
+ * 12. room join / leave: guest public OK, guest private denied, unknown room
  * 13. room join empty room -> Lobby; leave -> Lobby
  * 14. response envelope fields
  * 15. typical register / message / logout flow
@@ -289,15 +289,18 @@ TEST_CASE("PacketProcessor logout", "[packet_processor][logout]") {
   }
 }
 
-// 10. message requires auth / rejects empty
+// 10. message: guests allowed; empty rejected
 TEST_CASE("PacketProcessor message auth and empty", "[packet_processor][message][edge]") {
   Fixture fx;
 
-  SECTION("not authenticated") {
-    Packet req("alice", "server", Packet::PacketType::MESSAGE, "Lobby", "hi");
+  SECTION("guest can send") {
+    REQUIRE_FALSE(fx.session.isAuthenticated());
+    REQUIRE(rooms().joinRoom(RoomManager::LOBBY.getName(), fx.session));
+    Packet req(fx.session.getUser().getUsername(), "server", Packet::PacketType::MESSAGE, "Lobby",
+               "hi from guest");
     const Packet res = process(req, fx.session, fx.connections);
-    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
-    REQUIRE(res.message == "not authenticated");
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(res.message == "ok");
   }
 
   SECTION("empty message") {
@@ -332,22 +335,49 @@ TEST_CASE("PacketProcessor message success with pipes", "[packet_processor][mess
   REQUIRE(found);
 }
 
-// 12. room join / leave auth and unknown room
+// 12. room join / leave: guests on public, private denied, unknown room
 TEST_CASE("PacketProcessor room join leave edges", "[packet_processor][room][edge]") {
   Fixture fx;
 
-  SECTION("join not authenticated") {
-    Packet req("alice", "server", Packet::PacketType::ROOM_JOIN, "General", "");
+  SECTION("guest can join public room") {
+    REQUIRE_FALSE(fx.session.isAuthenticated());
+    Packet req(fx.session.getUser().getUsername(), "server", Packet::PacketType::ROOM_JOIN,
+               "General", "");
     const Packet res = process(req, fx.session, fx.connections);
-    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
-    REQUIRE(res.message == "not authenticated");
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(res.room == "General");
+    REQUIRE(fx.session.getRoom().getName() == "General");
   }
 
-  SECTION("leave not authenticated") {
-    Packet req("alice", "server", Packet::PacketType::ROOM_LEAVE, "General", "");
-    const Packet res = process(req, fx.session, fx.connections);
+  SECTION("guest can leave to Lobby") {
+    Packet join(fx.session.getUser().getUsername(), "server", Packet::PacketType::ROOM_JOIN,
+                "General", "");
+    REQUIRE(process(join, fx.session, fx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::SUCCESS));
+
+    Packet leave(fx.session.getUser().getUsername(), "server", Packet::PacketType::ROOM_LEAVE,
+                 "General", "");
+    const Packet res = process(leave, fx.session, fx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(res.room == RoomManager::LOBBY.getName());
+    REQUIRE(fx.session.getRoom().getName() == RoomManager::LOBBY.getName());
+  }
+
+  SECTION("guest denied private room") {
+    const User owner = fx.createUser();
+    fx.authenticate(owner);
+    const std::string privateName = unique("guestvault");
+    Packet create(owner.getUsername(), "server", Packet::PacketType::ROOM_CREATE, privateName,
+                  "PRIVATE");
+    REQUIRE(process(create, fx.session, fx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::SUCCESS));
+
+    Fixture guestFx;
+    Packet join(guestFx.session.getUser().getUsername(), "server", Packet::PacketType::ROOM_JOIN,
+                privateName, "");
+    const Packet res = process(join, guestFx.session, guestFx.connections);
     REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
-    REQUIRE(res.message == "not authenticated");
+    REQUIRE(res.message.find("not allowed") != std::string::npos);
   }
 
   SECTION("unknown room") {
@@ -534,11 +564,13 @@ TEST_CASE("PacketProcessor LOAD_MESSAGE_HISTORY", "[packet_processor][history]")
   REQUIRE(res.message.find(user.getUsername()) != std::string::npos);
   REQUIRE(res.message.find("hello history") != std::string::npos);
 
-  SECTION("rejects when not authenticated") {
+  SECTION("guest can load history") {
     ClientSession anon(nextFakeSocket(), User::anonymousUser(), RoomManager::LOBBY);
-    Packet history("anon", "server", Packet::PacketType::LOAD_MESSAGE_HISTORY, "Lobby", "");
-    const Packet denied = process(history, anon, fx.connections);
-    REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+    Packet history(anon.getUser().getUsername(), "server",
+                   Packet::PacketType::LOAD_MESSAGE_HISTORY, "Lobby", "");
+    const Packet allowed = process(history, anon, fx.connections);
+    REQUIRE(allowed.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(allowed.message.find("hello history") != std::string::npos);
   }
 
   SECTION("unknown room returns NOT_FOUND") {

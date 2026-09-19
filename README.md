@@ -11,24 +11,25 @@ C++17 chat cluster for Windows. Clients talk to a TCP server over framed binary 
                               SQLite (per node)
 ```
 
-A console client (`chat_client`) and a Winsock server (`chat_server`) ship in this repo. Passwords are hashed with Argon2id. Each node keeps its own SQLite file and replicates events over gossip rather than sharing a single store.
+Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` for the console UIs used by scripts and Catch2. Passwords are hashed with Argon2id. Each node keeps its own SQLite file and replicates events over gossip rather than sharing a single store.
 
 Class-level diagrams live in [architecture.md](architecture.md).
 
 ## Features
 
-- **Auth** — register and login with Argon2id; one live session per user across the cluster
-- **Rooms** — join / leave rooms, default public Lobby, in-room broadcast
-- **Messages** — persist to SQLite, fan out to local sockets, rumor to peer nodes
+- **Auth** — register, login, logout, and profile update with Argon2id; one live session per user across the cluster
+- **Rooms** — public / private rooms, join / leave (back to Lobby), create, invite to private rooms
+- **Messages** — persist for registered users, live broadcast (including guests), rumor to peer nodes, history load
 - **Heartbeat** — server pings; client auto-replies `pong`; stale sockets are closed
 - **Gossip** — `HELLO`, `EVENT`, `DIGEST`, and `PULL` with periodic anti-entropy
-- **Console UI** — login, register, join room, send message, logout
+- **Qt GUI** — client chat dashboard and server Ports / Users / Rooms / Log panels (console via `--test`)
 
 ## Architecture
 
 ```
                     +------------------+
-                    |  Console client  |
+                    | Qt / console     |
+                    | chat_client      |
                     +--------+---------+
                              |  TCP :PORT
                              |  Packet (Serializer + socket_io)
@@ -43,7 +44,7 @@ Class-level diagrams live in [architecture.md](architecture.md).
               users · rooms · messages · membership · online_users
 ```
 
-**Client path.** `ConsoleUI` builds a `Packet` via `PacketBuilder`. `Network` writes it on the socket (background reader thread pongs heartbeats and logs pushed messages). The server `ConnectionManager` accepts the connection, owns a `ClientSession`, and hands the packet to `PacketProcessor`.
+**Client path.** The Qt dashboard (or `ConsoleUI`) calls `Client` action methods. `PacketBuilder` builds the `Packet`; `Network` writes it (background reader pongs heartbeats, applies `ROOM_LIST`, and queues `MESSAGE` pushes for the UI). The server `ConnectionManager` accepts the connection, owns a `ClientSession`, and hands the packet to `PacketProcessor`.
 
 **Server path.** `PacketProcessor` authenticates against `DatabaseManager`, updates `RoomManager`, and rumors a `GOSSIP_EVENT` through `GossipManager`. Gossip applies the event locally (persist + optional room broadcast) and forwards it to peers. Anti-entropy digests catch nodes that missed a rumor.
 
@@ -62,9 +63,11 @@ Gossip event bodies use five length-prefixed fields (`type`, `eventId`, `usernam
 |------|------|
 | `LOGIN` / `REGISTER` / `LOGOUT` | Session lifecycle; login/register success puts room directory in `room` |
 | `ROOM_JOIN` / `ROOM_LEAVE` | Membership (`LEAVE` returns to Lobby) |
-| `ROOM_CREATE` | Create room (`room` = name, `message` = optional `type\|privacy`) |
+| `ROOM_CREATE` | Create room (`room` = name, `message` = optional privacy) |
+| `ROOM_INVITE` | Allow-list a user for a private room |
 | `ROOM_LIST` | Server push of full directory (`responseCode == 0`, body in `message`) |
 | `MESSAGE` | Chat send (response) and room push (`responseCode == 0`) |
+| `LOAD_MESSAGE_HISTORY` | History for the current room |
 | `HEARTBEAT` | Server `ping` / client `pong` |
 | `UPDATE_USER` | Profile update |
 | `GOSSIP_HELLO` / `GOSSIP_EVENT` / `GOSSIP_DIGEST` / `GOSSIP_PULL` | Peer port only |
@@ -73,21 +76,25 @@ Responses use `200` success, `400` error, `404` not found, `500` internal.
 
 ## Quick start
 
-Requires **CMake 3.16+**, a **C++17** compiler, and **Ninja** if you use the PowerShell helpers. The server and client link **Winsock** (`ws2_32`). Catch2 v3.8.1 and Argon2 are fetched at configure time.
+Requires **CMake 3.16+**, a **C++17** compiler, **Qt 6 Widgets**, and **Ninja** if you use the PowerShell helpers. The server and client link **Winsock** (`ws2_32`). Catch2 v3.8.1 and Argon2 are fetched at configure time.
 
 ```powershell
 cmake -B build -S . -G "Ninja" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build
 
-# Server (listens on 5555, gossip on 5557)
+# Server GUI (listens on 5555, gossip on 5557)
 .\src\server.ps1
 # or
 .\build\chat_server.exe
 
-# Client (connects to 127.0.0.1:5555)
+# Client GUI (connects to 127.0.0.1:5555)
 .\src\client.ps1
 # or
 .\build\chat_client.exe
+
+# Console UIs (scripts / tests)
+.\build\chat_server.exe --test
+.\build\chat_client.exe --test
 ```
 
 SQLite files are created under `data/` relative to the process working directory (gitignored). Prefer running from the repo root.
@@ -116,6 +123,7 @@ CLI flags map onto `include/config/config.h`:
 | `--peer-port N` | `5557` | Gossip listen port |
 | `--peers H:P,H:P` | *(empty)* | Other nodes' gossip addresses |
 | `--db PATH` | `data/node-1.db` | SQLite path |
+| `--test` | off | Console UI instead of Qt |
 | `--help` | | Print usage |
 
 Heartbeat interval is 5 s; timeout is 10 s. Worker thread count is 4.
@@ -128,9 +136,9 @@ Distributed-Chat-Server/
 ├── architecture.md         Class and sequence diagrams
 ├── include/                Public headers
 │   ├── auth/               Argon2id wrapper
-│   ├── client/             Network, UI, packets, client state
+│   ├── client/             Network, packets, state, Qt dashboard
 │   ├── config/             Ports, peers, DB path, CLI parser
-│   ├── server/             Sessions, rooms, gossip, heartbeat
+│   ├── server/             Sessions, rooms, gossip, heartbeat, Qt panels
 │   └── utils/              Packet, serializer, socket_io, models
 ├── src/
 │   ├── server.ps1          Configure, build, run chat_server
@@ -151,8 +159,8 @@ Headers live in `include/`; implementations live in `src/`. CMake adds `include/
 |--------|------|
 | `utils` | Models, serializer, socket I/O, gossip payload |
 | `auth` | Argon2id hash / verify |
-| `server_lib` / `chat_server` | Server library and executable |
-| `client_lib` / `chat_client` | Client library and executable |
+| `server_lib` / `chat_server` | Server library and Qt/console executable |
+| `client_lib` / `chat_client` | Client library and Qt/console executable |
 | `sqlite3` | Bundled SQLite amalgamation |
 | `*_test` | Catch2 binaries (discovered by CTest) |
 
@@ -162,6 +170,6 @@ ctest --test-dir build --output-on-failure
 
 ## Status
 
-**Working today:** TCP accept and framed I/O, console login/register/logout, room join/leave, message persist and broadcast, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, Catch2 coverage for utils, auth, client, and server.
+**Working today:** framed TCP, Qt and console clients/servers (`--test` for console), register / login / logout / profile, public and private rooms (join, leave, create, invite), live chat plus history for registered users, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, Catch2 coverage for utils, auth, client, and server.
 
-**Not in this tree:** profile updates (menu stub), room directory in the console UI, WebSocket or GUI clients, a shared remote database. `ThreadPool` is constructed but session I/O currently runs on dedicated threads.
+**Still open:** WebSocket or a shared remote database, ADMIN/USER role checks, gossip replicating password hashes, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). `ThreadPool` is constructed but session I/O runs on dedicated threads. See [STEPS.md](STEPS.md).

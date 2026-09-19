@@ -10,6 +10,7 @@
 #include "config/config.h"
 #include "utils/RESPONSE_CODES.h"
 #include "utils/models/packet.h"
+#include "utils/models/room.h"
 #include "utils/models/user.h"
 #include "utils/socket_io.h"
 #include <catch2/catch_test_macros.hpp>
@@ -143,8 +144,20 @@ Packet simpleReply(Packet::PacketType type, int code, const std::string &message
   return Packet("server", "client", type, "", message, code);
 }
 
+Packet connectWelcome() {
+  const User anon = User::anonymousUser();
+  const std::string directory = Room::serializeList({
+      Room(1, "Lobby", Room::RoomType::LOBBY),
+      Room(2, "General", Room::RoomType::OTHER),
+  });
+  return Packet("server", anon.serialize(), Packet::PacketType::ROOM_LIST, "Lobby", directory, 0);
+}
+
 bool startClient(Client &client, TestPeer &server) {
-  std::thread acceptor([&server] { (void)server.acceptOnce(); });
+  std::thread acceptor([&server] {
+    REQUIRE(server.acceptOnce());
+    REQUIRE(socket_io::writePacket(server.peer, connectWelcome()));
+  });
   const bool ok = client.start();
   acceptor.join();
   return ok && server.peer != INVALID_SOCKET && client.isAlive();
@@ -241,6 +254,7 @@ TEST_CASE("Client login success round-trip", "[client][login]") {
 
   std::thread serverThread([&] {
     REQUIRE(server.acceptOnce());
+    REQUIRE(socket_io::writePacket(server.peer, connectWelcome()));
     const auto req = socket_io::readPacket(server.peer);
     REQUIRE(req.has_value());
     REQUIRE(req->type == Packet::PacketType::LOGIN);
@@ -269,6 +283,7 @@ TEST_CASE("Client login failure keeps connection", "[client][login][edge]") {
 
   std::thread serverThread([&] {
     REQUIRE(server.acceptOnce());
+    REQUIRE(socket_io::writePacket(server.peer, connectWelcome()));
     const auto req = socket_io::readPacket(server.peer);
     REQUIRE(req.has_value());
     REQUIRE(req->type == Packet::PacketType::LOGIN);
@@ -307,6 +322,7 @@ TEST_CASE("Client register success round-trip", "[client][register]") {
 
   std::thread serverThread([&] {
     REQUIRE(server.acceptOnce());
+    REQUIRE(socket_io::writePacket(server.peer, connectWelcome()));
     const auto req = socket_io::readPacket(server.peer);
     REQUIRE(req.has_value());
     REQUIRE(req->type == Packet::PacketType::REGISTER);
@@ -338,6 +354,7 @@ TEST_CASE("Client login then logout", "[client][logout]") {
 
   std::thread serverThread([&] {
     REQUIRE(server.acceptOnce());
+    REQUIRE(socket_io::writePacket(server.peer, connectWelcome()));
 
     const auto login = socket_io::readPacket(server.peer);
     REQUIRE(login.has_value());

@@ -12,6 +12,7 @@
 class Header;
 class QLabel;
 class Client;
+class QTimer;
 
 class Page : public QWidget {
   Q_OBJECT
@@ -34,6 +35,9 @@ protected:
 
   // refresh the page
   virtual void refresh() = 0;
+
+  static constexpr int REFRESH_INTERVAL = 500; // refresh interval
+  QTimer *refreshTimer{nullptr};               // refresh timer
 
 private:
   Client *clientObject{nullptr};    // client instance

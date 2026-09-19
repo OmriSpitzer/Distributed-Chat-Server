@@ -168,14 +168,13 @@ void Network::readerLoop() {
       continue;
     }
 
-    // check if the packet is a message
-    if (packet->type == Packet::PacketType::MESSAGE && packet->responseCode == 0) {
-      Logger::logInfo("Network", "[" + packet->sender + "]: " + packet->message);
-      continue;
-    }
+    // unsolicited chat / room-directory pushes
+    if (packet->responseCode == 0 && (packet->type == Packet::PacketType::MESSAGE ||
+                                      packet->type == Packet::PacketType::ROOM_LIST)) {
+      if (packet->type == Packet::PacketType::MESSAGE) {
+        Logger::logInfo("Network", "[" + packet->sender + "]: " + packet->message);
+      }
 
-    // unsolicited room directory push
-    if (packet->type == Packet::PacketType::ROOM_LIST && packet->responseCode == 0) {
       PushHandler handler;
       {
         std::lock_guard<std::mutex> lock(mutex);
@@ -183,6 +182,8 @@ void Network::readerLoop() {
       }
       if (handler) {
         handler(*packet);
+      } else if (packet->type == Packet::PacketType::ROOM_LIST) {
+        Logger::logWarning("Network", "ROOM_LIST ignored — no push handler");
       }
       continue;
     }

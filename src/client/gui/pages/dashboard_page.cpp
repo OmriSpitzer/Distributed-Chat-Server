@@ -10,47 +10,65 @@
 #include "client/gui/components/button.h"
 #include "client/gui/components/header.h"
 #include "client/gui/components/pop_up_window.h"
+#include "utils/models/room.h"
+#include "utils/models/user.h"
 #include <QComboBox>
+#include <QDateTime>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
-#include <QMenu>
 #include <QMessageBox>
 #include <QPlainTextEdit>
-#include <QPoint>
+#include <QVariant>
 #include <QVBoxLayout>
+#include <algorithm>
+#include <vector>
+
+namespace {
+QString roomNameOf(const ClientState &state) {
+  if (!state.currentRoom) {
+    return QStringLiteral("Lobby");
+  }
+  return QString::fromStdString(state.currentRoom->getName());
+}
+
+QString formatChatTime(quint64 timestamp) {
+  const qint64 secs =
+      timestamp != 0 ? static_cast<qint64>(timestamp) : QDateTime::currentSecsSinceEpoch();
+  return QDateTime::fromSecsSinceEpoch(secs).toString("dd/MM/yy, HH:mm");
+}
+
+QString privacyLabel(Room::Privacy privacy) {
+  return privacy == Room::Privacy::PRIVATE ? QStringLiteral("Private") : QStringLiteral("Public");
+}
+
+QString roomListLabel(const Room &room, const QString &currentRoom) {
+  const QString name = QString::fromStdString(room.getName());
+  QString label = name + QStringLiteral(" room  ·  ") + privacyLabel(room.getPrivacy());
+  if (name == currentRoom) {
+    label += QStringLiteral("  ·  here");
+  }
+  return label;
+}
+} // namespace
 
 // constructor
 DashboardPage::DashboardPage(QWidget *parent, Client *client)
     : Page("Distributed Chat", parent, client) {
-  connectHeader();  // connect the header
-  buildWorkspace(); // build the workspace
-
-  // body layout properties
+  connectHeader();
+  buildWorkspace();
   getBodyLayout()->setContentsMargins(20, 20, 20, 20);
-
-  // refresh the page
   refresh();
 }
 
 // connect the header
 void DashboardPage::connectHeader() {
-  // connect buttons
   header()->signUpButton()->setOnClick([this]() { openSignUpDialog(); });
   header()->logInButton()->setOnClick([this]() { openLogInDialog(); });
-
-  // TODO: Examine this code
-  header()->userChip()->setOnClick([this]() {
-    QMenu menu(this); // create the menu
-
-    menu.addAction("Update profile", this, [this]() { openUpdateProfileDialog(); });
-    menu.addSeparator();
-    menu.addAction("Logout", this, [this]() { logout(); });
-    menu.exec(header()->userChip()->mapToGlobal(QPoint(0, header()->userChip()->height() + 6)));
-  });
+  header()->logoutButton()->setOnClick([this]() { logout(); });
 }
 
 // build the workspace
@@ -68,16 +86,6 @@ void DashboardPage::buildWorkspace() {
   side->setFixedWidth(280);        // set the fixed width
 
   // side layout properties
-  auto *sideLayout = new QVBoxLayout(side);       // create the side layout
-  sideLayout->setContentsMargins(16, 16, 16, 16); // set the contents margins
-  sideLayout->setSpacing(10);                     // set the spacing
-
-  // rooms label
-  auto *roomsLabel = new QLabel("ROOMS", side);
-  side->setObjectName("SideCard");
-  side->setFixedWidth(280);
-
-  // side layout properties
   auto *sideLayout = new QVBoxLayout(side);
   sideLayout->setContentsMargins(16, 16, 16, 16);
   sideLayout->setSpacing(10);
@@ -87,7 +95,7 @@ void DashboardPage::buildWorkspace() {
   roomsLabel->setObjectName("SectionTitle");
   roomsList = new QListWidget(side);
 
-  // buttons
+  const bool loggedIn = client() && client()->getState().isLoggedIn();
   joinButton =
       new Button("Join room", [this]() { openJoinRoomDialog(); }, true, side, "GhostButton");
   leaveButton = new Button("Leave room", [this]() { leaveRoom(); }, true, side, "GhostButton");
@@ -125,12 +133,9 @@ void DashboardPage::buildWorkspace() {
   roomTitle->setObjectName("RoomTitle");
 
   // buttons
-  historyButton =
-      new Button("Load history", [this]() { loadHistory(); }, true, chat, "GhostButton");
   updateProfileButton = new Button(
       "Update profile", [this]() { openUpdateProfileDialog(); }, true, chat, "GhostButton");
   chatHeader->addWidget(roomTitle, 1);
-  chatHeader->addWidget(historyButton);
   chatHeader->addWidget(updateProfileButton);
 
   // transcript
@@ -158,35 +163,82 @@ void DashboardPage::buildWorkspace() {
   // connect signals
   connect(composer, &QLineEdit::returnPressed, this, &DashboardPage::sendMessage);
   connect(roomsList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
-    if (item) {
-      currentRoom = item->text().section(' ', 0, 0);
-      appendMessage("system", "Joined " + currentRoom);
-      refresh();
+    if (!item) {
+      return;
     }
+    const QString name = item->data(Qt::UserRole).toString();
+    if (name.isEmpty() || name.startsWith('(')) {
+      return;
+    }
+    enterRoom(name);
   });
 }
 
 // get the display name
-QString DashboardPage::displayName() const { return loggedIn ? username : QString("Guest"); }
+QString DashboardPage::displayName() const {
+  if (client() && client()->getState().user) {
+    return QString::fromStdString(client()->getState().user->getUsername());
+  }
+  return QStringLiteral("Guest");
+}
 
 // refresh the page
 void DashboardPage::refresh() {
-  const bool connected = !client() || client()->isAlive(); // check if the client is connected
+  if (!client()) {
+    return;
+  }
 
-  // set the subtitle label
+  flushIncomingChat();
+
+  ClientState &state = client()->getState();
+  const bool connected = client()->isAlive();
+  const QString currentRoom = roomNameOf(state);
+  const std::vector<Room> rooms = state.getRooms();
+
   header()->subtitleLabel()->setText(connected ? "Connected" : "Disconnected");
+  header()->setLoggedIn(state.isLoggedIn(), displayName());
+  createRoomButton->setVisible(state.isLoggedIn());
+  inviteButton->setVisible(state.isLoggedIn());
 
-  // set the logged in state
-  header()->setLoggedIn(loggedIn, displayName());
+  // oldest created first (room id is AUTOINCREMENT)
+  std::vector<Room> roomsSorted = rooms;
+  std::sort(roomsSorted.begin(), roomsSorted.end(),
+            [](const Room &a, const Room &b) { return a.getId() < b.getId(); });
 
-  // set the create room button visibility
-  createRoomButton->setVisible(loggedIn);
+  struct RoomRow {
+    QString name;
+    QString label;
+  };
+  std::vector<RoomRow> nextRows;
+  nextRows.reserve(roomsSorted.size());
+  for (const Room &room : roomsSorted) {
+    const QString name = QString::fromStdString(room.getName());
+    nextRows.push_back({name, roomListLabel(room, currentRoom)});
+  }
+  if (nextRows.empty()) {
+    nextRows.push_back({QString(), connected ? QStringLiteral("(waiting for rooms…)")
+                                             : QStringLiteral("(not connected)")});
+  }
 
-  // clear the rooms list
-  roomsList->clear();
-  for (const QString &room : rooms) {
-    const QString mark = (room == currentRoom) ? "  ·  here" : "";
-    roomsList->addItem(room + mark);
+  bool roomsUnchanged = roomsList->count() == static_cast<int>(nextRows.size());
+  if (roomsUnchanged) {
+    for (int i = 0; i < static_cast<int>(nextRows.size()); ++i) {
+      const QListWidgetItem *item = roomsList->item(i);
+      if (!item || item->text() != nextRows[static_cast<std::size_t>(i)].label ||
+          item->data(Qt::UserRole).toString() != nextRows[static_cast<std::size_t>(i)].name) {
+        roomsUnchanged = false;
+        break;
+      }
+    }
+  }
+
+  if (!roomsUnchanged) {
+    roomsList->clear();
+    for (const RoomRow &row : nextRows) {
+      auto *item = new QListWidgetItem(row.label);
+      item->setData(Qt::UserRole, row.name);
+      roomsList->addItem(item);
+    }
   }
 
   // set the room title
@@ -195,19 +247,72 @@ void DashboardPage::refresh() {
 }
 
 // append a message to the transcript
-void DashboardPage::appendMessage(const QString &author, const QString &text) {
-  messages.append(author + ": " + text);
-  transcript->appendPlainText(author + "  ·  " + text);
+void DashboardPage::appendMessage(const QString &author, const QString &text, quint64 timestamp) {
+  transcript->appendPlainText(formatChatTime(timestamp) + "  ·  " + author + "  ·  " + text);
+}
+
+// drain network chat pushes into the transcript
+void DashboardPage::flushIncomingChat() {
+  if (!client()) {
+    return;
+  }
+  for (const ChatLine &line : client()->takePendingChatMessages()) {
+    appendMessage(QString::fromStdString(line.author), QString::fromStdString(line.text),
+                  line.timestamp);
+  }
+}
+
+// clear transcript and load history for the current room
+void DashboardPage::resetTranscriptForCurrentRoom() {
+  if (!client() || !transcript) {
+    return;
+  }
+  client()->clearPendingChatMessages();
+  transcript->clear();
+
+  std::vector<ChatLine> lines;
+  const std::string error = client()->loadMessageHistory(lines);
+  if (!error.empty()) {
+    appendMessage("system", QString::fromStdString(error));
+    return;
+  }
+  for (const ChatLine &line : lines) {
+    appendMessage(QString::fromStdString(line.author), QString::fromStdString(line.text),
+                  line.timestamp);
+  }
+}
+
+// join a room by name (clears transcript, loads history)
+bool DashboardPage::enterRoom(const QString &name) {
+  if (!client() || name.isEmpty()) {
+    return false;
+  }
+
+  const std::string error = client()->joinRoom(name.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Join room", QString::fromStdString(error));
+    return false;
+  }
+
+  resetTranscriptForCurrentRoom();
+  refresh();
+  return true;
 }
 
 // open the log in dialog
 void DashboardPage::openLogInDialog() {
-  auto *form = new QWidget;              // create the form
-  auto *layout = new QFormLayout(form);  // create the form layout
-  auto *userField = new QLineEdit(form); // create the username field
-  auto *passField = new QLineEdit(form); // create the password field
+  if (!client()) {
+    return;
+  }
+  if (client()->getState().isLoggedIn()) {
+    QMessageBox::information(this, "Log in", "Already logged in.");
+    return;
+  }
 
-  // set the password field echo mode
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *userField = new QLineEdit(form);
+  auto *passField = new QLineEdit(form);
   passField->setEchoMode(QLineEdit::Password);
   layout->addRow("Username", userField);
   layout->addRow("Password", passField);
@@ -217,31 +322,43 @@ void DashboardPage::openLogInDialog() {
     return;
   }
 
-  // check if the username is empty
-  username = userField->text().trimmed();
+  const QString username = userField->text().trimmed();
+  const QString password = passField->text();
   if (username.isEmpty()) {
     QMessageBox::warning(this, "Log in", "Username cannot be empty.");
     return;
   }
+  if (password.isEmpty()) {
+    QMessageBox::warning(this, "Log in", "Password cannot be empty.");
+    return;
+  }
 
-  // set the email
-  email = username + "@example.com";
-  loggedIn = true;
+  const std::string error =
+      client()->login(username.toStdString(), password.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Log in", QString::fromStdString(error));
+    return;
+  }
 
-  // append a message to the transcript
-  appendMessage("system", "Logged in as " + username);
+  resetTranscriptForCurrentRoom();
   refresh();
 }
 
 // open the sign up dialog
 void DashboardPage::openSignUpDialog() {
-  auto *form = new QWidget;               // create the form
-  auto *layout = new QFormLayout(form);   // create the form layout
-  auto *userField = new QLineEdit(form);  // create the username field
-  auto *passField = new QLineEdit(form);  // create the password field
-  auto *emailField = new QLineEdit(form); // create the email field
+  if (!client()) {
+    return;
+  }
+  if (client()->getState().isLoggedIn()) {
+    QMessageBox::information(this, "Sign in", "Already logged in.");
+    return;
+  }
 
-  // set the password field echo mode
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *userField = new QLineEdit(form);
+  auto *passField = new QLineEdit(form);
+  auto *emailField = new QLineEdit(form);
   passField->setEchoMode(QLineEdit::Password);
   layout->addRow("Username", userField);
   layout->addRow("Password", passField);
@@ -252,33 +369,45 @@ void DashboardPage::openSignUpDialog() {
     return;
   }
 
-  // check if the username or email is empty
-  username = userField->text().trimmed();
-  email = emailField->text().trimmed();
+  const QString username = userField->text().trimmed();
+  const QString password = passField->text();
+  const QString email = emailField->text().trimmed();
   if (username.isEmpty() || email.isEmpty()) {
     QMessageBox::warning(this, "Sign in", "Username and email are required.");
     return;
   }
+  if (password.isEmpty()) {
+    QMessageBox::warning(this, "Sign in", "Password cannot be empty.");
+    return;
+  }
 
-  // set the logged in state
-  loggedIn = true;
-  appendMessage("system", "Account created for " + username);
+  const std::string error =
+      client()->signUp(username.toStdString(), password.toStdString(), email.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Sign in", QString::fromStdString(error));
+    return;
+  }
+
+  resetTranscriptForCurrentRoom();
   refresh();
 }
 
 // open the update profile dialog
 void DashboardPage::openUpdateProfileDialog() {
-  auto *form = new QWidget;                        // create the form
-  auto *layout = new QFormLayout(form);            // create the form layout
-  auto *userField = new QLineEdit(username, form); // create the username field
-  auto *passField = new QLineEdit(form);           // create the password field
+  if (!client() || !client()->getState().isLoggedIn()) {
+    QMessageBox::information(this, "Update profile", "Log in first.");
+    return;
+  }
 
-  // set the password field echo mode
+  const User &user = *client()->getState().user;
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *userField = new QLineEdit(QString::fromStdString(user.getUsername()), form);
+  auto *passField = new QLineEdit(form);
+  auto *emailField = new QLineEdit(QString::fromStdString(user.getEmail()), form);
   passField->setEchoMode(QLineEdit::Password);
   passField->setPlaceholderText("Leave blank to keep current");
-
-  // create the email field
-  auto *emailField = new QLineEdit(email, form);
+  emailField->setReadOnly(true);
   layout->addRow("Username", userField);
   layout->addRow("New password", passField);
   layout->addRow("Email", emailField);
@@ -288,31 +417,36 @@ void DashboardPage::openUpdateProfileDialog() {
     return;
   }
 
-  // check if the username is empty
-  username = userField->text().trimmed();
+  const QString username = userField->text().trimmed();
+  const QString password = passField->text();
   if (username.isEmpty()) {
     QMessageBox::warning(this, "Update profile", "Username cannot be empty.");
     return;
   }
 
-  // set the email
-  email = emailField->text().trimmed();
-  appendMessage("system", "Profile updated");
+  // email is fixed by the server (must match the session profile)
+  const std::string error = client()->updateProfile(
+      username.toStdString(), password.toStdString(), user.getEmail());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Update profile", QString::fromStdString(error));
+    return;
+  }
+
   refresh();
 }
 
 // open the join room dialog
 void DashboardPage::openJoinRoomDialog() {
-  auto *form = new QWidget;              // create the form
-  auto *layout = new QFormLayout(form);  // create the form layout
-  auto *roomField = new QComboBox(form); // create the room field
+  if (!client()) {
+    return;
+  }
 
-  // set the room field editable
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *roomField = new QComboBox(form);
   roomField->setEditable(true);
-
-  // add the rooms to the room field
-  for (const QString &room : rooms) {
-    roomField->addItem(room);
+  for (const Room &room : client()->getState().getRooms()) {
+    roomField->addItem(QString::fromStdString(room.getName()));
   }
   layout->addRow("Room", roomField);
 
@@ -321,39 +455,26 @@ void DashboardPage::openJoinRoomDialog() {
     return;
   }
 
-  // check if the room is empty
   const QString name = roomField->currentText().trimmed();
   if (name.isEmpty()) {
+    QMessageBox::warning(this, "Join room", "Room name cannot be empty.");
     return;
   }
 
-  // check if the room is already in the list
-  if (!rooms.contains(name)) {
-    rooms.append(name);
-  }
-
-  // set the current room
-  currentRoom = name;
-
-  // append a message to the transcript
-  appendMessage("system", "Joined " + currentRoom);
-  refresh();
+  enterRoom(name);
 }
 
 // open the create room dialog
 void DashboardPage::openCreateRoomDialog() {
-  // check if the user is logged in
-  if (!loggedIn) {
+  if (!client() || !client()->getState().isLoggedIn()) {
     QMessageBox::information(this, "Create room", "Log in to create a room.");
     return;
   }
 
-  auto *form = new QWidget;              // create the form
-  auto *layout = new QFormLayout(form);  // create the form layout
-  auto *nameField = new QLineEdit(form); // create the name field
-  auto *privacy = new QComboBox(form);   // create the privacy field
-
-  // add the privacy options to the privacy field
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *nameField = new QLineEdit(form);
+  auto *privacy = new QComboBox(form);
   privacy->addItems({"Public", "Private"});
   layout->addRow("Name", nameField);
   layout->addRow("Privacy", privacy);
@@ -370,24 +491,40 @@ void DashboardPage::openCreateRoomDialog() {
     return;
   }
 
-  // check if the room is already in the list
-  if (!rooms.contains(name)) {
-    rooms.append(name);
+  const QString privacyText = privacy->currentText();
+  const std::string privacyWire =
+      (privacyText == QStringLiteral("Private")) ? "PRIVATE" : "PUBLIC";
+
+  const std::string error =
+      client()->createRoom(name.toStdString(), privacyWire);
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Create room", QString::fromStdString(error));
+    return;
   }
 
-  // set the current room
-  currentRoom = name;
-  appendMessage("system", "Created " + name + " (" + privacy->currentText() + ")");
-  refresh();
+  // enter the new room (clears transcript + loads history); no "Created" system line
+  enterRoom(name);
 }
 
 // open the invite dialog
 void DashboardPage::openInviteDialog() {
-  auto *form = new QWidget;             // create the form
-  auto *layout = new QFormLayout(form); // create the form layout
-  auto *invitee = new QLineEdit(form);  // create the invitee field
+  if (!client()) {
+    return;
+  }
+  if (!client()->getState().isLoggedIn()) {
+    QMessageBox::information(this, "Invite", "Log in to invite users.");
+    return;
+  }
 
-  // add the room label and invitee field to the form
+  const QString currentRoom = roomNameOf(client()->getState());
+  if (currentRoom == "Lobby") {
+    QMessageBox::information(this, "Invite", "Join a private room before inviting.");
+    return;
+  }
+
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *invitee = new QLineEdit(form);
   layout->addRow("Room", new QLabel(currentRoom, form));
   layout->addRow("Username", invitee);
 
@@ -396,57 +533,75 @@ void DashboardPage::openInviteDialog() {
     return;
   }
 
-  // check if the invitee is empty
   const QString username = invitee->text().trimmed();
   if (username.isEmpty()) {
     QMessageBox::warning(this, "Invite", "Username cannot be empty.");
     return;
   }
 
-  // append a message to the transcript
-  appendMessage("system", "Invited " + username + " to " + currentRoom);
+  const std::string error =
+      client()->inviteToRoom(currentRoom.toStdString(), username.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Invite", QString::fromStdString(error));
+    return;
+  }
+
+  QMessageBox::information(this, "Invite", "Invited " + username + " to " + currentRoom + ".");
 }
 
 // leave the room
 void DashboardPage::leaveRoom() {
-  // check if the current room is the lobby
-  if (currentRoom == "Lobby") {
-    QMessageBox::information(this, "Leave room", "Cannot leave the Lobby.");
+  if (!client()) {
     return;
   }
 
-  // set the current room to the lobby
-  const QString left = currentRoom;
-  currentRoom = "Lobby";
-  appendMessage("system", "Left " + left);
-  refresh();
-}
+  const std::string error = client()->leaveRoom();
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Leave room", QString::fromStdString(error));
+    return;
+  }
 
-// load the history
-void DashboardPage::loadHistory() {
-  appendMessage("system", "History for " + currentRoom);
-  transcript->appendPlainText("  (no messages — stub)");
+  resetTranscriptForCurrentRoom();
+  refresh();
 }
 
 // send a message
 void DashboardPage::sendMessage() {
-  const QString text = composer->text().trimmed(); // get the text from the composer
+  if (!client()) {
+    return;
+  }
 
-  // check if the text is empty
+  const QString text = composer->text().trimmed();
   if (text.isEmpty()) {
     return;
   }
 
-  // append a message to the transcript
-  appendMessage(displayName(), text);
+  const std::string error = client()->sendMessage(text.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Send message", QString::fromStdString(error));
+    return;
+  }
+
+  flushIncomingChat();
   composer->clear();
 }
 
 // logout
 void DashboardPage::logout() {
-  loggedIn = false;
-  username.clear();
-  email.clear();
-  appendMessage("system", "Logged out");
+  if (!client()) {
+    return;
+  }
+  if (!client()->getState().isLoggedIn()) {
+    QMessageBox::information(this, "Logout", "Not logged in.");
+    return;
+  }
+
+  const std::string error = client()->logout();
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Logout", QString::fromStdString(error));
+    return;
+  }
+
+  resetTranscriptForCurrentRoom();
   refresh();
 }

@@ -49,7 +49,7 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 - [x] **Room directory** — console should list available rooms before join (`ConsoleUI::showJoinRoom`).
 - [x] **Validate room exists** before sending `ROOM_JOIN` (or surface clear `404` from server).
 - [x] **Message history** — server has `loadHistory`; client requests via `LOAD_MESSAGE_HISTORY` (dashboard option 6).
-- [ ] **Pushed messages in UI** — reader logs room pushes; improve console presentation (“change visuals” TODO).
+- [x] **Pushed messages in UI** — reader logs room pushes; improve console presentation (“change visuals” TODO).
 
 ---
 
@@ -59,7 +59,7 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 - [x] Wire protocol for `createRoom` (`ROOM_CREATE` + `ROOM_LIST` push; `deleteRoom` still unwired).
 - [x] Enforce **PRIVATE** vs **PUBLIC** (schema supports it; join path does not).
-- [ ] Enforce **ADMIN / USER / GUEST** privileges (seed has ADMIN; no permission checks).
+- [x] Enforce **USER / GUEST** privileges ().
 - [x] Unique **email** constraint coverage and clear client errors (username uniqueness is stronger today).
 
 ---
@@ -68,8 +68,8 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ## 6. Server runtime & architecture
 
-- [ ] `ThreadPool`: use it for a clear reason, or delete it. Dedicated session threads are fine; an unused pool is not.
-- [ ] If kept: finish the hard-shutdown TODO; if removed: drop construction/shutdown from `Server`.
+- [x] `ThreadPool`: use it for a clear reason, or delete it. Dedicated session threads are fine; an unused pool is not.
+- [x] If kept: finish the hard-shutdown TODO; if removed: drop construction/shutdown from `Server`.
 - [x] Singletons (`DatabaseManager`, `RoomManager`) are acceptable for this small node. Prefer DI (owned by `Server`) only if tests need it — not a must.
 - [ ] Clear cluster presence on node boot (`online_users` should not survive a crash as “still online”).
 - [x] Cap / rotate gossip event log: verify ops story when `MAX_EVENT_LOG` drops old ids.
@@ -126,7 +126,7 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 - [x] **Users** panel — timer refresh from `Server::connections().getSessions()`.
 - [x] **Rooms** panel — timer refresh from `RoomManager::listRooms()`.
 - [x] **Log** panel — timer refresh from `Logger`.
-- [ ] Console ↔ GUI choice in `main` (real flag/prompt; not `if (true)`).
+- [x] Console ↔ GUI choice in `main` (real flag/prompt; not `if (true)`).
 - [ ] Live peer sockets on Ports (optional `GossipManager` snapshot getters).
 - [ ] Push updates (Logger sink / session events) instead of timer-only where it matters.
 - [ ] Polish UX (styles `.qss`, scroll behavior, empty states).
@@ -137,9 +137,9 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 
 - [ ] Qt client target (`chat_client_gui` or shared mode flag) beside console `chat_client`.
 - [ ] Screens mirroring `ConsoleUI`: home, login/register, dashboard, join/create room, messaging, profile, history.
-- [ ] Reuse `Client` / `PacketBuilder` / `PacketHandler` / `Network` — GUI is presentation only.
-- [ ] Show **pushed messages** live (pairs with §4 console push presentation).
-- [ ] GUI-thread rules: no widget updates from reader/network threads without queued signals.
+- [x] Reuse `Client` / `PacketBuilder` / `PacketHandler` / `Network` — GUI is presentation only.
+- [x] Show **pushed messages** live (pairs with §4 console push presentation).
+- [x] GUI-thread rules: no widget updates from reader/network threads without queued signals.
 
 ---
 

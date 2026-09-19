@@ -1,8 +1,8 @@
 # Architecture
 
-C++17 distributed chat: `chat_server` and `chat_client` are separate processes. They meet only on TCP as framed `Packet`s (`socket_io` + `Serializer`). Cluster nodes also gossip on a peer port.
+C++17 distributed chat: `chat_server` and `chat_client` are separate processes. They meet only on TCP as framed `Packet`s (`socket_io` + `Serializer`). Cluster nodes also gossip on a peer port. Each binary defaults to a Qt Widgets dashboard; `--test` runs the console UI.
 
-Shared types (`Packet`, `User`, `Room`, `Message`, `Logger`, `gossip_payload`) live in `utils`. They are not a third process.
+Shared types (`Packet`, `User`, `Room`, `Message`, `Logger`, `gossip_payload`) live in `utils`. They are not a third process. Qt stays in the executables: widgets read `Server*` / `Client*` on the GUI thread and do not live in `server_lib` / `client_lib` domain or transport code.
 
 ---
 
@@ -14,6 +14,15 @@ Dependencies go downward. Upper layers call lower ones; lower layers do not depe
 
 ```mermaid
 flowchart TB
+  subgraph S_L0["0. Presentation (executable)"]
+    direction LR
+    MainWindow
+    PortsPanel
+    UsersPanel
+    RoomsPanel
+    LogPanel
+  end
+
   subgraph S_L1["1. Transport"]
     direction LR
     ConnectionManager
@@ -48,6 +57,7 @@ flowchart TB
     SQLite[("SQLite")]
   end
 
+  S_L0 --> S_L2
   S_L1 --> S_L2
   S_L2 --> S_L3
   S_L3 --> S_L4
@@ -55,6 +65,7 @@ flowchart TB
 
 | Layer | Classes | Role |
 |-------|---------|------|
+| Presentation | `MainWindow`, `PortsPanel`, `UsersPanel`, `RoomsPanel`, `LogPanel` | Qt dashboard; timer refresh from `config`, sessions, rooms, `Logger` |
 | Transport | `ConnectionManager`, `Heartbeat`, `GossipManager`, `socket_io`, `Serializer` | Accept clients, ping/drop sockets, rumor to peers, frame bytes |
 | Application | `Server`, `PacketProcessor`, `ClientSession`, `ThreadPool` | Lifecycle, route each packet, per-socket auth/room state |
 | Domain | `RoomManager`, `Authentication`, `Packet`, `User`, `Room`, `Message` | Membership, broadcast rules, password hash/verify, wire types |
@@ -65,6 +76,8 @@ flowchart TB
 ```mermaid
 flowchart TB
   subgraph C_L1["1. Presentation"]
+    direction LR
+    DashboardPage
     ConsoleUI
   end
 
@@ -97,9 +110,9 @@ flowchart TB
 
 | Layer | Classes | Role |
 |-------|---------|------|
-| Presentation | `ConsoleUI` | Menus, login/register/join/message prompts |
-| Application | `Client`, `PacketBuilder`, `PacketHandler`, `ClientState` | Session loop, build requests, parse replies, remember user/room |
-| Transport | `Network`, `socket_io`, `Serializer` | Connect, send, reader thread (pong heartbeats, log pushed messages) |
+| Presentation | `DashboardPage`, `ConsoleUI` | Qt dashboard + dialogs, or console menus (`--test`) |
+| Application | `Client`, `PacketBuilder`, `PacketHandler`, `ClientState` | Action methods (`joinRoom`, `login`, …), parse replies, remember user/room |
+| Transport | `Network`, `socket_io`, `Serializer` | Connect, send, reader thread (pong heartbeats, `ROOM_LIST` / `MESSAGE` pushes) |
 | Shared domain | `Packet`, `User`, `Room` | Same models as the server wire |
 
 ---
@@ -131,7 +144,7 @@ flowchart TB
   PacketProcessor -->|"loginUser / createUser / isUserOnline"| DatabaseManager
   PacketProcessor -->|"joinRoom / leaveAll"| RoomManager
   PacketProcessor -->|"setUser / setAuthenticated"| ClientSession
-  PacketProcessor -->|"rumor LOGIN, USER_CREATED, ROOM_JOIN, MESSAGE"| ConnectionManager
+  PacketProcessor -->|"rumor LOGIN, USER_CREATED, ROOM_*, MESSAGE"| ConnectionManager
 
   RoomManager -->|"setMembership / clearMembership"| DatabaseManager
   RoomManager -->|"broadcast sendPacket"| ConnectionManager
@@ -150,18 +163,20 @@ flowchart TB
 flowchart TB
   Client["Client"]
 
-  Client -->|"showHomeScreen / showUserDashboard"| ConsoleUI
+  Client -->|"showDashboard_2"| DashboardPage
+  Client -->|"showDashboard"| ConsoleUI
   Client -->|"connect / sendPacket / waitFor"| Network
   Client -->|"handlePacket"| PacketHandler
   Client --> ClientState
 
-  ConsoleUI -->|"buildLogin / buildRegister / buildJoinRoom / buildMessage"| PacketBuilder
-  Client -->|"buildLogout / buildLeaveRoom"| PacketBuilder
+  DashboardPage -->|"joinRoom / leaveRoom / login / sendMessage / …"| Client
+  ConsoleUI -->|"prompts → Client actions"| Client
+  Client -->|"PacketBuilder"| PacketBuilder
   PacketHandler -->|"deserialize User on LOGIN / REGISTER"| ClientState
-  Network -->|"readerLoop: pong HEARTBEAT, log pushed MESSAGE, queue replies"| Network
+  Network -->|"readerLoop: pong HEARTBEAT, ROOM_LIST, enqueue MESSAGE, queue replies"| Network
 ```
 
-`Network` is the only client class that talks to the server. `ConsoleUI` never touches a socket.
+`Network` is the only client class that talks to the server. Widgets and `ConsoleUI` never touch a socket; they call `Client` on the UI / main thread. `MESSAGE` pushes are queued under a mutex and drained on the Qt timer (not from the reader thread).
 
 ---
 
@@ -173,9 +188,9 @@ Processes stay separate. Only `Network` and `ConnectionManager` share a TCP conn
 sequenceDiagram
   autonumber
   box rgb(230,240,255) Client
-    participant UI as ConsoleUI
-    participant PB as PacketBuilder
+    participant UI as DashboardPage / ConsoleUI
     participant C as Client
+    participant PB as PacketBuilder
     participant N as Network
   end
   box rgb(255,240,230) Server
@@ -187,7 +202,8 @@ sequenceDiagram
     participant GM as GossipManager
   end
 
-  UI->>PB: build LOGIN / REGISTER / ROOM_* / MESSAGE
+  UI->>C: joinRoom / login / sendMessage / …
+  C->>PB: build LOGIN / REGISTER / ROOM_* / MESSAGE / UPDATE_USER
   PB-->>C: Packet
   C->>N: sendPacket
   N->>CM: TCP writePacket
@@ -204,4 +220,4 @@ sequenceDiagram
   C->>C: PacketHandler + ClientState
 ```
 
-Heartbeat is out of band: `Heartbeat` pings every session; `Network::readerLoop` replies `pong` and does not queue those packets for `Client`.
+Heartbeat is out of band: `Heartbeat` pings every session; `Network::readerLoop` replies `pong` and does not queue those packets for `Client`. Room directory and chat pushes use `responseCode == 0` and the push handler, not `waitFor`.

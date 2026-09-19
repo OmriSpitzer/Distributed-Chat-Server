@@ -172,7 +172,11 @@ std::vector<Room> Room::deserializeList(const std::string &serialized) {
     const std::string piece =
         (end == std::string::npos) ? serialized.substr(start) : serialized.substr(start, end - start);
     if (!piece.empty()) {
-      rooms.push_back(Room::deserialize(piece));
+      try {
+        rooms.push_back(Room::deserialize(piece));
+      } catch (const std::exception &) {
+        // skip malformed entries so one bad room does not wipe the directory
+      }
     }
     if (end == std::string::npos) {
       break;

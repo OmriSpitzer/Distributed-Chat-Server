@@ -614,6 +614,13 @@ bool GossipManager::applyEvent(const Packet &event) {
       }
     }
 
+    // guests / unknown usernames are not in users — membership FK would throw
+    if (!db.getUser(username)) {
+      Logger::logInfo("GossipManager",
+                      "ROOM_JOIN skipped DB membership for unknown user " + username);
+      return true;
+    }
+
     // set the membership
     db.setMembership(username, *newId, nodeId);
     Logger::logInfo("GossipManager",
@@ -684,6 +691,7 @@ bool GossipManager::applyEvent(const Packet &event) {
   // broadcast the message to the room
   if (inserted) {
     Packet push(username, "", Packet::PacketType::MESSAGE, roomName, content, 0);
+    push.timestamp = static_cast<std::uint64_t>(created);
     RoomManager::getInstance().broadcast(*room, push, connections, -1);
   }
   return true;

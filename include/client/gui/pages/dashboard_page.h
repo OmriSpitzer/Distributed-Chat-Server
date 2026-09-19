@@ -26,27 +26,18 @@ public:
 
 private:
   // rooms
-  QListWidget *roomsList{nullptr};        // rooms list widget
-  Button *joinButton{nullptr};            // join button
-  Button *leaveButton{nullptr};           // leave button
-  Button *createRoomButton{nullptr};      // create room button
-  Button *inviteButton{nullptr};          // invite button
+  QListWidget *roomsList{nullptr};   // rooms list widget
+  Button *joinButton{nullptr};       // join button
+  Button *leaveButton{nullptr};      // leave button
+  Button *createRoomButton{nullptr}; // create room button
+  Button *inviteButton{nullptr};     // invite button
 
   // chat
   QLabel *roomTitle{nullptr};           // room title label
-  Button *historyButton{nullptr};       // history button
   Button *updateProfileButton{nullptr}; // update profile button
   QPlainTextEdit *transcript{nullptr};  // transcript plain text edit
   QLineEdit *composer{nullptr};         // composer line edit
   Button *sendButton{nullptr};          // send button
-
-  // stub session (not wired to Client yet)
-  bool loggedIn{false};
-  QString username;
-  QString email;
-  QString currentRoom{"Lobby"};
-  QStringList rooms{"Lobby", "General", "Research"};
-  QStringList messages;
 
   // connect the header
   void connectHeader();
@@ -57,8 +48,17 @@ private:
   // refresh the page
   void refresh() override;
 
-  // append a message to the transcript
-  void appendMessage(const QString &author, const QString &text);
+  // append a message to the transcript (timestamp = unix seconds; 0 uses now)
+  void appendMessage(const QString &author, const QString &text, quint64 timestamp = 0);
+
+  // drain network chat pushes into the transcript
+  void flushIncomingChat();
+
+  // clear transcript and load history for the current room
+  void resetTranscriptForCurrentRoom();
+
+  // join a room by name (clears transcript, loads history)
+  bool enterRoom(const QString &name);
 
   // get the display name
   QString displayName() const;
@@ -83,9 +83,6 @@ private:
 
   // leave the room
   void leaveRoom();
-
-  // load the history
-  void loadHistory();
 
   // send a message
   void sendMessage();

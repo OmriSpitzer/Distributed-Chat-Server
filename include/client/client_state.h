@@ -18,11 +18,10 @@ public:
   ClientState(const ClientState &) = delete;
   ClientState &operator=(const ClientState &) = delete;
 
-  std::optional<User> user;        // user data
-  std::optional<Room> currentRoom; // current room data
-
-  // check if the user is logged in
-  bool isLoggedIn() const { return user.has_value(); }
+  // authenticated (non-guest) user present
+  bool isLoggedIn() const {
+    return user.has_value() && user->getUserType() != User::UserType::GUEST;
+  }
 
   // replace the cached room directory (thread-safe)
   void setRooms(std::vector<Room> next) {
@@ -44,6 +43,8 @@ public:
     rooms.clear();
   }
 
+  std::optional<User> user;        // user data
+  std::optional<Room> currentRoom; // current room data
 private:
   std::vector<Room> rooms;       // cached room directory
   mutable std::mutex roomsMutex; // guards rooms

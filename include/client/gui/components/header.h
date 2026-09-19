@@ -30,8 +30,9 @@ public:
   Button *signUpButton() const { return signUpBtn; }
   Button *logInButton() const { return logInBtn; }
   Button *userChip() const { return userChipBtn; }
+  Button *logoutButton() const { return logoutBtn; }
 
-  // show Sign in / Log in, or the user chip
+  // show Sign in / Log in, or the user chip + logout
   void setLoggedIn(bool loggedIn, const QString &username = QString());
 
 private:
@@ -39,5 +40,6 @@ private:
   QLabel *headingSubLabel{nullptr}; // page subtitle
   Button *signUpBtn{nullptr};       // Sign in
   Button *logInBtn{nullptr};        // Log in
-  Button *userChipBtn{nullptr};     // logged-in user menu
+  Button *userChipBtn{nullptr};     // logged-in username chip
+  Button *logoutBtn{nullptr};       // Logout (next to chip)
 };

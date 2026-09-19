@@ -221,8 +221,18 @@ struct Fixture {
     if (!waitUntil(kAcceptWait, [&] { return connections.getSessions().size() >= expected; })) {
       return INVALID_SOCKET;
     }
+
+    // drain connect welcome (ROOM_LIST with anon user + room directory)
+    REQUIRE(setRecvTimeout(client, 2000));
+    const auto welcome = socket_io::readPacket(client);
+    if (!welcome || welcome->type != Packet::PacketType::ROOM_LIST) {
+      return INVALID_SOCKET;
+    }
+    lastWelcome = *welcome;
     return client;
   }
+
+  std::optional<Packet> lastWelcome;
 
   User createUser(std::string_view password = "secret") {
     const std::string name = unique("user");
@@ -343,6 +353,17 @@ TEST_CASE("ConnectionManager accept creates anonymous Lobby session",
   REQUIRE_FALSE(session->isAuthenticated());
   REQUIRE(session->getRoom().getName() == RoomManager::LOBBY.getName());
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "New client connected"));
+
+  REQUIRE(fx.lastWelcome.has_value());
+  REQUIRE(fx.lastWelcome->type == Packet::PacketType::ROOM_LIST);
+  REQUIRE(fx.lastWelcome->room == RoomManager::LOBBY.getName());
+  REQUIRE(fx.lastWelcome->sender == "server");
+  const User welcomeUser = User::deserialize(fx.lastWelcome->receiver);
+  REQUIRE(welcomeUser.getUserType() == User::UserType::GUEST);
+  REQUIRE(welcomeUser.getUsername().rfind("anon", 0) == 0);
+  REQUIRE(welcomeUser == session->getUser());
+  REQUIRE_FALSE(fx.lastWelcome->message.empty());
+  REQUIRE(fx.lastWelcome->message.rfind("room(", 0) == 0);
 }
 
 // 8. client ping receives pong

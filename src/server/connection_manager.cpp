@@ -14,6 +14,7 @@
 #include "utils/gossip_payload.h"
 #include "utils/models/logger.h"
 #include "utils/models/packet.h"
+#include "utils/models/room.h"
 #include "utils/socket_io.h"
 #include <atomic>
 #include <cstdint>
@@ -120,7 +121,36 @@ void ConnectionManager::acceptLoop() {
     Logger::logInfo("ConnectionManager", "New client connected socket " + std::to_string(fd));
 
     // add the new client session (non-copyable: mutex + atomic closed flag)
-    addSession(fd, std::make_shared<ClientSession>(fd, User::anonymousUser(), RoomManager::LOBBY));
+    auto session = std::make_shared<ClientSession>(fd, User::anonymousUser(), RoomManager::LOBBY);
+    addSession(fd, session);
+
+    // register in Lobby membership so room broadcasts reach this socket
+    if (!RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *session)) {
+      Logger::logWarning("ConnectionManager",
+                         "Failed to place new client in Lobby, socket " + std::to_string(fd));
+      closeClient(fd);
+      removeSession(fd);
+      continue;
+    }
+
+    // push connect snapshot: anon user (sender), Lobby (room), directory (message)
+    std::vector<Room> directory = RoomManager::getInstance().listRooms();
+    if (directory.empty()) {
+      directory = {RoomManager::LOBBY, RoomManager::GENERAL};
+    }
+    Packet welcome("server", session->getUser().serialize(), Packet::PacketType::ROOM_LIST,
+                   RoomManager::LOBBY.getName(), Room::serializeList(directory), 0);
+    if (!sendPacket(fd, welcome)) {
+      Logger::logWarning("ConnectionManager",
+                         "Failed to send connect welcome, socket " + std::to_string(fd));
+      closeClient(fd);
+      removeSession(fd);
+      continue;
+    }
+
+    Logger::logInfo("ConnectionManager", "Sent connect welcome with " +
+                                             std::to_string(directory.size()) + " rooms, socket " +
+                                             std::to_string(fd));
 
     // handle the client in a new thread
     std::thread([this, fd] { handleClient(fd); }).detach();
