@@ -51,6 +51,9 @@
  * 13. deleteRoom moves live sessions to Lobby
  * 14. concurrent joins
  * 15. typical create / join / leave / delete flow
+ * 16. listRooms includes defaults and created rooms
+ * 17. leaveAll is idempotent for Lobby-only session
+ * 18. broadcastAll respects skipSocket
  */
 
 namespace {
@@ -174,13 +177,12 @@ struct NetFixture {
     // every session. Those threads are detached; destroying ConnectionManager while
     // they still run causes a use-after-free / segfault after Catch reports pass.
     connections.stopListening();
-    waitUntil(kAcceptWait, [&] { return connections.getSessions().empty(); });
-
     for (SOCKET socket : clients) {
       if (socket != INVALID_SOCKET) {
         socket_io::close(socket);
       }
     }
+    waitUntil(kAcceptWait, [&] { return connections.getSessions().empty(); });
     if (acceptThread.joinable()) {
       acceptThread.join();
     }
@@ -236,6 +238,13 @@ struct NetFixture {
       if (known.find(entry.first) == known.end()) {
         out.client = client;
         out.session = entry.second;
+        // drain connect welcome (ROOM_LIST) so broadcast asserts see only MESSAGE
+        setRecvTimeout(client, 2000);
+        const auto welcome = socket_io::readPacket(client);
+        if (!welcome || welcome->type != Packet::PacketType::ROOM_LIST) {
+          out.client = INVALID_SOCKET;
+          out.session.reset();
+        }
         return out;
       }
     }
@@ -280,9 +289,18 @@ TEST_CASE("RoomManager createRoom edges", "[room_manager][createRoom][edge]") {
   REQUIRE(rooms().getRoom(name));
   REQUIRE(rooms().getRoom(name)->getId() > 0);
 
+  const std::string privName = unique("priv");
+  REQUIRE(rooms().createRoom(
+      Room(0, privName, Room::RoomType::SECURITY, Room::Privacy::PRIVATE)));
+  auto priv = rooms().getRoom(privName);
+  REQUIRE(priv);
+  REQUIRE(priv->getPrivacy() == Room::Privacy::PRIVATE);
+
   ConnectionManager connections;
   REQUIRE(rooms().deleteRoom(name, connections));
+  REQUIRE(rooms().deleteRoom(privName, connections));
   REQUIRE_FALSE(rooms().getRoom(name));
+  REQUIRE_FALSE(rooms().getRoom(privName));
 }
 
 // 4. deleteRoom refuses Lobby / unknown
@@ -579,4 +597,82 @@ TEST_CASE("RoomManager typical create join leave delete flow", "[room_manager][f
 
   rooms().leaveAll(*connected.session);
   REQUIRE(connected.session->getRoom().getName() == RoomManager::LOBBY.getName());
+}
+
+// 16. listRooms includes defaults and created rooms
+TEST_CASE("RoomManager listRooms includes defaults and created", "[room_manager][listRooms]") {
+  auto before = rooms().listRooms();
+  REQUIRE(before.size() >= 2);
+  bool hasLobby = false;
+  bool hasGeneral = false;
+  for (const Room &r : before) {
+    if (r.getName() == RoomManager::LOBBY.getName()) {
+      hasLobby = true;
+    }
+    if (r.getName() == RoomManager::GENERAL.getName()) {
+      hasGeneral = true;
+    }
+  }
+  REQUIRE(hasLobby);
+  REQUIRE(hasGeneral);
+
+  const std::string name = unique("listed");
+  REQUIRE(rooms().createRoom(Room(0, name)));
+  auto after = rooms().listRooms();
+  REQUIRE(after.size() == before.size() + 1);
+  bool found = false;
+  for (const Room &r : after) {
+    if (r.getName() == name) {
+      found = true;
+      break;
+    }
+  }
+  REQUIRE(found);
+
+  ConnectionManager connections;
+  REQUIRE(rooms().deleteRoom(name, connections));
+  REQUIRE(rooms().listRooms().size() == before.size());
+}
+
+// 17. leaveAll is idempotent for Lobby-only session
+TEST_CASE("RoomManager leaveAll is idempotent for Lobby-only session",
+          "[room_manager][leaveAll][edge]") {
+  TrackedSession tracked(nextFakeSocket());
+  REQUIRE(tracked.get().getRoom().getName() == RoomManager::LOBBY.getName());
+  rooms().leaveAll(tracked.get());
+  rooms().leaveAll(tracked.get());
+  REQUIRE(tracked.get().getRoom().getName() == RoomManager::LOBBY.getName());
+}
+
+// 18. broadcastAll respects skipSocket
+TEST_CASE("RoomManager broadcastAll respects skipSocket",
+          "[room_manager][broadcastAll][edge]") {
+  REQUIRE(winsock().ok);
+  ensureRandomRoom();
+  NetFixture net;
+  REQUIRE(net.listen());
+
+  auto c1 = net.connectClient();
+  auto c2 = net.connectClient();
+  REQUIRE(c1.client != INVALID_SOCKET);
+  REQUIRE(c2.client != INVALID_SOCKET);
+  REQUIRE(c1.session);
+  REQUIRE(c2.session);
+
+  REQUIRE(rooms().joinRoom("General", *c1.session));
+  REQUIRE(rooms().joinRoom("Random", *c2.session));
+  REQUIRE(setRecvTimeout(c1.client, 500));
+  REQUIRE(setRecvTimeout(c2.client, 500));
+
+  Packet packet = makeMsg("skip-me");
+  REQUIRE(rooms().broadcastAll(packet, net.connections, c1.session->getSocket()));
+
+  auto skipped = socket_io::readPacket(c1.client);
+  REQUIRE_FALSE(skipped.has_value());
+  auto got = socket_io::readPacket(c2.client);
+  REQUIRE(got);
+  REQUIRE(got->message == "skip-me");
+
+  rooms().leaveAll(*c1.session);
+  rooms().leaveAll(*c2.session);
 }

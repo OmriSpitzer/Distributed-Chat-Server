@@ -126,7 +126,7 @@ QWidget *MainWindow::buildHeader(QWidget *parent) {
   auto *header = new QWidget(parent);                   // header widget
   auto *headerLayout = new QVBoxLayout(header);         // header layout
   auto *title = new QLabel("Server dashboard", header); // title label
-  auto *subtitle = new QLabel("Live status panels (UI stub — not connected to Server yet)",
+  auto *subtitle = new QLabel("Live status panels",
                               header); // subtitle label
 
   // properties

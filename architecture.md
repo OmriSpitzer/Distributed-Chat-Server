@@ -4,6 +4,10 @@ C++17 distributed chat: `chat_server` and `chat_client` are separate processes. 
 
 Shared types (`Packet`, `User`, `Room`, `Message`, `Logger`, `gossip_payload`) live in `utils`. They are not a third process. Qt stays in the executables: widgets read `Server*` / `Client*` on the GUI thread and do not live in `server_lib` / `client_lib` domain or transport code.
 
+**Related docs:** [README.md](README.md) (quick start / scripts), [database.md](database.md) (SQLite schema and write paths), [tests/TESTS.md](tests/TESTS.md), [STEPS.md](STEPS.md).
+
+Local multi-node demo: `.\scripts\run_cluster.ps1` (2 servers + 2 clients). See README “Two-node cluster”.
+
 ---
 
 ## Layered architecture
@@ -67,7 +71,7 @@ flowchart TB
 |-------|---------|------|
 | Presentation | `MainWindow`, `PortsPanel`, `UsersPanel`, `RoomsPanel`, `LogPanel` | Qt dashboard; timer refresh from `config`, sessions, rooms, `Logger` |
 | Transport | `ConnectionManager`, `Heartbeat`, `GossipManager`, `socket_io`, `Serializer` | Accept clients, ping/drop sockets, rumor to peers, frame bytes |
-| Application | `Server`, `PacketProcessor`, `ClientSession`, `ThreadPool` | Lifecycle, route each packet, per-socket auth/room state |
+| Application | `Server`, `PacketProcessor`, `ClientSession`, `ThreadPool` | Lifecycle, route each packet, per-socket auth/room state (`ThreadPool` is constructed and shut down with `Server`; session I/O uses dedicated threads, not pool tasks) |
 | Domain | `RoomManager`, `Authentication`, `Packet`, `User`, `Room`, `Message` | Membership, broadcast rules, password hash/verify, wire types |
 | Persistence | `DatabaseManager`, `gossip_payload`, SQLite | Users, online presence, membership, message history, event bodies |
 

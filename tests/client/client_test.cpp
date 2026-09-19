@@ -379,8 +379,8 @@ TEST_CASE("Client login then logout", "[client][logout]") {
     client.showDashboard();
   }
   {
-    // dashboard: 7 = Logout
-    IoRedirect io("7\n");
+    // dashboard: 8 = Logout (7 is Invite to Room)
+    IoRedirect io("8\n");
     client.showDashboard();
   }
 

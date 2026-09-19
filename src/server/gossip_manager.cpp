@@ -692,7 +692,7 @@ bool GossipManager::applyEvent(const Packet &event) {
   if (inserted) {
     Packet push(username, "", Packet::PacketType::MESSAGE, roomName, content, 0);
     push.timestamp = static_cast<std::uint64_t>(created);
-    RoomManager::getInstance().broadcast(*room, push, connections, -1);
+  RoomManager::getInstance().broadcast(*room, push, connections, INVALID_SOCKET);
   }
   return true;
 }

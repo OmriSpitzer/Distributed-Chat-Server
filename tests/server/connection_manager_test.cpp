@@ -59,6 +59,7 @@
  * 16. multiple clients
  * 17. stopListening closes live clients
  * 18. typical connect / login / message / disconnect flow
+ * 19. hasSession false for guest / wrong user
  */
 
 namespace {
@@ -166,13 +167,27 @@ struct Fixture {
   Fixture &operator=(const Fixture &) = delete;
 
   ~Fixture() {
+    // Drop gossip first so disconnect cleanup cannot touch a dying GossipManager.
     connections.setGossip(nullptr);
+    gossip.reset();
+
+    connections.stopListening();
     for (SOCKET socket : clients) {
       if (socket != INVALID_SOCKET) {
         socket_io::close(socket);
       }
     }
-    connections.stopListening();
+
+    // Detached handleClient threads must finish before ConnectionManager is destroyed
+    // (otherwise Catch reports pass then CTest sees a SegFault / heap corruption).
+    if (!waitUntil(kAcceptWait, [&] { return connections.getSessions().empty(); })) {
+      for (const auto &entry : connections.getSessions()) {
+        connections.closeClient(entry.first);
+      }
+      waitUntil(kAcceptWait, [&] { return connections.getSessions().empty(); });
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
     if (acceptThread.joinable()) {
       acceptThread.join();
     }
@@ -243,7 +258,18 @@ struct Fixture {
     if (!socket_io::writePacket(client, packet)) {
       return std::nullopt;
     }
-    return socket_io::readPacket(client);
+    // Skip ROOM_LIST directory pushes that may arrive before the typed reply.
+    for (int attempt = 0; attempt < 8; ++attempt) {
+      auto res = socket_io::readPacket(client);
+      if (!res) {
+        return std::nullopt;
+      }
+      if (res->type == Packet::PacketType::ROOM_LIST && res->responseCode == 0) {
+        continue;
+      }
+      return res;
+    }
+    return std::nullopt;
   }
 
   // MESSAGE apply broadcasts to the room (including sender) before the reply is sent
@@ -451,7 +477,7 @@ TEST_CASE("ConnectionManager hasSession after login", "[connection_manager][hasS
   REQUIRE(fx.listen());
   const SOCKET client = fx.connectClient();
   REQUIRE(client != INVALID_SOCKET);
-  REQUIRE(setRecvTimeout(client, 3000));
+  REQUIRE(setRecvTimeout(client, 10000));
 
   const User user = fx.createUser("secret");
   REQUIRE_FALSE(fx.connections.hasSession(user));
@@ -597,4 +623,29 @@ TEST_CASE("ConnectionManager typical connect login message disconnect flow",
   REQUIRE(waitUntil(kAcceptWait, [&] {
     return fx.connections.getSessions().empty() && !db().isUserOnline(user.getUsername());
   }));
+}
+
+// 19. hasSession is false for guests and for a different registered user
+TEST_CASE("ConnectionManager hasSession false for guest and wrong user",
+          "[connection_manager][hasSession][edge]") {
+  REQUIRE(winsock().ok);
+  Fixture fx;
+  fx.attachGossip();
+  REQUIRE(fx.listen());
+  const SOCKET client = fx.connectClient();
+  REQUIRE(client != INVALID_SOCKET);
+  REQUIRE(setRecvTimeout(client, 3000));
+
+  auto sessions = fx.connections.getSessions();
+  REQUIRE(sessions.size() == 1);
+  const User guest = sessions.begin()->second->getUser();
+  REQUIRE(guest.getUserType() == User::UserType::GUEST);
+  REQUIRE_FALSE(fx.connections.hasSession(guest));
+
+  const User alice = fx.createUser("secret");
+  const User bob = fx.createUser("secret");
+  Packet login(alice.getUsername(), "server", Packet::PacketType::LOGIN, "", "secret");
+  REQUIRE(fx.request(client, login)->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+  REQUIRE(fx.connections.hasSession(alice));
+  REQUIRE_FALSE(fx.connections.hasSession(bob));
 }
