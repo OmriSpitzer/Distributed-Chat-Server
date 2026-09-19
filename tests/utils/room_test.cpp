@@ -298,7 +298,12 @@ TEST_CASE("Room serializeList deserializeList", "[room][serialize][list]") {
     REQUIRE(Room::deserializeList("").empty());
   }
 
-  SECTION("invalid entry throws") {
-    REQUIRE_THROWS_AS(Room::deserializeList("not-a-room"), std::invalid_argument);
+  SECTION("invalid entry is skipped") {
+    // malformed pieces are skipped so one bad room does not wipe the directory
+    REQUIRE(Room::deserializeList("not-a-room").empty());
+    const auto mixed =
+        Room::deserializeList("not-a-room;room(1|Lobby|Lobby|PUBLIC);also-bad");
+    REQUIRE(mixed.size() == 1);
+    REQUIRE(mixed[0].getName() == "Lobby");
   }
 }

@@ -4,6 +4,8 @@ Each `chat_server` node owns a local SQLite file (default `data/node-1.db`). The
 
 Schema source of truth: `src/database/init.sql`. Queries live in `src/database/queries/`.
 
+**Related docs:** [README.md](README.md), [architecture.md](architecture.md) (who calls `DatabaseManager`), [tests/TESTS.md](tests/TESTS.md), [STEPS.md](STEPS.md).
+
 ---
 
 ## Placement in the cluster
@@ -16,7 +18,7 @@ flowchart LR
 
   subgraph N1["Node A"]
     SA["chat_server"]
-    DBA[("SQLite<br/>users · rooms · messages<br/>membership · online_users")]
+    DBA[("SQLite<br/>users · rooms · messages<br/>membership · online_users<br/>allow_list")]
     SA --- DBA
   end
 
@@ -80,11 +82,19 @@ erDiagram
     TEXT node_id "live session node"
   }
 
+  allow_list {
+    INTEGER room_id PK, FK
+    TEXT email PK, FK
+    BOOLEAN creator "room creator flag"
+  }
+
   users ||--o{ messages : "sends"
   rooms ||--o{ messages : "contains"
   users ||--o{ membership : "joins"
   rooms ||--o{ membership : "hosts"
   users ||--o| online_users : "present as"
+  rooms ||--o{ allow_list : "ACL"
+  users ||--o{ allow_list : "allowed as"
 ```
 
 | From | To | Cardinality | Join |
@@ -94,8 +104,12 @@ erDiagram
 | `users.username` | `membership.username` | 1 : N | FK |
 | `rooms.id` | `membership.room_id` | 1 : N | FK |
 | `users.username` | `online_users.username` | 1 : 0..1 | same key, **no FK** |
+| `rooms.id` | `allow_list.room_id` | 1 : N | FK |
+| `users.email` | `allow_list.email` | 1 : N | FK |
 
 `membership` is a composite primary key `(username, room_id)`: one row per user per room, with `node_id` recording which cluster node holds that user’s socket in the room.
+
+`allow_list` is a composite primary key `(room_id, email)`: who may join a **PRIVATE** room (and who is the creator). Public joins may also seed allow-list rows for registered users.
 
 ---
 
@@ -138,7 +152,7 @@ Chat spaces. `id` is assigned by SQLite `AUTOINCREMENT` (`sqlite3_last_insert_ro
 
 Ids **1** (Lobby) and **2** (General) are seed rooms. `deleteRoom` refuses `id < 3`.
 
-`privacy` is stored; join-path enforcement of `PRIVATE` is not wired yet.
+`PRIVATE` rooms require an `allow_list` hit (authenticated + listed). Guests cannot join private rooms. Creators are seeded on `ROOM_CREATE`; others via `ROOM_INVITE` / gossip `ROOM_ACL_ADD`.
 
 ### `messages`
 
@@ -177,7 +191,19 @@ Cluster-wide “who is logged in.” One row per username; `node_id` is the node
 | `username` | `TEXT` | `PRIMARY KEY` |
 | `node_id` | `TEXT` | `NOT NULL` |
 
-No foreign key: a crash can leave a stale row. Clearing presence on boot is still an open item.
+No foreign key: a crash can leave a stale row. Clearing presence on boot is still an open item (see [STEPS.md](STEPS.md)).
+
+### `allow_list`
+
+Who may enter a private room, keyed by user email.
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `room_id` | `INTEGER` | PK part → `rooms(id)` |
+| `email` | `TEXT` | PK part → `users(email)` |
+| `creator` | `BOOLEAN` | `NOT NULL` — `1` for room creator |
+
+APIs: `isAllowed`, `addToAllowList`, creator check for invite. `delete_room.sql` clears allow-list rows before membership / messages / room.
 
 ---
 
@@ -281,6 +307,12 @@ flowchart LR
     clear_membership
     clear_all_membership
   end
+
+  subgraph ACL
+    is_allowed
+    add_user_allow_list
+    is_allow_list_creator
+  end
 ```
 
 | API | SQL | Effect |
@@ -289,6 +321,7 @@ flowchart LR
 | `userExists` | `user_exists.sql` | existence probe |
 | `createUser` | `create_user.sql` | insert hashed `USER` |
 | `loginUser` | `login_user.sql` | select including hash, then Argon2 verify |
+| `updateUser` | matching files | password and/or username change |
 | `saveMessage` | `save_message.sql` | `INSERT OR IGNORE` — false if id already seen |
 | `loadHistory` | `load_history.sql` | last 100 in room, newest first |
 | `setMembership` | `set_membership.sql` | upsert `(username, room_id, node_id)` |
@@ -298,11 +331,14 @@ flowchart LR
 | `setOnline` / `clearOnline` | matching files | upsert / delete presence |
 | `createRoom` | `create_room.sql` | insert; id from `last_insert_rowid` |
 | `getRoom` / `listRooms` | matching files | by id / all rows |
-| `deleteRoom` | `delete_room.sql` | membership → messages → room |
+| `deleteRoom` | `delete_room.sql` | allow_list → membership → messages → room |
+| `isAllowed` | `is_allowed.sql` | private-room ACL probe |
+| `addToAllowList` | `add_user_allow_list.sql` | upsert ACL row (`creator` flag) |
 
-`delete_room.sql` is three statements with the same `room_id` bind (schema has no `ON DELETE CASCADE`):
+`delete_room.sql` orders deletes (schema has no `ON DELETE CASCADE`):
 
 ```sql
+DELETE FROM allow_list WHERE room_id = ?;
 DELETE FROM membership WHERE room_id = ?;
 DELETE FROM messages WHERE room_id = ?;
 DELETE FROM rooms WHERE id = ?;
@@ -409,13 +445,13 @@ flowchart TB
     IGN["INSERT OR IGNORE for gossip idempotency"]
   end
 
-  subgraph Gaps["Not in schema yet"]
+  subgraph Gaps["Still open"]
     OFK["online_users has no FK to users"]
     Casc["No ON DELETE CASCADE — delete_room.sql orders DELETEs"]
-    Priv["PRIVATE rooms stored, not gated on join"]
-    Boot["Stale online_users after crash"]
+    Boot["Stale online_users after crash (no clear-on-boot)"]
+    Hash["USER_CREATED gossip may carry password material"]
   end
 ```
 
-Passwords leave the database only inside `loginUser` for verification, then are dropped. `User` objects on the wire and in UI never carry a hash.
+Passwords leave the database only inside `loginUser` for verification, then are dropped. `User` objects on the wire and in UI never carry a hash. Private-room gating uses `allow_list` on the join path.
 )

@@ -289,6 +289,10 @@ target_link_libraries(server_test PRIVATE server_lib Catch2::Catch2WithMain Thre
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
+# Discover at ctest time so partial builds (server/client only) do not leave
+# *_NOT_BUILT placeholder tests in CTestTestfile.cmake.
+set(CATCH_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST)
+
 # ------------ Utils tests ------------
 catch_discover_tests(user_test)
 catch_discover_tests(room_test)

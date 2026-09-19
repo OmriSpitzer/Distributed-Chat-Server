@@ -2,11 +2,19 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **24 executables**, **306** `TEST_CASE`s.
+Totals: **24** executables, **330** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
 `tests/class/` is leftover and is **not** built.
+
+**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [STEPS.md](../STEPS.md)
+
+Manual multi-node smoke (not Catch2): `.\scripts\run_cluster.ps1` — 2 servers + 2 clients.
+
+```powershell
+ctest --test-dir build --output-on-failure
+```
 
 ---
 
@@ -15,7 +23,7 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 | Executable | File | Cases |
 |---|---|---|
 | `user_test` | `tests/utils/user_test.cpp` | 10 |
-| `room_test` | `tests/utils/room_test.cpp` | 10 |
+| `room_test` | `tests/utils/room_test.cpp` | 12 |
 | `message_test` | `tests/utils/message_test.cpp` | 12 |
 | `packet_test` | `tests/utils/packet_test.cpp` | 11 |
 | `log_message_test` | `tests/utils/log_message_test.cpp` | 12 |
@@ -49,10 +57,8 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - Room stringToPrivacy
 - Room privacy conversion round-trip
 - Room stream output includes name, type, and privacy
-
-### DatabaseManager room APIs (`[database_manager][createRoom]`)
-
-- createRoom assigns SQLite AUTOINCREMENT id; getRoom / listRooms / deleteRoom round-trip
+- Room serialize deserialize round-trip
+- Room serializeList deserializeList (invalid entries skipped)
 
 ### Message (`[message]`)
 
@@ -183,10 +189,10 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 | Executable | File | Cases |
 |---|---|---|
 | `client_state_test` | `tests/client/client_state_test.cpp` | 10 |
-| `packet_builder_test` | `tests/client/packet_builder_test.cpp` | 13 |
+| `packet_builder_test` | `tests/client/packet_builder_test.cpp` | 21 |
 | `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 7 |
 | `network_test` | `tests/client/network_test.cpp` | 11 |
-| `console_ui_test` | `tests/client/console_ui_test.cpp` | 14 |
+| `console_ui_test` | `tests/client/console_ui_test.cpp` | 18 |
 | `client_test` | `tests/client/client_test.cpp` | 10 |
 
 ### ClientState (`[client_state]`)
@@ -215,6 +221,14 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - PacketBuilder buildJoinRoom maps fields
 - PacketBuilder buildLeaveRoom maps fields
 - PacketBuilder join and leave reject empty arguments
+- PacketBuilder buildUpdateUser maps fields
+- PacketBuilder buildUpdateUser rejects empty username or email
+- PacketBuilder buildCreateRoom maps fields
+- PacketBuilder buildCreateRoom rejects empty arguments
+- PacketBuilder buildInviteToRoom maps fields
+- PacketBuilder buildInviteToRoom rejects empty arguments
+- PacketBuilder buildLoadMessageHistory maps fields
+- PacketBuilder buildLoadMessageHistory rejects empty arguments
 - PacketBuilder sets defaults and timestamp
 - PacketBuilder accepts whitespace-only arguments
 
@@ -258,6 +272,10 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - ConsoleUI showJoinRoom builds a ROOM_JOIN packet
 - ConsoleUI showCreateMessage builds a MESSAGE packet
 - ConsoleUI showCreateMessage cancel via exit
+- ConsoleUI showUpdateProfile builds username UPDATE_USER
+- ConsoleUI showUpdateProfile builds password UPDATE_USER
+- ConsoleUI showUpdateProfile back cancels
+- ConsoleUI showCreateRoom builds a ROOM_CREATE packet
 
 ### Client (`[client]`) — mocked peer, not a live `chat_server`
 
@@ -279,12 +297,12 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 | Executable | File | Cases |
 |---|---|---|
 | `client_session_test` | `tests/server/client_session_test.cpp` | 11 |
-| `database_manager_test` | `tests/server/database_manager_test.cpp` | 18 |
+| `database_manager_test` | `tests/server/database_manager_test.cpp` | 20 |
 | `heartbeat_test` | `tests/server/heartbeat_test.cpp` | 19 |
-| `room_manager_test` | `tests/server/room_manager_test.cpp` | 15 |
-| `packet_processor_test` | `tests/server/packet_processor_test.cpp` | 15 |
-| `connection_manager_test` | `tests/server/connection_manager_test.cpp` | 18 |
-| `gossip_manager_test` | `tests/server/gossip_manager_test.cpp` | 22 |
+| `room_manager_test` | `tests/server/room_manager_test.cpp` | 18 |
+| `packet_processor_test` | `tests/server/packet_processor_test.cpp` | 18 |
+| `connection_manager_test` | `tests/server/connection_manager_test.cpp` | 19 |
+| `gossip_manager_test` | `tests/server/gossip_manager_test.cpp` | 23 |
 | `server_test` | `tests/server/server_test.cpp` | 13 |
 
 ### ClientSession (`[client_session]`)
@@ -321,6 +339,8 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - DatabaseManager membership edges
 - DatabaseManager concurrent writes
 - DatabaseManager typical register login logout flow
+- DatabaseManager createRoom assigns id and round-trips
+- DatabaseManager updateUser password and username
 
 ### Heartbeat (`[heartbeat]`)
 
@@ -348,7 +368,7 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 
 - RoomManager singleton identity
 - RoomManager getRoom edges
-- RoomManager createRoom edges
+- RoomManager createRoom edges (duplicate / Lobby / PRIVATE)
 - RoomManager deleteRoom refuses Lobby and unknown
 - RoomManager joinRoom unknown and empty name
 - RoomManager joinRoom moves between rooms
@@ -361,6 +381,9 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - RoomManager deleteRoom moves members to Lobby
 - RoomManager concurrent joins are safe
 - RoomManager typical create join leave delete flow
+- RoomManager listRooms includes defaults and created
+- RoomManager leaveAll is idempotent for Lobby-only session
+- RoomManager broadcastAll respects skipSocket
 
 ### PacketProcessor (`[packet_processor]`)
 
@@ -377,7 +400,10 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - PacketProcessor message success with pipes
 - PacketProcessor room join leave edges (guest public join/leave; guest denied private; unknown room)
 - PacketProcessor room join and leave
+- PacketProcessor UPDATE_USER
 - PacketProcessor response envelope
+- PacketProcessor ROOM_CREATE
+- PacketProcessor LOAD_MESSAGE_HISTORY
 - PacketProcessor typical register message logout flow
 
 ### ConnectionManager (`[connection_manager]`)
@@ -400,6 +426,7 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - ConnectionManager accepts multiple clients
 - ConnectionManager stopListening closes clients
 - ConnectionManager typical connect login message disconnect flow
+- ConnectionManager hasSession false for guest and wrong user
 
 ### GossipManager (`[gossip_manager]`)
 
@@ -412,6 +439,7 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 - GossipManager rumor empty event id is a no-op
 - GossipManager rumor LOGIN and LOGOUT update presence
 - GossipManager rumor USER_CREATED inserts user
+- GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD
 - GossipManager rumor ROOM_JOIN and ROOM_LEAVE
 - GossipManager rumor MESSAGE saves history
 - GossipManager duplicate rumor event id is ignored
@@ -446,62 +474,58 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 
 ## Functionality still untested
 
-These are product behaviors that exist (or are TODOs) and do not yet have a Catch2 case. Highest value first.
+Product behaviors that exist (or are TODOs) without a dedicated Catch2 case. Highest value first. Cluster rumor / DIGEST / HELLO paths are covered in `gossip_manager_test` above; gaps below are mostly **live dual-process** or missing unit surfaces.
 
 ### End-to-end (live `chat_server` + `chat_client` / Client)
 
-- Two clients on one node: login, join the same room, send a MESSAGE; the other client receives the push (Network logs it, does not queue it).
-- Client join-room round-trip: dashboard choice 2 updates `ClientState.currentRoom`.
-- Client leave-room round-trip: dashboard choice 3 returns to Lobby; refuse leave while already in Lobby.
-- Client send-message round-trip: dashboard choice 4, SUCCESS vs ERROR.
+- Two clients on one node: login, join the same room, send a MESSAGE; the other client receives the push.
+- Client join-room / leave-room / send-message full UI round-trips against a live server.
 - Client cannot leave Lobby; join unknown room returns NOT_FOUND and state is unchanged.
 - Disconnect / Ctrl+C while logged in: server clears `online_users` and rumors LOGOUT.
 - Client reconnect after server restart; session is anonymous until login again.
 - Register then login on a second client with the same username is rejected (`user already logged in`).
 - Logout then login again on the same connection.
-- Update profile (dashboard choice 1) — still a TODO in `Client::showDashboard`.
+- Invite to private room + join allow-list path across a live client.
 
-### Cluster / gossip (two nodes)
+### Cluster / gossip (two live processes)
 
-- Two `Server` processes with `--peers`: HELLO both ways, then a LOGIN on node A appears in node B `online_users`.
-- USER_CREATED on A: login on B with the same credentials succeeds (password/email replicated).
+Unit coverage exists in `gossip_manager_test`. Still open as **two `chat_server` processes**:
+
+- Two binaries with `--peers`: LOGIN on A appears in B `online_users`.
+- USER_CREATED on A: login on B with the same credentials succeeds.
 - Duplicate login across nodes: A holds the socket, B rejects LOGIN.
-- ROOM_JOIN on A updates membership on B; ROOM_LEAVE / return to Lobby replicates.
-- MESSAGE on A is persisted on B and broadcast to B’s local room sockets.
-- Anti-entropy: B is down while A rumored events; after B starts, DIGEST/PULL fills the gap.
-- Event-log cap (`MAX_EVENT_LOG` 256): oldest ids dropped; late PULL cannot resurrect them.
-- Peer disconnect and re-dial (`DIAL_INTERVAL`); duplicate NODE_ID rejected.
-- Gossip packets on the client port stay rejected (already unit-tested) while the peer port accepts them.
+- ROOM_JOIN / MESSAGE / ACL across live peer sockets (beyond in-process peer fixtures).
+- Event-log cap (`MAX_EVENT_LOG`): late PULL cannot resurrect dropped ids.
+- Clear `online_users` on node boot (product TODO — see STEPS §6).
+
+Smoke: `.\scripts\run_cluster.ps1`.
 
 ### Persistence and rooms
 
-- `loadHistory` after join: client never requests history today; if added, test newest-first reconstruct.
-- Server restart with the same `--db`: users, rooms, messages, membership survive; `online_users` should be empty until login.
-- `createRoom` / `deleteRoom` over the wire (no client packet type yet; RoomManager only).
-- Private rooms vs PUBLIC; room types other than Lobby (schema supports them, client always joins by name).
-- ADMIN vs USER vs GUEST privileges (seed has ADMIN; no permission checks yet).
-- Unique email constraint on `createUser` (username uniqueness is covered).
+- `allow_list` CRUD edges as dedicated `DatabaseManager` cases (join/invite covered via packet processor / gossip).
+- Server restart with the same `--db`: users, rooms, messages, membership survive; `online_users` should be empty until login (clear-on-boot not implemented).
+- `deleteRoom` over the wire (no client packet type yet).
+- ADMIN privilege checks (seed has ADMIN; no gates yet).
 
 ### Heartbeat (client + server together)
 
-- Live `Network::readerLoop` pongs `Heartbeat` pings so the session is not timed out.
-- Silent client (no pong) is closed after `HEARTBEAT_TIMEOUT`; `online_users` cleared.
-- Heartbeat ping is not delivered to `Client::waitFor`.
+Covered at component level (`heartbeat_test`, `network_test` pong). Still open:
+
+- Full stack: live `Network::readerLoop` + `Heartbeat` + presence clear on timeout in one process pair.
 
 ### Missing unit / config surfaces
 
-- **ThreadPool**: enqueue, worker execution, shutdown while tasks queued, destructor, concurrent `task()`.
-- **config::parseArgs / parsePort / parsePeers**: `--host`, `--port`, `--peer-port`, `--peers`, `--db`, `--node-id`, `--help`, invalid port, unknown flag, missing value.
-- **PacketHandler** only handles LOGIN/REGISTER; ROOM_JOIN / ROOM_LEAVE / MESSAGE / LOGOUT success payloads are ignored (Client inspects `responseCode` instead). Worth a contract test so that does not regress.
-- ConsoleUI has no leave-room prompt (leave is dashboard choice 3 with no extra input) — cover cancel/EOF on `showRegister` / `showJoinRoom` the same way as login.
-- `waitFor` skipping unexpected queued types (non-heartbeat packets of the wrong type).
-- `Network` receive timeout / blocking `receivePacket` with no packet.
-- `socket_io::listenTo` / `connectTo` failure (port in use, bad host) as named cases if not already asserted inside edges.
+- **ThreadPool**: enqueue, worker execution, shutdown while tasks queued (pool is constructed but unused for session I/O).
+- **config::parseArgs / parsePort / parsePeers**: CLI flags, invalid port, unknown flag, missing value.
+- **PacketHandler** beyond LOGIN/REGISTER (Client often checks `responseCode` alone).
+- ConsoleUI invite / history / leave prompts if added as dedicated screens.
+- `waitFor` skipping unexpected queued types.
+- `Network` receive timeout with no packet as a named case.
 
 ### Concurrency / robustness
 
 - Two clients sending MESSAGE in the same room at once; history order and broadcast to both.
 - Login + gossip rumor + heartbeat ping overlapping on one session.
-- Rapid connect/disconnect of many sockets (`THREAD_COUNT` workers).
-- Malformed / oversized client frames do not crash `handleClient`.
+- Rapid connect/disconnect of many sockets.
+- Malformed / oversized client frames do not crash `handleClient` (partially covered elsewhere).
 - SQLite lock timeout under gossip + packet_processor + heartbeat concurrent DB writes (partially covered by `DatabaseManager concurrent writes`).

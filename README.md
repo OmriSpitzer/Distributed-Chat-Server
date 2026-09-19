@@ -13,12 +13,19 @@ C++17 chat cluster for Windows. Clients talk to a TCP server over framed binary 
 
 Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` for the console UIs used by scripts and Catch2. Passwords are hashed with Argon2id. Each node keeps its own SQLite file and replicates events over gossip rather than sharing a single store.
 
-Class-level diagrams live in [architecture.md](architecture.md).
+**Docs to read next**
+
+| Doc | What it covers |
+|-----|----------------|
+| [architecture.md](architecture.md) | Layered classes, Mermaid diagrams, client/server call paths, wire sequence |
+| [database.md](database.md) | Per-node SQLite schema, ER model, `allow_list`, query catalog, write paths |
+| [tests/TESTS.md](tests/TESTS.md) | Catch2 catalog and remaining gaps |
+| [STEPS.md](STEPS.md) | Backlog and open work |
 
 ## Features
 
 - **Auth** — register, login, logout, and profile update with Argon2id; one live session per user across the cluster
-- **Rooms** — public / private rooms, join / leave (back to Lobby), create, invite to private rooms
+- **Rooms** — public / private rooms, join / leave (back to Lobby), create, invite to private rooms (`allow_list`)
 - **Messages** — persist for registered users, live broadcast (including guests), rumor to peer nodes, history load
 - **Heartbeat** — server pings; client auto-replies `pong`; stale sockets are closed
 - **Gossip** — `HELLO`, `EVENT`, `DIGEST`, and `PULL` with periodic anti-entropy
@@ -41,12 +48,14 @@ Class-level diagrams live in [architecture.md](architecture.md).
           |  SQLite                                  |  SQLite
           +------------------+------------------+----+
                              |
-              users · rooms · messages · membership · online_users
+              users · rooms · messages · membership · online_users · allow_list
 ```
 
 **Client path.** The Qt dashboard (or `ConsoleUI`) calls `Client` action methods. `PacketBuilder` builds the `Packet`; `Network` writes it (background reader pongs heartbeats, applies `ROOM_LIST`, and queues `MESSAGE` pushes for the UI). The server `ConnectionManager` accepts the connection, owns a `ClientSession`, and hands the packet to `PacketProcessor`.
 
 **Server path.** `PacketProcessor` authenticates against `DatabaseManager`, updates `RoomManager`, and rumors a `GOSSIP_EVENT` through `GossipManager`. Gossip applies the event locally (persist + optional room broadcast) and forwards it to peers. Anti-entropy digests catch nodes that missed a rumor.
+
+For class diagrams and sequences, see **[architecture.md](architecture.md)**. For the SQLite layout and gossip-related persistence, see **[database.md](database.md)**.
 
 **Wire format.** Length-prefixed binary frames, max 1 MiB payload:
 
@@ -79,37 +88,57 @@ Responses use `200` success, `400` error, `404` not found, `500` internal.
 Requires **CMake 3.16+**, a **C++17** compiler, **Qt 6 Widgets**, and **Ninja** if you use the PowerShell helpers. The server and client link **Winsock** (`ws2_32`). Catch2 v3.8.1 and Argon2 are fetched at configure time.
 
 ```powershell
+# Build both binaries
+.\scripts\build.ps1
+
+# Single server / client (GUI)
+.\scripts\run_server.ps1
+.\scripts\run_client.ps1
+
+# Console UIs
+.\scripts\run_server.ps1 --test
+.\scripts\run_client.ps1 --test
+
+# Or cmake directly
 cmake -B build -S . -G "Ninja" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build
-
-# Server GUI (listens on 5555, gossip on 5557)
-.\src\server.ps1
-# or
 .\build\chat_server.exe
-
-# Client GUI (connects to 127.0.0.1:5555)
-.\src\client.ps1
-# or
 .\build\chat_client.exe
-
-# Console UIs (scripts / tests)
-.\build\chat_server.exe --test
-.\build\chat_client.exe --test
 ```
 
 SQLite files are created under `data/` relative to the process working directory (gitignored). Prefer running from the repo root.
 
 ### Two-node cluster
 
-```powershell
-.\build\chat_server.exe --node-id node1 --port 5555 --peer-port 5557 --peers 127.0.0.1:5558 --db data/node-1.db
-.\build\chat_server.exe --node-id node2 --port 5556 --peer-port 5558 --peers 127.0.0.1:5557 --db data/node-2.db
+Fastest path — builds, opens **2 servers** and **2 clients** (one client per node) in separate windows:
 
-.\build\chat_client.exe --host 127.0.0.1 --port 5555
-.\build\chat_client.exe --host 127.0.0.1 --port 5556
+```powershell
+.\scripts\run_cluster.ps1
+# console UIs:
+.\scripts\run_cluster.ps1 -Test
+```
+
+Manual equivalent:
+
+```powershell
+.\scripts\run_server.ps1 --node-id node1 --port 5555 --peer-port 5557 --peers 127.0.0.1:5558 --db data/node-1.db
+.\scripts\run_server.ps1 --node-id node2 --port 5556 --peer-port 5558 --peers 127.0.0.1:5557 --db data/node-2.db
+
+.\scripts\run_client.ps1 --host 127.0.0.1 --port 5555
+.\scripts\run_client.ps1 --host 127.0.0.1 --port 5556
 ```
 
 `--peers` is a comma-separated list of **gossip** addresses (`host:port`), not client ports.
+
+| Script | Role |
+|--------|------|
+| `scripts/build.ps1` | Configure (if needed) and build `chat_server` + `chat_client` |
+| `scripts/run_server.ps1` | Run one server in the current terminal |
+| `scripts/run_client.ps1` | Run one client in the current terminal |
+| `scripts/run.ps1` | Start one server in a new window (used by the cluster script) |
+| `scripts/run_cluster.ps1` | Build + 2-node cluster + 2 clients |
+
+Legacy helpers `src/server.ps1` and `src/client.ps1` still build-and-run a single binary; prefer `scripts/`.
 
 ## Configuration
 
@@ -126,7 +155,7 @@ CLI flags map onto `include/config/config.h`:
 | `--test` | off | Console UI instead of Qt |
 | `--help` | | Print usage |
 
-Heartbeat interval is 5 s; timeout is 10 s. Worker thread count is 4.
+Heartbeat interval is 5 s; timeout is 10 s. Worker thread count is 4 (`ThreadPool` is constructed for shutdown compatibility; session I/O uses dedicated threads).
 
 ## Repository layout
 
@@ -134,6 +163,9 @@ Heartbeat interval is 5 s; timeout is 10 s. Worker thread count is 4.
 Distributed-Chat-Server/
 ├── CMakeLists.txt          Libraries, executables, Catch2 tests
 ├── architecture.md         Class and sequence diagrams
+├── database.md             SQLite schema, queries, write paths
+├── STEPS.md                Backlog
+├── scripts/                build / run / cluster PowerShell helpers
 ├── include/                Public headers
 │   ├── auth/               Argon2id wrapper
 │   ├── client/             Network, packets, state, Qt dashboard
@@ -141,14 +173,12 @@ Distributed-Chat-Server/
 │   ├── server/             Sessions, rooms, gossip, heartbeat, Qt panels
 │   └── utils/              Packet, serializer, socket_io, models
 ├── src/
-│   ├── server.ps1          Configure, build, run chat_server
-│   ├── client.ps1          Configure, build, run chat_client
 │   ├── auth/
 │   ├── client/
 │   ├── database/           init.sql + queries (baked into sql_schemas.h)
 │   ├── server/
 │   └── utils/
-└── tests/                  auth · client · server · utils
+└── tests/                  auth · client · server · utils (+ TESTS.md)
 ```
 
 Headers live in `include/`; implementations live in `src/`. CMake adds `include/` as a public include path and embeds SQL files from `DB_SCHEMAS` into a generated `sql_schemas.h` at configure time.
@@ -168,8 +198,10 @@ Headers live in `include/`; implementations live in `src/`. CMake adds `include/
 ctest --test-dir build --output-on-failure
 ```
 
+See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**24** executables, **326** `TEST_CASE`s).
+
 ## Status
 
-**Working today:** framed TCP, Qt and console clients/servers (`--test` for console), register / login / logout / profile, public and private rooms (join, leave, create, invite), live chat plus history for registered users, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, Catch2 coverage for utils, auth, client, and server.
+**Working today:** framed TCP, Qt and console clients/servers (`--test` for console), register / login / logout / profile, public and private rooms (join, leave, create, invite), live chat plus history for registered users, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, PowerShell cluster helpers, Catch2 coverage for utils, auth, client, and server.
 
-**Still open:** WebSocket or a shared remote database, ADMIN/USER role checks, gossip replicating password hashes, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). `ThreadPool` is constructed but session I/O runs on dedicated threads. See [STEPS.md](STEPS.md).
+**Still open:** WebSocket or a shared remote database, ADMIN role checks, gossip replicating password hashes, clear stale `online_users` on node boot, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). See [STEPS.md](STEPS.md).

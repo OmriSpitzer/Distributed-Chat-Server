@@ -140,12 +140,14 @@ struct Fixture {
 
   ~Fixture() {
     heartbeat.stop();
+    connections.stopListening();
     for (SOCKET socket : clients) {
       if (socket != INVALID_SOCKET) {
         socket_io::close(socket);
       }
     }
-    connections.stopListening();
+    // wait for detached handleClient threads before ConnectionManager dtor
+    waitUntil(std::chrono::seconds(2), [&] { return connections.getSessions().empty(); });
     if (acceptThread.joinable()) {
       acceptThread.join();
     }
@@ -188,6 +190,13 @@ struct Fixture {
     const std::size_t expected = clients.size();
     if (!waitUntil(std::chrono::seconds(2),
                    [&] { return connections.getSessions().size() >= expected; })) {
+      return INVALID_SOCKET;
+    }
+
+    // drain connect welcome (ROOM_LIST) so later reads see heartbeats only
+    setRecvTimeout(client, 2000);
+    const auto welcome = socket_io::readPacket(client);
+    if (!welcome || welcome->type != Packet::PacketType::ROOM_LIST) {
       return INVALID_SOCKET;
     }
     return client;

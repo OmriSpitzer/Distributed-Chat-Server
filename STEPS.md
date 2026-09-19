@@ -2,6 +2,8 @@
 
 Backlog for the distributed chat system. Priority is approximate; items marked **(goal)** are explicit design targets.
 
+**Docs:** [README.md](README.md) · [architecture.md](architecture.md) · [database.md](database.md) · [tests/TESTS.md](tests/TESTS.md)
+
 ---
 
 ## 1. Persistence — one mapper, not the whole domain **(goal)**
@@ -26,6 +28,7 @@ Prefer `TEXT` **+** `CHECK` against the known set (readable, stays stable if C++
 
 - [x] Constrain enum-like columns (`CHECK` on TEXT, or INTEGER + mapped helpers).
 - [x] Migrate `init.sql` seed data and all queries to the chosen representation.
+- [x] Private-room `allow_list` table + join / invite / gossip ACL paths.
 
 ---
 
@@ -45,11 +48,11 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ## 4. Client product gaps
 
-- [x] **Update profile** — dashboard choice 1 (`UPDATE_USER` via `PacketBuilder` / `ConsoleUI::showUpdateProfile`).
+- [x] **Update profile** — dashboard / console (`UPDATE_USER` via `PacketBuilder` / `ConsoleUI::showUpdateProfile`).
 - [x] **Room directory** — console should list available rooms before join (`ConsoleUI::showJoinRoom`).
 - [x] **Validate room exists** before sending `ROOM_JOIN` (or surface clear `404` from server).
-- [x] **Message history** — server has `loadHistory`; client requests via `LOAD_MESSAGE_HISTORY` (dashboard option 6).
-- [x] **Pushed messages in UI** — reader logs room pushes; improve console presentation (“change visuals” TODO).
+- [x] **Message history** — server has `loadHistory`; client requests via `LOAD_MESSAGE_HISTORY`.
+- [x] **Pushed messages in UI** — console and Qt dashboard drain queued room pushes.
 
 ---
 
@@ -57,9 +60,10 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ## 5. Rooms & authorization
 
-- [x] Wire protocol for `createRoom` (`ROOM_CREATE` + `ROOM_LIST` push; `deleteRoom` still unwired).
-- [x] Enforce **PRIVATE** vs **PUBLIC** (schema supports it; join path does not).
-- [x] Enforce **USER / GUEST** privileges ().
+- [x] Wire protocol for `createRoom` (`ROOM_CREATE` + `ROOM_LIST` push; `deleteRoom` still unwired over the client packet API).
+- [x] Enforce **PRIVATE** vs **PUBLIC** via `allow_list` on join / invite.
+- [x] Guests may join public rooms (in-memory); private rooms require authenticated allow-list membership.
+- [ ] Enforce **ADMIN** privilege checks (seed has `ADMIN`; no role gates yet).
 - [x] Unique **email** constraint coverage and clear client errors (username uniqueness is stronger today).
 
 ---
@@ -68,8 +72,7 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ## 6. Server runtime & architecture
 
-- [x] `ThreadPool`: use it for a clear reason, or delete it. Dedicated session threads are fine; an unused pool is not.
-- [x] If kept: finish the hard-shutdown TODO; if removed: drop construction/shutdown from `Server`.
+- [x] `ThreadPool`: kept constructed with `Server` and shut down on stop; session I/O stays on dedicated threads (pool is not the accept path).
 - [x] Singletons (`DatabaseManager`, `RoomManager`) are acceptable for this small node. Prefer DI (owned by `Server`) only if tests need it — not a must.
 - [ ] Clear cluster presence on node boot (`online_users` should not survive a crash as “still online”).
 - [x] Cap / rotate gossip event log: verify ops story when `MAX_EVENT_LOG` drops old ids.
@@ -93,12 +96,14 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 Highest-value gaps:
 
-- [ ] E2E: two clients, same room, MESSAGE push received.
+- [ ] E2E: two clients, same room, MESSAGE push received (live `chat_server` + `chat_client`).
 - [ ] E2E: join / leave Lobby rules, unknown room `404`, logout/login, double-login rejected.
-- [x] Cluster: LOGIN / USER_CREATED / ROOM_JOIN / MESSAGE / anti-entropy DIGEST-PULL across two nodes.
+- [x] Cluster unit coverage: LOGIN / USER_CREATED / ROOM_JOIN / MESSAGE / ROOM_CREATED+ACL / anti-entropy DIGEST-PULL (`gossip_manager_test`).
 - [x] Heartbeat: live pong keeps session; silent client timed out and presence cleared.
 - [ ] Unit: `ThreadPool`, `config::parseArgs`, `PacketHandler` contract beyond login/register.
 - [ ] Remove or wire `tests/class/` leftover (not built today).
+
+Manual multi-node smoke: `.\scripts\run_cluster.ps1` (see README).
 
 ---
 
@@ -106,9 +111,10 @@ Highest-value gaps:
 
 ## 9. Docs & cleanup
 
-- [ ] Sync `SERVER.md` / `CLIENT.md` / `MODELS.md` with the current layered architecture (`architecture.md` is closer to truth).
-- [x] README “not in this tree” list: track profile, room directory, history UI, clearer TCP, DB enums as they land.
-- [ ] Decide product scope for later: WebSocket / shared remote DB (GUI tracked in §11).
+- [x] Layered architecture documented in [architecture.md](architecture.md); schema in [database.md](database.md); README points at both.
+- [x] PowerShell helpers under `scripts/` (`build`, `run_server`, `run_client`, `run`, `run_cluster`).
+- [x] README “not in this tree” list synced with shipped features (profile, rooms, TCP helpers, DB enums, allow_list).
+- [ ] Decide product scope for later: WebSocket / shared remote DB.
 
 ---
 
@@ -135,11 +141,12 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 
 ### Client GUI
 
-- [ ] Qt client target (`chat_client_gui` or shared mode flag) beside console `chat_client`.
-- [ ] Screens mirroring `ConsoleUI`: home, login/register, dashboard, join/create room, messaging, profile, history.
+- [x] Qt client dashboard (`DashboardPage` / `MainPage`) beside console `ConsoleUI` (`--test`).
+- [x] Screens: home/login/register, dashboard, join/create room, messaging, profile, invite, history.
 - [x] Reuse `Client` / `PacketBuilder` / `PacketHandler` / `Network` — GUI is presentation only.
 - [x] Show **pushed messages** live (pairs with §4 console push presentation).
 - [x] GUI-thread rules: no widget updates from reader/network threads without queued signals.
+- [ ] Polish UX (styles, empty states, clearer disconnect handling).
 
 ---
 
@@ -148,11 +155,7 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 ## Suggested order
 
 1. Security + presence-on-boot (gossip hash-only, seed hashes, clear `online_users`)
-2. Persistence mapper cleanup + DB enum `CHECK`s
-3. Clearer TCP wrapper shared by client and server
-4. Client room list + history + profile
-5. AuthZ (roles / private rooms)
-6. Use or delete `ThreadPool`
-7. Fill E2E / cluster test gaps
-8. Finish server GUI polish + console/GUI switch; then client GUI (§11)
-
+2. Fill E2E / live dual-client test gaps
+3. ADMIN role checks (if in scope)
+4. Finish server GUI polish; optional client GUI polish
+5. Product scope: WebSocket / shared remote DB
