@@ -1,6 +1,6 @@
 # Distributed Chat Server
 
-[![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)[![CMake](https://img.shields.io/badge/CMake-3.16%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)[![Platform](https://img.shields.io/badge/Windows-Winsock-0078D6?logo=windows&logoColor=white)](#quick-start)[![Tests](https://img.shields.io/badge/tests-Catch2%20v3.8-FF6B2B)](https://github.com/catchorg/Catch2)[![Version](https://img.shields.io/badge/version-1.0.0-informational)]()
+ [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/) [![CMake](https://img.shields.io/badge/CMake-3.16%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/) [![Platform](https://img.shields.io/badge/Windows-Winsock-0078D6?logo=windows&logoColor=white)](#quick-start) [![Tests](https://img.shields.io/badge/tests-Catch2%20v3.8-FF6B2B)](https://github.com/catchorg/Catch2) [![Version](https://img.shields.io/badge/version-1.0.0-informational)]()
 
 C++17 chat cluster for Windows. Clients talk to a TCP server over framed binary packets; servers gossip with each other so presence, membership, and messages stay in sync across nodes.
 
@@ -20,7 +20,7 @@ Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` f
 | [architecture.md](architecture.md) | Layered classes, Mermaid diagrams, client/server call paths, wire sequence |
 | [database.md](database.md) | Per-node SQLite schema, ER model, `allow_list`, query catalog, write paths |
 | [tests/TESTS.md](tests/TESTS.md) | Catch2 catalog and remaining gaps |
-| [STEPS.md](STEPS.md) | Backlog and open work |
+| [FUTURE_WORK.md](FUTURE_WORK.md) | Backlog and open work |
 
 ## Features
 

@@ -2,13 +2,13 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **24** executables, **339** `TEST_CASE`s.
+Totals: **26** executables, **344** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
 `tests/class/` is leftover and is **not** built.
 
-**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [STEPS.md](../STEPS.md)
+**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [FUTURE_WORK.md](../FUTURE_WORKs.md)
 
 Manual multi-node smoke (not Catch2): `.\scripts\run_cluster.ps1` — 2 servers + 2 clients.
 
@@ -481,19 +481,39 @@ ctest --test-dir build --output-on-failure
 
 ---
 
+## Func / E2E
+
+Live `Server` + `Client` (same libraries as `chat_server` / `chat_client`), not mocks.
+
+| Executable | File | Cases |
+|---|---|---|
+| `two_client_message_push_test` | `tests/func/two_client_message_push_test.cpp` | 1 |
+| `session_rules_test` | `tests/func/session_rules_test.cpp` | 4 |
+
+### Two-client MESSAGE push (`[func][e2e][message]`)
+
+- E2E two clients same room MESSAGE push received
+
+### Session rules (`[func][e2e][room]` / `[auth]`)
+
+- E2E join leave Lobby rules
+- E2E join unknown room returns error
+- E2E logout then login again
+- E2E double login rejected
+
+---
+
 ## Functionality still untested
 
 Product behaviors that exist (or are TODOs) without a dedicated Catch2 case. Highest value first. Cluster rumor / DIGEST / HELLO paths are covered in `gossip_manager_test` above; gaps below are mostly **live dual-process** or missing unit surfaces.
 
-### End-to-end (live `chat_server` + `chat_client` / Client)
+### End-to-end (live `Server` + `Client`)
 
-- Two clients on one node: login, join the same room, send a MESSAGE; the other client receives the push.
+- [x] Two clients on one node: seed login (admin/user), join the same room, send a MESSAGE; the other client receives the push (`tests/func/`).
+- [x] Cannot leave Lobby; leave General → Lobby; join unknown room error + state unchanged; logout/login; double-login rejected (`session_rules_test`).
 - Client join-room / leave-room / send-message full UI round-trips against a live server.
-- Client cannot leave Lobby; join unknown room returns NOT_FOUND and state is unchanged.
 - Disconnect / Ctrl+C while logged in: server clears `online_users` and rumors LOGOUT.
 - Client reconnect after server restart; session is anonymous until login again.
-- Register then login on a second client with the same username is rejected (`user already logged in`).
-- Logout then login again on the same connection.
 - Invite to private room + join allow-list path across a live client.
 
 ### Cluster / gossip (two live processes)

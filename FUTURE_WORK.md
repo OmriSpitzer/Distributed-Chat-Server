@@ -20,6 +20,8 @@ Backlog for the distributed chat system. Priority is approximate; items marked *
 
 ---
 
+
+
 ## 2. Schema — constrained enums in the DB **(goal)**
 
 C++ already has `User::UserType`, `Room::RoomType`, `Room::Privacy`, `Packet::PacketType`. SQLite still stores free `TEXT` (`user_type`, `type`, `privacy`).
@@ -32,6 +34,8 @@ Prefer `TEXT` **+** `CHECK` against the known set (readable, stays stable if C++
 
 ---
 
+
+
 ## 3. TCP layer — clearer transport **(goal)**
 
 Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / cast `SOCKET`, split across `ConnectionManager`, `Network`, and gossip.
@@ -42,6 +46,8 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ---
 
+
+
 ## 4. Client product gaps
 
 - [x] **Update profile** — dashboard / console (`UPDATE_USER` via `PacketBuilder` / `ConsoleUI::showUpdateProfile`).
@@ -51,6 +57,8 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 - [x] **Pushed messages in UI** — console and Qt dashboard drain queued room pushes.
 
 ---
+
+
 
 ## 5. Rooms & authorization
 
@@ -65,6 +73,8 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ---
 
+
+
 ## 6. Server runtime & architecture
 
 - [x] `ThreadPool`: kept constructed with `Server` and shut down on stop; session I/O stays on dedicated threads (pool is not the accept path).
@@ -73,6 +83,8 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 - [x] Cap / rotate gossip event log: verify ops story when `MAX_EVENT_LOG` drops old ids.
 
 ---
+
+
 
 ## 7. Security & correctness
 
@@ -83,20 +95,22 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ---
 
+
+
 ## 8. Testing (from `tests/TESTS.md`)
 
 Highest-value gaps:
 
-- [ ] E2E: two clients, same room, MESSAGE push received (live `chat_server` + `chat_client`).
-- [ ] E2E: join / leave Lobby rules, unknown room `404`, logout/login, double-login rejected.
+- [x] E2E: two clients, same room, MESSAGE push received (live `Server` + `Client` in `tests/func/`).
+- [x] E2E: join / leave Lobby rules, unknown room `404`, logout/login, double-login rejected.
 - [x] Cluster unit coverage: LOGIN / USER_CREATED / ROOM_JOIN / MESSAGE / ROOM_CREATED+ACL / anti-entropy DIGEST-PULL (`gossip_manager_test`).
 - [x] Heartbeat: live pong keeps session; silent client timed out and presence cleared.
 - [ ] Unit: `ThreadPool`, `config::parseArgs`, `PacketHandler` contract beyond login/register.
 - [ ] Remove or wire `tests/class/` leftover (not built today).
 
-Manual multi-node smoke: `.\scripts\run_cluster.ps1` (see README).
-
 ---
+
+
 
 ## 9. Docs & cleanup
 
@@ -106,6 +120,8 @@ Manual multi-node smoke: `.\scripts\run_cluster.ps1` (see README).
 - [ ] Decide product scope for later: WebSocket / shared remote DB.
 
 ---
+
+
 
 ## 10. Visual GUI — server & client
 
@@ -122,23 +138,16 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 - [x] Console ↔ GUI choice in `main` (real flag/prompt; not `if (true)`).
 - [ ] Live peer sockets on Ports (optional `GossipManager` snapshot getters).
 - [ ] Push updates (Logger sink / session events) instead of timer-only where it matters.
-- [ ] Polish UX (styles `.qss`, scroll behavior, empty states).
+
+
 
 ### Client GUI
 
 - [x] Qt client dashboard (`DashboardPage` / `MainPage`) beside console `ConsoleUI` (`--test`).
-- [x] Screens: home/login/register, dashboard, join/create room, messaging, profile, invite, history.
+- [x] Screens: home/login/register, dashboard, join/create/delete room, messaging, profile, invite/kick, history.
 - [x] Reuse `Client` / `PacketBuilder` / `PacketHandler` / `Network` — GUI is presentation only.
 - [x] Show **pushed messages** live (pairs with §4 console push presentation).
 - [x] GUI-thread rules: no widget updates from reader/network threads without queued signals.
-- [ ] Polish UX (styles, empty states, clearer disconnect handling).
 
 ---
-
-## Suggested order
-
-1. Security + presence-on-boot (gossip hash-only, seed hashes, clear `online_users`)
-2. Fill E2E / live dual-client test gaps
-3. Finish server GUI polish; optional client GUI polish
-4. Product scope: WebSocket / shared remote DB
 

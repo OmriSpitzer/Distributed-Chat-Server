@@ -269,6 +269,21 @@ add_executable(connection_manager_test tests/server/connection_manager_test.cpp)
 target_link_libraries(connection_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
 add_executable(server_test tests/server/server_test.cpp)
 target_link_libraries(server_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
+# ------------ Func / E2E connections ------------
+
+add_executable(two_client_message_push_test
+  tests/func/two_client_message_push_test.cpp
+  tests/client/main_page_stub.cpp)
+target_link_libraries(two_client_message_push_test PRIVATE
+  server_lib client_lib Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(session_rules_test
+  tests/func/session_rules_test.cpp
+  tests/client/main_page_stub.cpp)
+target_link_libraries(session_rules_test PRIVATE
+  server_lib client_lib Catch2::Catch2WithMain Threads::Threads)
+
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
@@ -306,6 +321,11 @@ catch_discover_tests(gossip_manager_test)
 catch_discover_tests(packet_processor_test)
 catch_discover_tests(connection_manager_test)
 catch_discover_tests(server_test)
+
+# ------------ Func / E2E tests ------------
+
+catch_discover_tests(two_client_message_push_test)
+catch_discover_tests(session_rules_test)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - Tests - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^

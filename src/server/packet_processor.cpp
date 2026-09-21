@@ -115,8 +115,7 @@ std::string encodeHistory(const std::vector<Message> &messages) {
 }
 
 bool isAdmin(const ClientSession &session) {
-  return session.isAuthenticated() &&
-         session.getUser().getUserType() == User::UserType::ADMIN;
+  return session.isAuthenticated() && session.getUser().getUserType() == User::UserType::ADMIN;
 }
 
 void denyForbidden(Packet &response, std::string_view message) {
@@ -440,7 +439,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // invite a user to a private room (creator only)
+    // invite a user to a private room
   case Packet::PacketType::ROOM_INVITE: {
     if (!session.isAuthenticated()) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
@@ -470,7 +469,8 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       }
 
       DatabaseManager &db = DatabaseManager::getInstance();
-      if (!isAdmin(session) && !db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
+      if (!isAdmin(session) &&
+          !db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
         denyForbidden(response, "only the room creator or an admin can invite");
         break;
       }
@@ -572,7 +572,8 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       }
 
       DatabaseManager &db = DatabaseManager::getInstance();
-      if (!isAdmin(session) && !db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
+      if (!isAdmin(session) &&
+          !db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
         denyForbidden(response, "only the room creator or an admin can kick");
         break;
       }
