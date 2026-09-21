@@ -435,6 +435,42 @@ TEST_CASE("GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD", "[gossip_manager]
   fixture.gossip->stop();
 }
 
+TEST_CASE("GossipManager rumor ROOM_DELETED and ROOM_KICK", "[gossip_manager][rumor][admin]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  REQUIRE(fixture.start());
+
+  const std::string creator = unique("c");
+  const std::string creatorEmail = creator + "@example.com";
+  const std::string guest = unique("g");
+  const std::string guestEmail = guest + "@example.com";
+  REQUIRE_NOTHROW(db().createUser(creator, "secret", creatorEmail));
+  REQUIRE_NOTHROW(db().createUser(guest, "secret", guestEmail));
+
+  const std::string roomName = unique("doom");
+  fixture.gossip->rumor(makeEvent("ROOM_CREATED", unique("rc"), creator, "Other", "PRIVATE",
+                                  roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return RoomManager::getInstance().getRoom(roomName).has_value(); }));
+  auto created = RoomManager::getInstance().getRoom(roomName);
+  REQUIRE(created.has_value());
+
+  fixture.gossip->rumor(makeEvent("ROOM_ACL_ADD", unique("acl"), guest, "0", "", roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return db().isAllowed(created->getId(), guestEmail); }));
+
+  fixture.gossip->rumor(makeEvent("ROOM_KICK", unique("kick"), guest, fixture.nodeId, "", roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return !db().isAllowed(created->getId(), guestEmail); }));
+
+  fixture.gossip->rumor(
+      makeEvent("ROOM_DELETED", unique("rd"), creator, fixture.nodeId, "", roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return !RoomManager::getInstance().getRoom(roomName).has_value(); }));
+
+  fixture.gossip->stop();
+}
+
 // 10. rumor ROOM_JOIN / ROOM_LEAVE
 TEST_CASE("GossipManager rumor ROOM_JOIN and ROOM_LEAVE", "[gossip_manager][rumor][room]") {
   REQUIRE(winsock().ok);

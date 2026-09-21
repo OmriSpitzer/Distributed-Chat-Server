@@ -180,6 +180,19 @@ TEST_CASE("Packet constructor stores all fields", "[packet][ctor]") {
     REQUIRE(packet.room == "Secure");
     REQUIRE(packet.message == "bob");
   }
+
+  SECTION("ROOM_DELETE") {
+    const Packet packet("alice", "server", Packet::PacketType::ROOM_DELETE, "Labs", "");
+    REQUIRE(packet.type == Packet::PacketType::ROOM_DELETE);
+    REQUIRE(packet.room == "Labs");
+  }
+
+  SECTION("ROOM_KICK") {
+    const Packet packet("alice", "server", Packet::PacketType::ROOM_KICK, "Secure", "bob");
+    REQUIRE(packet.type == Packet::PacketType::ROOM_KICK);
+    REQUIRE(packet.room == "Secure");
+    REQUIRE(packet.message == "bob");
+  }
 }
 
 // 3. constructor default arguments
@@ -503,6 +516,8 @@ TEST_CASE("Packet packetTypeToString", "[packet][packetTypeToString]") {
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::LOAD_MESSAGE_HISTORY) ==
           "LOAD_MESSAGE_HISTORY");
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_INVITE) == "ROOM_INVITE");
+  REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_DELETE) == "ROOM_DELETE");
+  REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_KICK) == "ROOM_KICK");
 
   SECTION("invalid enum value defaults to DEFAULT") {
     const auto bogus = static_cast<Packet::PacketType>(999);
@@ -535,6 +550,8 @@ TEST_CASE("Packet stringToPacketType", "[packet][stringToPacketType]") {
   REQUIRE(Packet::stringToPacketType("LOAD_MESSAGE_HISTORY") ==
           Packet::PacketType::LOAD_MESSAGE_HISTORY);
   REQUIRE(Packet::stringToPacketType("ROOM_INVITE") == Packet::PacketType::ROOM_INVITE);
+  REQUIRE(Packet::stringToPacketType("ROOM_DELETE") == Packet::PacketType::ROOM_DELETE);
+  REQUIRE(Packet::stringToPacketType("ROOM_KICK") == Packet::PacketType::ROOM_KICK);
 
   SECTION("unknown / edge strings default to DEFAULT") {
     REQUIRE(Packet::stringToPacketType("") == Packet::PacketType::DEFAULT);
@@ -568,7 +585,8 @@ TEST_CASE("Packet type conversion round-trip", "[packet][type-roundtrip]") {
       Packet::PacketType::GOSSIP_DIGEST, Packet::PacketType::GOSSIP_PULL,
       Packet::PacketType::UPDATE_USER,   Packet::PacketType::ROOM_CREATE,
       Packet::PacketType::ROOM_LIST,     Packet::PacketType::LOAD_MESSAGE_HISTORY,
-      Packet::PacketType::ROOM_INVITE};
+      Packet::PacketType::ROOM_INVITE,   Packet::PacketType::ROOM_DELETE,
+      Packet::PacketType::ROOM_KICK};
 
   for (const auto type : types) {
     REQUIRE(Packet::stringToPacketType(Packet::packetTypeToString(type)) == type);

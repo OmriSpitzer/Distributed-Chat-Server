@@ -245,6 +245,48 @@ TEST_CASE("PacketBuilder buildInviteToRoom rejects empty arguments",
   }
 }
 
+TEST_CASE("PacketBuilder buildKickFromRoom maps fields", "[packet_builder][kick]") {
+  const Packet packet = PacketBuilder::buildKickFromRoom("alice", "Secure", "bob");
+  REQUIRE(packet.type == Packet::PacketType::ROOM_KICK);
+  REQUIRE(packet.sender == "alice");
+  REQUIRE(packet.room == "Secure");
+  REQUIRE(packet.message == "bob");
+}
+
+TEST_CASE("PacketBuilder buildKickFromRoom rejects empty arguments",
+          "[packet_builder][kick][edge]") {
+  SECTION("empty username") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildKickFromRoom("", "Secure", "bob"),
+                      std::invalid_argument);
+  }
+  SECTION("empty room") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildKickFromRoom("alice", "", "bob"),
+                      std::invalid_argument);
+  }
+  SECTION("empty target") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildKickFromRoom("alice", "Secure", ""),
+                      std::invalid_argument);
+  }
+}
+
+TEST_CASE("PacketBuilder buildDeleteRoom maps fields", "[packet_builder][delete]") {
+  const Packet packet = PacketBuilder::buildDeleteRoom("alice", "Labs");
+  REQUIRE(packet.type == Packet::PacketType::ROOM_DELETE);
+  REQUIRE(packet.sender == "alice");
+  REQUIRE(packet.room == "Labs");
+  REQUIRE(packet.message.empty());
+}
+
+TEST_CASE("PacketBuilder buildDeleteRoom rejects empty arguments",
+          "[packet_builder][delete][edge]") {
+  SECTION("empty username") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildDeleteRoom("", "Labs"), std::invalid_argument);
+  }
+  SECTION("empty room") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildDeleteRoom("alice", ""), std::invalid_argument);
+  }
+}
+
 TEST_CASE("PacketBuilder buildLoadMessageHistory maps fields", "[packet_builder][history]") {
   const Packet packet = PacketBuilder::buildLoadMessageHistory("alice", "Lobby");
   REQUIRE(packet.type == Packet::PacketType::LOAD_MESSAGE_HISTORY);

@@ -113,6 +113,8 @@ bool isValidPacketType(Packet::PacketType type) {
   case Packet::PacketType::ROOM_LIST:
   case Packet::PacketType::LOAD_MESSAGE_HISTORY:
   case Packet::PacketType::ROOM_INVITE:
+  case Packet::PacketType::ROOM_DELETE:
+  case Packet::PacketType::ROOM_KICK:
     return true;
   }
   return false;

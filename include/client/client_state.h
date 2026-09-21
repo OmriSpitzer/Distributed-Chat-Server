@@ -23,6 +23,11 @@ public:
     return user.has_value() && user->getUserType() != User::UserType::GUEST;
   }
 
+  // logged-in ADMIN
+  bool isAdmin() const {
+    return user.has_value() && user->getUserType() == User::UserType::ADMIN;
+  }
+
   // replace the cached room directory (thread-safe)
   void setRooms(std::vector<Room> next) {
     std::lock_guard<std::mutex> lock(roomsMutex);

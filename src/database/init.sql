@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS allow_list (
   FOREIGN KEY (email) REFERENCES users(email)
 );
 
+-- Populate users table
+INSERT OR IGNORE INTO users (username, email, password, user_type) VALUES
+  ('admin', 'admin@example.com', 'admin', 'ADMIN'),
+  ('user', 'user@example.com', 'user', 'USER');
+
 -- Populate rooms table
 INSERT OR IGNORE INTO rooms (id, name, type, privacy) VALUES
   (1, 'Lobby', 'Lobby', 'PUBLIC'),

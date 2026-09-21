@@ -30,6 +30,8 @@ public:
     ROOM_LIST,
     LOAD_MESSAGE_HISTORY,
     ROOM_INVITE,
+    ROOM_DELETE,
+    ROOM_KICK,
   };
 
   // constructors

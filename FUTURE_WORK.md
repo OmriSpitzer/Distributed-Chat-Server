@@ -6,6 +6,8 @@ Backlog for the distributed chat system. Priority is approximate; items marked *
 
 ---
 
+# ------------------------------ VERSION 2.0 ------------------------------
+
 ## 1. Persistence — one mapper, not the whole domain **(goal)**
 
 `DatabaseManager` should be the **only place that turns SQL rows into domain objects**. It does **not** own the domain: `PacketProcessor` and other app code may still build `User` / `Message` / `Room` from validated input (login fields, gossip payloads, etc.).
@@ -17,8 +19,6 @@ Backlog for the distributed chat system. Priority is approximate; items marked *
 - [x] Keep password hashing inside create/login; never put hash/plaintext on objects meant for UI/wire.
 
 ---
-
-
 
 ## 2. Schema — constrained enums in the DB **(goal)**
 
@@ -32,8 +32,6 @@ Prefer `TEXT` **+** `CHECK` against the known set (readable, stays stable if C++
 
 ---
 
-
-
 ## 3. TCP layer — clearer transport **(goal)**
 
 Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / cast `SOCKET`, split across `ConnectionManager`, `Network`, and gossip.
@@ -43,8 +41,6 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 - [x] Align client `Network` and server `ConnectionManager` on the same helpers.
 
 ---
-
-
 
 ## 4. Client product gaps
 
@@ -56,19 +52,18 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ---
 
-
-
 ## 5. Rooms & authorization
 
-- [x] Wire protocol for `createRoom` (`ROOM_CREATE` + `ROOM_LIST` push; `deleteRoom` still unwired over the client packet API).
+- [x] Wire protocol for `createRoom` (`ROOM_CREATE` + `ROOM_LIST` push) and `deleteRoom` (`ROOM_DELETE`, ADMIN).
 - [x] Enforce **PRIVATE** vs **PUBLIC** via `allow_list` on join / invite.
 - [x] Guests may join public rooms (in-memory); private rooms require authenticated allow-list membership.
-- [ ] Enforce **ADMIN** privilege checks (seed has `ADMIN`; no role gates yet).
+- [x] Enforce **ADMIN** privilege checks (seed has `ADMIN`):
+  - Invite or kick a user from **any** room (not only the creator).
+  - Create or delete rooms, including **PRIVATE** — never Lobby or General.
+  - Join **PRIVATE** rooms (bypass `allow_list`).
 - [x] Unique **email** constraint coverage and clear client errors (username uniqueness is stronger today).
 
 ---
-
-
 
 ## 6. Server runtime & architecture
 
@@ -79,8 +74,6 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ---
 
-
-
 ## 7. Security & correctness
 
 - [ ] **USER_CREATED gossip** currently rumors password material for peer register — replace with hash-only (or challenge) replication.
@@ -89,8 +82,6 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 - [ ] Align `PacketHandler` with all success paths (today mostly LOGIN/REGISTER; client often checks `responseCode` alone).
 
 ---
-
-
 
 ## 8. Testing (from `tests/TESTS.md`)
 
@@ -107,8 +98,6 @@ Manual multi-node smoke: `.\scripts\run_cluster.ps1` (see README).
 
 ---
 
-
-
 ## 9. Docs & cleanup
 
 - [x] Layered architecture documented in [architecture.md](architecture.md); schema in [database.md](database.md); README points at both.
@@ -117,8 +106,6 @@ Manual multi-node smoke: `.\scripts\run_cluster.ps1` (see README).
 - [ ] Decide product scope for later: WebSocket / shared remote DB.
 
 ---
-
-
 
 ## 10. Visual GUI — server & client
 
@@ -137,8 +124,6 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 - [ ] Push updates (Logger sink / session events) instead of timer-only where it matters.
 - [ ] Polish UX (styles `.qss`, scroll behavior, empty states).
 
-
-
 ### Client GUI
 
 - [x] Qt client dashboard (`DashboardPage` / `MainPage`) beside console `ConsoleUI` (`--test`).
@@ -150,12 +135,10 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 
 ---
 
-
-
 ## Suggested order
 
 1. Security + presence-on-boot (gossip hash-only, seed hashes, clear `online_users`)
 2. Fill E2E / live dual-client test gaps
-3. ADMIN role checks (if in scope)
-4. Finish server GUI polish; optional client GUI polish
-5. Product scope: WebSocket / shared remote DB
+3. Finish server GUI polish; optional client GUI polish
+4. Product scope: WebSocket / shared remote DB
+

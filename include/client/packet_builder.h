@@ -42,6 +42,13 @@ public:
   static Packet buildInviteToRoom(std::string_view username, std::string_view room,
                                   std::string_view inviteeUsername);
 
+  // build a kick packet (message = target username)
+  static Packet buildKickFromRoom(std::string_view username, std::string_view room,
+                                  std::string_view targetUsername);
+
+  // build a delete-room packet
+  static Packet buildDeleteRoom(std::string_view username, std::string_view room);
+
   // build a load message history packet for a room
   static Packet buildLoadMessageHistory(std::string_view username, std::string_view room);
 };

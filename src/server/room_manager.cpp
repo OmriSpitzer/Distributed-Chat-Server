@@ -261,6 +261,12 @@ bool RoomManager::deleteRoom(const std::string &roomName, ConnectionManager &con
     }
   }
 
+  Packet lobbyPush("server", "*", Packet::PacketType::ROOM_LIST, LOBBY.getName(),
+                   Room::serializeList(listRooms()), 0);
+  for (SOCKET socket : sockets) {
+    connections.sendPacket(socket, lobbyPush);
+  }
+
   Logger::logInfo("RoomManager", "Room deleted: " + roomName);
   return true;
 }

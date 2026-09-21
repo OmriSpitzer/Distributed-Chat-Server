@@ -7,6 +7,7 @@
 
 #include "server/gossip_manager.h"
 #include "config/config.h"
+#include "server/client_session.h"
 #include "server/database_manager.h"
 #include "server/room_manager.h"
 #include "utils/gossip_payload.h"
@@ -578,6 +579,71 @@ bool GossipManager::applyEvent(const Packet &event) {
     }
 
     Logger::logInfo("GossipManager", "Applied ROOM_ACL_ADD for " + username + " -> " + roomName);
+    return true;
+  }
+
+  // room deleted — drop locally if still present (idempotent)
+  if (type == "ROOM_DELETED") {
+    const std::string roomName = event.room;
+    if (roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_DELETED event");
+      return false;
+    }
+    if (roomName == RoomManager::LOBBY.getName() || roomName == RoomManager::GENERAL.getName()) {
+      Logger::logWarning("GossipManager", "ROOM_DELETED refused for seed room: " + roomName);
+      return false;
+    }
+
+    if (RoomManager::getInstance().getRoom(roomName)) {
+      if (!RoomManager::getInstance().deleteRoom(roomName, connections)) {
+        Logger::logWarning("GossipManager", "ROOM_DELETED apply failed for " + roomName);
+        return false;
+      }
+    }
+
+    Packet push("server", "*", Packet::PacketType::ROOM_LIST, "",
+                Room::serializeList(RoomManager::getInstance().listRooms()), 0);
+    RoomManager::getInstance().broadcastAll(push, connections);
+    Logger::logInfo("GossipManager", "Applied ROOM_DELETED for " + roomName);
+    return true;
+  }
+
+  // kick — drop allow-list entry and force-leave if the user is here
+  if (type == "ROOM_KICK") {
+    const std::string roomName = event.room;
+    if (username.empty() || roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_KICK event");
+      return false;
+    }
+
+    auto room = RoomManager::getInstance().getRoom(roomName);
+    auto user = db.getUser(username);
+    if (room && user) {
+      try {
+        db.removeFromAllowList(room->getId(), user->getEmail());
+      } catch (const std::exception &e) {
+        Logger::logWarning("GossipManager", std::string("ROOM_KICK ACL remove failed for ") +
+                                                username + " -> " + roomName + ": " + e.what());
+      }
+    }
+
+    for (const auto &entry : connections.getSessions()) {
+      const SOCKET socket = entry.first;
+      const auto &session = entry.second;
+      if (!session || !session->isAuthenticated() ||
+          session->getUser().getUsername() != username) {
+        continue;
+      }
+      if (session->getRoom().getName() != roomName) {
+        continue;
+      }
+      RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *session);
+      Packet lobbyPush("server", "*", Packet::PacketType::ROOM_LIST, RoomManager::LOBBY.getName(),
+                       Room::serializeList(RoomManager::getInstance().listRooms()), 0);
+      connections.sendPacket(socket, lobbyPush);
+    }
+
+    Logger::logInfo("GossipManager", "Applied ROOM_KICK for " + username + " from " + roomName);
     return true;
   }
 

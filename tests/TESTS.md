@@ -2,7 +2,7 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **24** executables, **330** `TEST_CASE`s.
+Totals: **24** executables, **339** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
@@ -227,6 +227,10 @@ ctest --test-dir build --output-on-failure
 - PacketBuilder buildCreateRoom rejects empty arguments
 - PacketBuilder buildInviteToRoom maps fields
 - PacketBuilder buildInviteToRoom rejects empty arguments
+- PacketBuilder buildKickFromRoom maps fields
+- PacketBuilder buildKickFromRoom rejects empty arguments
+- PacketBuilder buildDeleteRoom maps fields
+- PacketBuilder buildDeleteRoom rejects empty arguments
 - PacketBuilder buildLoadMessageHistory maps fields
 - PacketBuilder buildLoadMessageHistory rejects empty arguments
 - PacketBuilder sets defaults and timestamp
@@ -264,6 +268,7 @@ ctest --test-dir build --output-on-failure
 - ConsoleUI showUserDashboard without user returns -1
 - ConsoleUI showUserDashboard accepts a valid choice
 - ConsoleUI showUserDashboard EOF returns Logout
+- ConsoleUI showUserDashboard admin EOF returns Logout
 - ConsoleUI showLogin builds a LOGIN packet
 - ConsoleUI showLogin cancel on username exit
 - ConsoleUI showLogin cancel on password exit
@@ -276,6 +281,8 @@ ctest --test-dir build --output-on-failure
 - ConsoleUI showUpdateProfile builds password UPDATE_USER
 - ConsoleUI showUpdateProfile back cancels
 - ConsoleUI showCreateRoom builds a ROOM_CREATE packet
+- ConsoleUI showKickFromRoom builds a ROOM_KICK packet
+- ConsoleUI showDeleteRoom builds a ROOM_DELETE packet
 
 ### Client (`[client]`) — mocked peer, not a live `chat_server`
 
@@ -405,6 +412,7 @@ ctest --test-dir build --output-on-failure
 - PacketProcessor ROOM_CREATE
 - PacketProcessor LOAD_MESSAGE_HISTORY
 - PacketProcessor typical register message logout flow
+- PacketProcessor ADMIN privilege checks
 
 ### ConnectionManager (`[connection_manager]`)
 
@@ -440,6 +448,7 @@ ctest --test-dir build --output-on-failure
 - GossipManager rumor LOGIN and LOGOUT update presence
 - GossipManager rumor USER_CREATED inserts user
 - GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD
+- GossipManager rumor ROOM_DELETED and ROOM_KICK
 - GossipManager rumor ROOM_JOIN and ROOM_LEAVE
 - GossipManager rumor MESSAGE saves history
 - GossipManager duplicate rumor event id is ignored
@@ -504,8 +513,6 @@ Smoke: `.\scripts\run_cluster.ps1`.
 
 - `allow_list` CRUD edges as dedicated `DatabaseManager` cases (join/invite covered via packet processor / gossip).
 - Server restart with the same `--db`: users, rooms, messages, membership survive; `online_users` should be empty until login (clear-on-boot not implemented).
-- `deleteRoom` over the wire (no client packet type yet).
-- ADMIN privilege checks (seed has ADMIN; no gates yet).
 
 ### Heartbeat (client + server together)
 

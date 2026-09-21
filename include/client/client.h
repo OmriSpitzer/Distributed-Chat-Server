@@ -65,6 +65,12 @@ public:
   // invite a user to a private room (requires login). Empty = success; otherwise error text.
   std::string inviteToRoom(std::string_view roomName, std::string_view inviteeUsername);
 
+  // kick a user from a room (ADMIN, or room creator). Empty = success; otherwise error text.
+  std::string kickFromRoom(std::string_view roomName, std::string_view targetUsername);
+
+  // delete a room (ADMIN only; not Lobby / General). Empty = success; otherwise error text.
+  std::string deleteRoom(std::string_view roomName);
+
   // update profile (username and optional new password). Empty = success; otherwise error text.
   std::string updateProfile(std::string_view username, std::string_view newPassword,
                             std::string_view email);

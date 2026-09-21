@@ -81,6 +81,18 @@ void rumorAclAdd(ConnectionManager &connections, const std::string &username,
   rumorEvent(connections, "ROOM_ACL_ADD", username, creator ? "1" : "0", "", roomName);
 }
 
+// replicate an allow-list remove + force-leave (kick)
+void rumorRoomKick(ConnectionManager &connections, const std::string &username,
+                   const std::string &roomName) {
+  rumorEvent(connections, "ROOM_KICK", username, config::NODE_ID, "", roomName);
+}
+
+// replicate a room delete
+void rumorRoomDeleted(ConnectionManager &connections, const std::string &username,
+                      const std::string &roomName) {
+  rumorEvent(connections, "ROOM_DELETED", username, config::NODE_ID, "", roomName);
+}
+
 // encode the current room directory for clients
 std::string encodeRoomDirectory() {
   return Room::serializeList(RoomManager::getInstance().listRooms());
@@ -100,6 +112,32 @@ std::string encodeHistory(const std::vector<Message> &messages) {
            it->getContent() + "\n";
   }
   return out;
+}
+
+bool isAdmin(const ClientSession &session) {
+  return session.isAuthenticated() &&
+         session.getUser().getUserType() == User::UserType::ADMIN;
+}
+
+void denyForbidden(Packet &response, std::string_view message) {
+  response.responseCode = static_cast<int>(RESPONSE_CODES::FORBIDDEN);
+  response.message = std::string(message);
+}
+
+ClientSession *findSessionByUsername(ConnectionManager &connections, const std::string &username) {
+  for (const auto &entry : connections.getSessions()) {
+    const auto &session = entry.second;
+    if (session && session->isAuthenticated() && session->getUser().getUsername() == username) {
+      return session.get();
+    }
+  }
+  return nullptr;
+}
+
+void pushLobbyTo(ConnectionManager &connections, SOCKET socket) {
+  Packet push("server", "*", Packet::PacketType::ROOM_LIST, RoomManager::LOBBY.getName(),
+              encodeRoomDirectory(), 0);
+  connections.sendPacket(socket, push);
 }
 } // namespace
 
@@ -286,7 +324,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
       DatabaseManager &db = DatabaseManager::getInstance();
       const std::string email = session.getUser().getEmail();
-      if (room->getPrivacy() == Room::Privacy::PRIVATE) {
+      if (room->getPrivacy() == Room::Privacy::PRIVATE && !isAdmin(session)) {
         if (!session.isAuthenticated() || !db.isAllowed(room->getId(), email)) {
           response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
           response.message = "not allowed to join " + roomName;
@@ -425,16 +463,15 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         response.message = "unknown room: " + roomName;
         break;
       }
-      if (room->getPrivacy() != Room::Privacy::PRIVATE) {
+      if (room->getPrivacy() != Room::Privacy::PRIVATE && !isAdmin(session)) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "invite only allowed for private rooms";
         break;
       }
 
       DatabaseManager &db = DatabaseManager::getInstance();
-      if (!db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
-        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
-        response.message = "only the room creator can invite";
+      if (!isAdmin(session) && !db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
+        denyForbidden(response, "only the room creator or an admin can invite");
         break;
       }
 
@@ -457,6 +494,118 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     } catch (...) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
       response.message = "invite failed";
+    }
+    break;
+  }
+
+    // delete a room (ADMIN only; Lobby / General refused by RoomManager)
+  case Packet::PacketType::ROOM_DELETE: {
+    if (!isAdmin(session)) {
+      denyForbidden(response, "admin required");
+      break;
+    }
+
+    try {
+      const std::string roomName = packet.room.empty() ? session.getRoom().getName() : packet.room;
+      if (roomName.empty()) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "missing room name";
+        break;
+      }
+      if (roomName == RoomManager::LOBBY.getName() || roomName == RoomManager::GENERAL.getName()) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "cannot delete Lobby or General";
+        break;
+      }
+
+      if (!RoomManager::getInstance().deleteRoom(roomName, connections)) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "unknown room or delete failed";
+        break;
+      }
+
+      rumorRoomDeleted(connections, session.getUser().getUsername(), roomName);
+      pushRoomDirectory(connections);
+
+      response.room = RoomManager::LOBBY.getName();
+      response.message = "deleted " + roomName;
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+    } catch (...) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = "delete failed";
+    }
+    break;
+  }
+
+    // kick a user from a room (ADMIN, or allow-list creator)
+  case Packet::PacketType::ROOM_KICK: {
+    if (!session.isAuthenticated()) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = "not authenticated";
+      break;
+    }
+
+    try {
+      const std::string roomName = packet.room.empty() ? session.getRoom().getName() : packet.room;
+      const std::string targetUsername = packet.message;
+      if (roomName.empty() || targetUsername.empty()) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "missing room or username";
+        break;
+      }
+      if (roomName == RoomManager::LOBBY.getName()) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "cannot kick from Lobby";
+        break;
+      }
+      if (targetUsername == session.getUser().getUsername()) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "cannot kick yourself";
+        break;
+      }
+
+      auto room = RoomManager::getInstance().getRoom(roomName);
+      if (!room) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
+        response.message = "unknown room: " + roomName;
+        break;
+      }
+
+      DatabaseManager &db = DatabaseManager::getInstance();
+      if (!isAdmin(session) && !db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
+        denyForbidden(response, "only the room creator or an admin can kick");
+        break;
+      }
+
+      auto target = db.getUser(targetUsername);
+      if (!target) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
+        response.message = "unknown user: " + targetUsername;
+        break;
+      }
+
+      db.removeFromAllowList(room->getId(), target->getEmail());
+
+      if (ClientSession *targetSession = findSessionByUsername(connections, targetUsername)) {
+        if (targetSession->getRoom().getName() == roomName) {
+          const std::string prevRoom = roomName;
+          RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *targetSession);
+          rumorRoomJoin(connections, targetUsername, RoomManager::LOBBY.getName(), prevRoom);
+          pushLobbyTo(connections, targetSession->getSocket());
+        }
+      }
+
+      rumorRoomKick(connections, targetUsername, roomName);
+
+      response.room = roomName;
+      response.message = "kicked " + targetUsername;
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+    } catch (const DatabaseManager::ConstraintError &e) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+      response.message = e.what();
+    } catch (...) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = "kick failed";
     }
     break;
   }
