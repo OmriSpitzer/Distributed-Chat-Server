@@ -45,8 +45,8 @@ public:
   // true if a row exists for this username
   bool userExists(const std::string_view &username);
 
-  // create user — throws ConstraintError / runtime_error if username is taken
-  User createUser(const std::string_view &username, const std::string_view &password,
+  // create user from Argon2id hash — throws ConstraintError / runtime_error if username is taken
+  User createUser(const std::string_view &username, const std::string_view &passwordHash,
                   const std::string_view &email);
 
   // update username and/or password for an existing user (empty password = keep current)

@@ -7,6 +7,7 @@
  * @date 13-09-2026
  */
 
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/client_session.h"
 #include "server/connection_manager.h"
@@ -115,7 +116,7 @@ struct Fixture {
 
   User createUser(std::string_view password = "secret") {
     const std::string name = unique("user");
-    return db().createUser(name, password, name + "@example.com");
+    return db().createUser(name, Authentication::hashPassword(password), name + "@example.com");
   }
 
   User createAdmin(std::string_view password = "secret") {

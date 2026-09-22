@@ -8,6 +8,7 @@
  * @date 13-09-2026
  */
 
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
@@ -251,7 +252,7 @@ struct Fixture {
 
   User createUser(std::string_view password = "secret") {
     const std::string name = unique("user");
-    return db().createUser(name, password, name + "@example.com");
+    return db().createUser(name, Authentication::hashPassword(password), name + "@example.com");
   }
 
   std::optional<Packet> request(SOCKET client, const Packet &packet) {
@@ -495,7 +496,8 @@ TEST_CASE("ConnectionManager rumor with and without gossip", "[connection_manage
   REQUIRE(winsock().ok);
   (void)db();
   const std::string user = unique("rumor");
-  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"),
+                                  user + "@example.com"));
 
   ConnectionManager bare;
   const std::string eventId = unique("eid");

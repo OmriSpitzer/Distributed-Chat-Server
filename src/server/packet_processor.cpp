@@ -6,6 +6,7 @@
  */
 
 #include "server/packet_processor.h"
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
@@ -22,6 +23,7 @@
 #include <string_view>
 #include <variant>
 #include <vector>
+
 
 namespace {
 std::atomic<std::uint64_t> nextPresenceSeq{0};
@@ -49,10 +51,11 @@ void rumorPresence(ConnectionManager &connections, const char *kind, const std::
   rumorEvent(connections, kind, username, config::NODE_ID, ts);
 }
 
-// send a user created event to the network
+// send a user created event to the network (passwordHash = Argon2id, not plaintext)
 void rumorUserCreated(ConnectionManager &connections, const std::string &username,
-                      std::string_view password, std::string_view email) {
-  rumorEvent(connections, "USER_CREATED", username, std::string(password), std::string(email));
+                      std::string_view passwordHash, std::string_view email) {
+  rumorEvent(connections, "USER_CREATED", username, std::string(passwordHash),
+             std::string(email));
 }
 
 // send a room join event to the network
@@ -231,8 +234,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       }
 
       // create the user
-      User user = DatabaseManager::getInstance().createUser(username, password, email);
-      rumorUserCreated(connections, user.getUsername(), password, email);
+      const std::string hashedPassword = Authentication::hashPassword(password);
+      User user = DatabaseManager::getInstance().createUser(username, hashedPassword, email);
+      rumorUserCreated(connections, user.getUsername(), hashedPassword, email);
 
       // set the session
       const std::string prevRoom = session.getRoom().getName();

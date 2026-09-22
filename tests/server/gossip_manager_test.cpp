@@ -8,6 +8,7 @@
  * @date 13-09-2026
  */
 
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
@@ -31,6 +32,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <variant>
 #include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -385,13 +387,15 @@ TEST_CASE("GossipManager rumor USER_CREATED inserts user", "[gossip_manager][rum
   const std::string user = unique("created");
   const std::string email = user + "@example.com";
   const std::string eventId = unique("uc");
-  fixture.gossip->rumor(makeEvent("USER_CREATED", eventId, user, "secret", email));
+  const std::string passwordHash = Authentication::hashPassword("secret");
+  fixture.gossip->rumor(makeEvent("USER_CREATED", eventId, user, passwordHash, email));
 
   REQUIRE(waitUntil(std::chrono::seconds(2), [&] { return db().userExists(user); }));
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Applied USER_CREATED for " + user));
+  REQUIRE(std::holds_alternative<User>(db().loginUser(user, "secret")));
 
   // duplicate apply for same username (new event id) should still succeed
-  fixture.gossip->rumor(makeEvent("USER_CREATED", unique("uc2"), user, "secret", email));
+  fixture.gossip->rumor(makeEvent("USER_CREATED", unique("uc2"), user, passwordHash, email));
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Applied USER_CREATED for " + user));
 
   fixture.gossip->stop();
@@ -409,8 +413,8 @@ TEST_CASE("GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD", "[gossip_manager]
   const std::string guestEmail = guest + "@example.com";
   const std::string roomName = unique("vault");
 
-  REQUIRE_NOTHROW(db().createUser(creator, "secret", creatorEmail));
-  REQUIRE_NOTHROW(db().createUser(guest, "secret", guestEmail));
+  REQUIRE_NOTHROW(db().createUser(creator, Authentication::hashPassword("secret"), creatorEmail));
+  REQUIRE_NOTHROW(db().createUser(guest, Authentication::hashPassword("secret"), guestEmail));
 
   fixture.gossip->rumor(makeEvent("ROOM_CREATED", unique("rc"), creator, "Other", "PRIVATE",
                                   roomName));
@@ -444,8 +448,8 @@ TEST_CASE("GossipManager rumor ROOM_DELETED and ROOM_KICK", "[gossip_manager][ru
   const std::string creatorEmail = creator + "@example.com";
   const std::string guest = unique("g");
   const std::string guestEmail = guest + "@example.com";
-  REQUIRE_NOTHROW(db().createUser(creator, "secret", creatorEmail));
-  REQUIRE_NOTHROW(db().createUser(guest, "secret", guestEmail));
+  REQUIRE_NOTHROW(db().createUser(creator, Authentication::hashPassword("secret"), creatorEmail));
+  REQUIRE_NOTHROW(db().createUser(guest, Authentication::hashPassword("secret"), guestEmail));
 
   const std::string roomName = unique("doom");
   fixture.gossip->rumor(makeEvent("ROOM_CREATED", unique("rc"), creator, "Other", "PRIVATE",
@@ -478,7 +482,8 @@ TEST_CASE("GossipManager rumor ROOM_JOIN and ROOM_LEAVE", "[gossip_manager][rumo
   REQUIRE(fixture.start());
 
   const std::string user = unique("joiner");
-  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"),
+                                  user + "@example.com"));
   REQUIRE_NOTHROW(db().setMembership(user, 1, "n1"));
 
   fixture.gossip->rumor(
@@ -500,7 +505,7 @@ TEST_CASE("GossipManager rumor MESSAGE saves history", "[gossip_manager][rumor][
 
   const std::string user = unique("chat");
   const std::string email = user + "@example.com";
-  REQUIRE_NOTHROW(db().createUser(user, "secret", email));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"), email));
 
   const std::string msgId = unique("msg");
   const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)));
@@ -806,7 +811,7 @@ TEST_CASE("GossipManager typical LOGIN MESSAGE LOGOUT flow", "[gossip_manager][f
 
   const std::string user = unique("flow");
   const std::string email = user + "@example.com";
-  REQUIRE_NOTHROW(db().createUser(user, "secret", email));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"), email));
 
   fixture.gossip->rumor(makeEvent("LOGIN", unique("fl"), user, fixture.nodeId, "0"));
   REQUIRE(waitUntil(std::chrono::seconds(1), [&] { return db().isUserOnline(user); }));

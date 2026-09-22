@@ -57,8 +57,8 @@ CREATE TABLE IF NOT EXISTS allow_list (
 
 -- Populate users table
 INSERT OR IGNORE INTO users (username, email, password, user_type) VALUES
-  ('admin', 'admin@example.com', 'admin', 'ADMIN'),
-  ('user', 'user@example.com', 'user', 'USER');
+  ('admin', 'admin@example.com', '$argon2id$v=19$m=65536,t=2,p=1$Y1830LYD3RttWtQDzyPXsQ$IyxgOT8rTFYjURNB7+ujAqXEmnNmuPpuuEZ7q9lI1sI', 'ADMIN'),
+  ('user', 'user@example.com', '$argon2id$v=19$m=65536,t=2,p=1$YzNhRDrpnSIUHNq8i8F+TA$mfEvIQ4VZ9CS8cTIkloWsvMrUn07lezdSe0JsVRlOoA', 'USER');
 
 -- Populate rooms table
 INSERT OR IGNORE INTO rooms (id, name, type, privacy) VALUES

@@ -79,7 +79,6 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 - [x] `ThreadPool`: kept constructed with `Server` and shut down on stop; session I/O stays on dedicated threads (pool is not the accept path).
 - [x] Singletons (`DatabaseManager`, `RoomManager`) are acceptable for this small node. Prefer DI (owned by `Server`) only if tests need it — not a must.
-- [ ] Clear cluster presence on node boot (`online_users` should not survive a crash as “still online”).
 - [x] Cap / rotate gossip event log: verify ops story when `MAX_EVENT_LOG` drops old ids.
 
 ---
@@ -88,10 +87,9 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ## 7. Security & correctness
 
-- [ ] **USER_CREATED gossip** currently rumors password material for peer register — replace with hash-only (or challenge) replication.
-- [ ] Replace placeholder Argon2 hashes in `init.sql` seed users with real hashes or remove seed accounts.
+- [x] **USER_CREATED gossip** rumors Argon2id hash only (not plaintext) for peer register.
+- [x] Replace placeholder Argon2 hashes in `init.sql` seed users with real hashes (`admin`/`user`).
 - [x] Reject oversized / malformed frames without tearing down the process (robustness).
-- [ ] Align `PacketHandler` with all success paths (today mostly LOGIN/REGISTER; client often checks `responseCode` alone).
 
 ---
 
@@ -105,8 +103,6 @@ Highest-value gaps:
 - [x] E2E: join / leave Lobby rules, unknown room `404`, logout/login, double-login rejected.
 - [x] Cluster unit coverage: LOGIN / USER_CREATED / ROOM_JOIN / MESSAGE / ROOM_CREATED+ACL / anti-entropy DIGEST-PULL (`gossip_manager_test`).
 - [x] Heartbeat: live pong keeps session; silent client timed out and presence cleared.
-- [ ] Unit: `ThreadPool`, `config::parseArgs`, `PacketHandler` contract beyond login/register.
-- [ ] Remove or wire `tests/class/` leftover (not built today).
 
 ---
 
@@ -117,7 +113,7 @@ Highest-value gaps:
 - [x] Layered architecture documented in [architecture.md](architecture.md); schema in [database.md](database.md); README points at both.
 - [x] PowerShell helpers under `scripts/` (`build`, `run_server`, `run_client`, `run`, `run_cluster`).
 - [x] README “not in this tree” list synced with shipped features (profile, rooms, TCP helpers, DB enums, allow_list).
-- [ ] Decide product scope for later: WebSocket / shared remote DB.
+- [x] Decide product scope for later: WebSocket / shared remote DB.
 
 ---
 
@@ -136,8 +132,6 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 - [x] **Rooms** panel — timer refresh from `RoomManager::listRooms()`.
 - [x] **Log** panel — timer refresh from `Logger`.
 - [x] Console ↔ GUI choice in `main` (real flag/prompt; not `if (true)`).
-- [ ] Live peer sockets on Ports (optional `GossipManager` snapshot getters).
-- [ ] Push updates (Logger sink / session events) instead of timer-only where it matters.
 
 
 
@@ -151,3 +145,52 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 
 ---
 
+
+
+# ------------------------------ VERSION 3.0 ------------------------------
+
+## 1. Ambassedor Design Patern
+
+Introduce a client-side Ambassador as the only path from `Client` to the remote server, so UI/application code stays protocol-agnostic and new transports (WebSocket, REST, …) plug in as adapters.
+
+- [ ] Define an Ambassador interface with domain operations (`login`, `signUp`, `logout`, `joinRoom`, `leaveRoom`, `createRoom`, `deleteRoom`, `invite`, `kick`, `sendMessage`, `updateProfile`, `loadHistory`, connect/disconnect, health).
+- [ ] Return typed domain results / clear error strings — never expose raw `Packet`, sockets, or protocol status codes to `Client` / UI.
+- [ ] Keep pushes (`ROOM_LIST`, live `MESSAGE`) behind the same façade (callbacks or a small inbox API), not a second path into `Network`.
+
+- [ ] Implement a TCP/`Packet` adapter that owns `PacketBuilder`, `Network`, `waitFor`, and `PacketHandler`.
+- [ ] Align `PacketHandler` with **all** RPC success paths (not only LOGIN / REGISTER / UPDATE_USER): validate `responseCode` **and** payload; refuse `200` with empty/malformed bodies.
+- [ ] Move reply parsing out of `Client` action methods; `Client` only applies Ambassador results to `ClientState`.
+- [ ] Treat `responseCode == 0` pushes as unsolicited events, not RPC success.
+
+- [ ] Wire `Client` to call only the Ambassador (no direct `handler.handlePacket` / duplicated `responseCode` checks).
+- [ ] Preserve console + Qt behavior (same public `Client` methods; internals swap to Ambassador).
+- [ ] Unit-test Ambassador with a fake adapter; keep `PacketHandler` tests protocol-local (TCP adapter).
+
+- [ ] Client health check against the connected server (pairs with § Architecture “Client health checks…”).
+- [ ] Timeouts / reconnect policy on the Ambassador (not in UI code).
+- [ ] Optional: retries / circuit-break only for idempotent ops; document which calls may retry.
+
+- [ ] Document adapter contract so WebSocket / REST implement the same Ambassador operations.
+- [ ] Do **not** reuse `PacketHandler` for non-`Packet` protocols — each adapter has its own codec mapping to the same domain types.
+- [ ] Add a second adapter only when a real second transport ships; until then keep one TCP adapter behind the interface.
+
+
+
+## 2. Implementing design patterns
+
+- [ ] Sidecar Design Patter - Dynamic logic service changers in servers
+
+
+
+## 3. Architecture
+
+- [ ] Clear cluster presence on node boot (`online_users` should not survive a crash as “still online”).
+- [ ] Client health checks the server he is connected to
+- [ ] Live peer sockets on Ports (optional `GossipManager` ~~snapshot getters).~~
+
+
+
+## 4. Gossip payload
+
+- [ ] Inhance the payload to be object oriented and scalable (not defined by 5 fields)
+- [ ] RESTfulness on API's

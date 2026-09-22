@@ -630,8 +630,7 @@ bool GossipManager::applyEvent(const Packet &event) {
     for (const auto &entry : connections.getSessions()) {
       const SOCKET socket = entry.first;
       const auto &session = entry.second;
-      if (!session || !session->isAuthenticated() ||
-          session->getUser().getUsername() != username) {
+      if (!session || !session->isAuthenticated() || session->getUser().getUsername() != username) {
         continue;
       }
       if (session->getRoom().getName() != roomName) {
@@ -758,7 +757,7 @@ bool GossipManager::applyEvent(const Packet &event) {
   if (inserted) {
     Packet push(username, "", Packet::PacketType::MESSAGE, roomName, content, 0);
     push.timestamp = static_cast<std::uint64_t>(created);
-  RoomManager::getInstance().broadcast(*room, push, connections, INVALID_SOCKET);
+    RoomManager::getInstance().broadcast(*room, push, connections, INVALID_SOCKET);
   }
   return true;
 }

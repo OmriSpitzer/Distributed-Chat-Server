@@ -337,6 +337,7 @@ ctest --test-dir build --output-on-failure
 - DatabaseManager createUser string edges
 - DatabaseManager loginUser success
 - DatabaseManager loginUser failures
+- DatabaseManager seed users login with real passwords
 - DatabaseManager saveMessage success and duplicate id
 - DatabaseManager saveMessage foreign keys
 - DatabaseManager saveMessage content edges

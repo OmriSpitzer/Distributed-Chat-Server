@@ -204,4 +204,4 @@ See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**24** executables, *
 
 **Working today:** framed TCP, Qt and console clients/servers (`--test` for console), register / login / logout / profile, public and private rooms (join, leave, create, invite, kick, delete), ADMIN gates (invite/kick any room, delete except Lobby/General, join PRIVATE), live chat plus history for registered users, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, PowerShell cluster helpers, Catch2 coverage for utils, auth, client, and server.
 
-**Still open:** WebSocket or a shared remote database, gossip replicating password hashes, clear stale `online_users` on node boot, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). See [FUTURE_WORK.md](FUTURE_WORK.md).
+**Still open:** WebSocket or a shared remote database, clear stale `online_users` on node boot, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). See [FUTURE_WORK.md](FUTURE_WORK.md).
