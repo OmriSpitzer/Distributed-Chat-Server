@@ -21,6 +21,7 @@ add_library(utils
     src/utils/serializer.cpp
     src/utils/socket_io.cpp
     src/utils/gossip_payload.cpp
+    src/utils/health/health_monitor.cpp
 )
 target_include_directories(utils PUBLIC include)
 target_link_libraries(utils PUBLIC ws2_32)
@@ -38,6 +39,9 @@ add_library(server_lib
     src/server/heartbeat.cpp
     src/server/server.cpp
     src/server/gossip_manager.cpp
+    src/utils/health/db_health_adapter.cpp
+    src/utils/health/heartbeat_health_adapter.cpp
+    src/utils/health/server_health_adapter.cpp
 )
 
 target_include_directories(server_lib PUBLIC include)
@@ -53,6 +57,7 @@ add_library(client_lib
     src/client/packet_builder.cpp
     src/client/packet_handler.cpp
     src/client/client.cpp
+    src/utils/health/client_health_adapter.cpp
 )
 target_include_directories(client_lib PUBLIC include)
 target_link_libraries(client_lib PUBLIC utils)

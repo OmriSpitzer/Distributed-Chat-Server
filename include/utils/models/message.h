@@ -1,5 +1,5 @@
 /**
- * Message header file class
+ * Message class header file
  *
  * @date 11-09-2026
  */

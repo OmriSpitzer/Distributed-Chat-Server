@@ -91,6 +91,9 @@ public:
   // list all rooms
   std::vector<Room> listRooms();
 
+  // cheap connectivity
+  bool ping();
+
   // delete a room
   void deleteRoom(int id);
 

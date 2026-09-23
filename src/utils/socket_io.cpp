@@ -1,9 +1,12 @@
 /**
- * Socket I/O functions
+ * Socket I/O helpers
  *
- * @brief Socket I/O functions for reading and writing packets.
+ * @brief Shared TCP primitives for client and server
  * @date 13-09-2026
  *
+ * Frame: [u32 BE size][payload] — payload via Serializer; max size enforced there.
+ * Owns no sessions; callers own SOCKET lifetime (close via socket_io::close).
+ * Platform: Windows Winsock2 (ws2_32).
  */
 
 #include "utils/socket_io.h"
@@ -51,23 +54,31 @@ SOCKET listenTo(std::uint16_t port) {
   return socketFd;
 }
 
-// create a TCP socket and connect to host:port
+// create a TCP socket and connect to host:port (INVALID_SOCKET on failure)
 SOCKET connectTo(std::string_view host, std::uint16_t port) {
+  // create a socket
   SOCKET socketFd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (socketFd == INVALID_SOCKET) {
     return INVALID_SOCKET;
   }
 
+  // set the socket to non-blocking
+  u_long nonBlocking = 1;
+  ioctlsocket(socketFd, FIONBIO, &nonBlocking);
+
+  // set the address
   sockaddr_in address{};
   address.sin_family = AF_INET;
   address.sin_port = htons(port);
 
+  // convert the host to a string
   const std::string hostStr(host);
   if (inet_pton(AF_INET, hostStr.c_str(), &address.sin_addr) != 1) {
     socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
 
+  // connect to the address
   if (::connect(socketFd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
     socket_io::close(socketFd);
     return INVALID_SOCKET;
@@ -145,26 +156,35 @@ std::optional<Packet> readPacket(SOCKET socket) {
 
 // write a packet to the socket
 bool writePacket(SOCKET socket, const Packet &packet) {
-  const std::string framed = Serializer::serialize(packet);
+  const std::string framed = Serializer::serialize(packet); // serialize the packet
+
+  // check if the framed buffer is empty
   if (framed.empty())
     return false;
+
+  // send the framed buffer
   return sendExact(socket, framed.data(), static_cast<int>(framed.size()));
 }
 
 // accept a connection from a listening socket
 SOCKET acceptFrom(SOCKET listeningSocket) {
+  // check if the listening socket is valid
   if (listeningSocket == INVALID_SOCKET) {
     return INVALID_SOCKET;
   }
+
+  // accept a connection from the listening socket
   return ::accept(listeningSocket, nullptr, nullptr);
 }
 
 // close a socket
 void close(SOCKET socket) {
+  // check if the socket is valid
   if (socket == INVALID_SOCKET) {
     return;
   }
+
+  // close the socket
   ::closesocket(socket);
 }
-
 } // namespace socket_io

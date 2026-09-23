@@ -1,5 +1,5 @@
 /**
- * Logger header file class
+ * Logger class header file (Singleton Design Pattern)
  *
  * @date 12-09-2026
  */
@@ -14,7 +14,8 @@
 
 class Logger {
 public:
-  static constexpr std::size_t kMaxMessages = 1000;
+  // maximum number of messages to store
+  static constexpr std::size_t MAX_MESSAGES = 1000;
 
   // singleton instance getter
   static Logger &getInstance() {
@@ -40,16 +41,19 @@ public:
   // print the logger
   friend std::ostream &operator<<(std::ostream &out, const Logger &logger);
 
+  // delete copy constructor and assignment operator
   Logger(const Logger &) = delete;
   Logger &operator=(const Logger &) = delete;
   Logger(Logger &&) = delete;
   Logger &operator=(Logger &&) = delete;
 
 private:
-  mutable std::mutex messages_mutex;
-  std::deque<LogMessage> messages;
+  mutable std::mutex messages_mutex; // mutex for the messages
+  std::deque<LogMessage> messages;   // messages queue
 
+  // add a message to the logger
   void addMessage(std::string_view source, std::string_view message, LogMessage::Type type);
 
+  // constructor
   Logger() = default;
 };

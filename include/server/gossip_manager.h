@@ -1,5 +1,5 @@
 /**
- * GossipManager header file class
+ * Gossip Manager class header file
  *
  * @date 12-09-2026
  */

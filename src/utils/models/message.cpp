@@ -1,8 +1,11 @@
 /**
- * Message class
+ * Message class implementation file
  *
- * @brief Message class to store a message and its metadata.
+ * @brief Message class to store a message and its metadata
  * @date 11-09-2026
+ *
+ * Message class with fields: from, to, content, timestamp, id
+ * Used for storing and displaying messages between users
  */
 
 #include "utils/models/message.h"

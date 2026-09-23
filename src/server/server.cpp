@@ -1,16 +1,26 @@
 /**
- * Server class
+ * Server class implementation file
  *
- * @brief Wires together the server components and owns the listen lifecycle.
+ * @brief Wires together the server components and owns the listen lifecycle
+ *
+ * Server class with fields: threadPool, connectionManager, gossipManager, heartbeat, acceptThread,
+ * running
+ * Used for managing the server lifecycle
  * @date 11-09-2026
  */
 
 #include "server/server.h"
 #include "config/config.h"
+#include "server/database_manager.h"
 #include "server/gossip_manager.h"
 #include "server/heartbeat.h"
+#include "utils/health/db_health_adapter.h"
+#include "utils/health/heartbeat_health_adapter.h"
+#include "utils/health/server_health_adapter.h"
 #include "utils/models/logger.h"
 #include <iostream>
+#include <memory>
+#include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -20,6 +30,9 @@
 // get connections
 ConnectionManager &Server::connections() { return connectionManager; }
 
+// get health monitor
+HealthMonitor &Server::health() { return healthMonitor; }
+
 // start the server
 void Server::start() {
   // check if the server is already running
@@ -28,7 +41,7 @@ void Server::start() {
     return;
   }
 
-  Logger::logInfo("Server", "Starting server");
+  Logger::logInfo("Server", "Starting server"); // log the server starting
 
   // initialize winsock 2.2
   WSADATA data;
@@ -54,7 +67,13 @@ void Server::start() {
   gossipManager.start();
 
   // start the accept loop
-  acceptThread = std::thread([this] { connectionManager.acceptLoop(); }); // start the accept loop
+  acceptThread = std::thread([this] { connectionManager.acceptLoop(); });
+
+  // add the health checks to the health monitor
+  healthMonitor.add(std::make_unique<ServerHealthAdapter>(*this));        // server health
+  healthMonitor.add(std::make_unique<HeartbeatHealthAdapter>(heartbeat)); // heartbeat health
+  healthMonitor.add(
+      std::make_unique<DbHealthAdapter>(DatabaseManager::getInstance())); // database health
 
   Logger::logInfo("Server", "Started on port " + std::to_string(config::PORT) + " with " +
                                 std::to_string(config::THREAD_COUNT) +
@@ -109,6 +128,32 @@ void Server::dashboard() {
   }
   std::cout << std::endl;
   std::cout << "Listening: " << (connectionManager.isListening() ? "yes" : "no") << std::endl;
+
+  std::cout << "Health:" << std::endl;
+  HealthStatus overallStatus = HealthStatus::Up;
+  std::string overallDetail;
+  for (const auto &report : healthMonitor.checkAll()) {
+    std::cout << "  " << report.name << ": " << report.statusToString();
+    if (!report.detail.empty()) {
+      std::cout << " (" << report.detail << ")";
+    }
+    std::cout << std::endl;
+    if (report.status == HealthStatus::Down) {
+      overallStatus = HealthStatus::Down;
+      if (!overallDetail.empty()) {
+        overallDetail += "; ";
+      }
+      overallDetail += report.name + ":Down";
+    } else if (report.status == HealthStatus::Degraded && overallStatus != HealthStatus::Down) {
+      overallStatus = HealthStatus::Degraded;
+    }
+  }
+  std::cout << "Overall: " << healthStatusToString(overallStatus);
+  if (!overallDetail.empty()) {
+    std::cout << " (" << overallDetail << ")";
+  }
+  std::cout << std::endl;
+
   std::cout << "--------------------------------\n" << std::endl;
 }
 

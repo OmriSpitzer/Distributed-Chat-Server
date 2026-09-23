@@ -1,5 +1,5 @@
 /**
- * Heartbeat header file class
+ * Heartbeat class header file
  *
  * @date 12-09-2026
  */
@@ -25,6 +25,9 @@ public:
 
   // stop the heartbeat
   void stop();
+
+  // check if the heartbeat is running
+  bool isRunning() const { return running.load(); }
 
   // delete copy and move
   Heartbeat(const Heartbeat &) = delete;

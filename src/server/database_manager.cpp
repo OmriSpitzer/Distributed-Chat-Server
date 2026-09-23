@@ -429,6 +429,16 @@ std::vector<Room> DatabaseManager::listRooms() {
   return rooms;
 }
 
+// check connectivity
+bool DatabaseManager::ping() {
+  try {
+    query("SELECT 1");
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
 // delete a room
 void DatabaseManager::deleteRoom(int id) {
   if (id < 3) {

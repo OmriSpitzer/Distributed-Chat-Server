@@ -7,14 +7,15 @@
  * @date 12-09-2026
  */
 
-#include "utils/models/logger.h"
 #include "utils/models/log_message.h"
+#include "utils/models/logger.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+
 
 /**
  * 1. empty state after clear
@@ -23,7 +24,7 @@
  * 4. messages keep insertion order
  * 5. getMessage bounds
  * 6. clear removes all messages
- * 7. capacity eviction at kMaxMessages
+ * 7. capacity eviction at MAX_MESSAGES
  * 8. stream output
  * 9. singleton identity
  * 10. heartbeat messages get unique ids
@@ -191,7 +192,7 @@ TEST_CASE("Logger getMessage bounds", "[logger][getMessage]") {
   SECTION("empty logger rejects any index") {
     REQUIRE_THROWS_AS(kLogger.getMessage(0), std::out_of_range);
     REQUIRE_THROWS_AS(kLogger.getMessage(1), std::out_of_range);
-    REQUIRE_THROWS_AS(kLogger.getMessage(Logger::kMaxMessages), std::out_of_range);
+    REQUIRE_THROWS_AS(kLogger.getMessage(Logger::MAX_MESSAGES), std::out_of_range);
   }
 
   SECTION("valid indices after logging") {
@@ -236,41 +237,41 @@ TEST_CASE("Logger clear removes all messages", "[logger][clear]") {
   REQUIRE(kLogger.getMessage(0).getMessage() == "after clear");
 }
 
-// 7. capacity eviction at kMaxMessages
-TEST_CASE("Logger evicts oldest messages past kMaxMessages", "[logger][capacity]") {
+// 7. capacity eviction at MAX_MESSAGES
+TEST_CASE("Logger evicts oldest messages past MAX_MESSAGES", "[logger][capacity]") {
   resetLogger();
 
   SECTION("fills exactly to capacity") {
-    for (std::size_t i = 0; i < Logger::kMaxMessages; ++i) {
+    for (std::size_t i = 0; i < Logger::MAX_MESSAGES; ++i) {
       Logger::logInfo(kSrc, std::to_string(i));
     }
-    REQUIRE(Logger::size() == Logger::kMaxMessages);
+    REQUIRE(Logger::size() == Logger::MAX_MESSAGES);
     REQUIRE(kLogger.getMessage(0).getMessage() == "0");
-    REQUIRE(kLogger.getMessage(Logger::kMaxMessages - 1).getMessage() ==
-            std::to_string(Logger::kMaxMessages - 1));
+    REQUIRE(kLogger.getMessage(Logger::MAX_MESSAGES - 1).getMessage() ==
+            std::to_string(Logger::MAX_MESSAGES - 1));
   }
 
   SECTION("one past capacity drops the oldest") {
-    for (std::size_t i = 0; i < Logger::kMaxMessages; ++i) {
+    for (std::size_t i = 0; i < Logger::MAX_MESSAGES; ++i) {
       Logger::logInfo(kSrc, std::to_string(i));
     }
     Logger::logInfo(kSrc, "overflow");
 
-    REQUIRE(Logger::size() == Logger::kMaxMessages);
+    REQUIRE(Logger::size() == Logger::MAX_MESSAGES);
     REQUIRE(kLogger.getMessage(0).getMessage() == "1");
-    REQUIRE(kLogger.getMessage(Logger::kMaxMessages - 1).getMessage() == "overflow");
+    REQUIRE(kLogger.getMessage(Logger::MAX_MESSAGES - 1).getMessage() == "overflow");
   }
 
   SECTION("many past capacity keeps only the newest window") {
     const std::size_t extra = 50;
-    for (std::size_t i = 0; i < Logger::kMaxMessages + extra; ++i) {
+    for (std::size_t i = 0; i < Logger::MAX_MESSAGES + extra; ++i) {
       Logger::logWarning(kSrc, std::to_string(i));
     }
 
-    REQUIRE(Logger::size() == Logger::kMaxMessages);
+    REQUIRE(Logger::size() == Logger::MAX_MESSAGES);
     REQUIRE(kLogger.getMessage(0).getMessage() == std::to_string(extra));
-    REQUIRE(kLogger.getMessage(Logger::kMaxMessages - 1).getMessage() ==
-            std::to_string(Logger::kMaxMessages + extra - 1));
+    REQUIRE(kLogger.getMessage(Logger::MAX_MESSAGES - 1).getMessage() ==
+            std::to_string(Logger::MAX_MESSAGES + extra - 1));
   }
 }
 

@@ -149,7 +149,13 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 
 # ------------------------------ VERSION 3.0 ------------------------------
 
-## 1. Ambassedor Design Patern
+
+
+## 1. Design Patterns - Implementation **(goal)**
+
+Ship the structural patterns below so client/server stay testable and transport-agnostic. Shared types (`IHealthCheck`, `HealthMonitor`, transport interfaces) live in a common place; each process wires only the adapters it owns.
+
+### Ambassador
 
 Introduce a client-side Ambassador as the only path from `Client` to the remote server, so UI/application code stays protocol-agnostic and new transports (WebSocket, REST, …) plug in as adapters.
 
@@ -157,7 +163,7 @@ Introduce a client-side Ambassador as the only path from `Client` to the remote 
 - [ ] Return typed domain results / clear error strings — never expose raw `Packet`, sockets, or protocol status codes to `Client` / UI.
 - [ ] Keep pushes (`ROOM_LIST`, live `MESSAGE`) behind the same façade (callbacks or a small inbox API), not a second path into `Network`.
 
-- [ ] Implement a TCP/`Packet` adapter that owns `PacketBuilder`, `Network`, `waitFor`, and `PacketHandler`.
+- [ ] Implement a TCP/`Packet` adapter (`IChatTransport`) that owns `PacketBuilder`, `Network`, `waitFor`, and `PacketHandler`.
 - [ ] Align `PacketHandler` with **all** RPC success paths (not only LOGIN / REGISTER / UPDATE_USER): validate `responseCode` **and** payload; refuse `200` with empty/malformed bodies.
 - [ ] Move reply parsing out of `Client` action methods; `Client` only applies Ambassador results to `ClientState`.
 - [ ] Treat `responseCode == 0` pushes as unsolicited events, not RPC success.
@@ -166,31 +172,202 @@ Introduce a client-side Ambassador as the only path from `Client` to the remote 
 - [ ] Preserve console + Qt behavior (same public `Client` methods; internals swap to Ambassador).
 - [ ] Unit-test Ambassador with a fake adapter; keep `PacketHandler` tests protocol-local (TCP adapter).
 
-- [ ] Client health check against the connected server (pairs with § Architecture “Client health checks…”).
-- [ ] Timeouts / reconnect policy on the Ambassador (not in UI code).
+- [ ] Timeouts / reconnect policy on the Ambassador (not in UI code); pair health with Health checks below and failover (§3).
 - [ ] Optional: retries / circuit-break only for idempotent ops; document which calls may retry.
 
 - [ ] Document adapter contract so WebSocket / REST implement the same Ambassador operations.
 - [ ] Do **not** reuse `PacketHandler` for non-`Packet` protocols — each adapter has its own codec mapping to the same domain types.
-- [ ] Add a second adapter only when a real second transport ships; until then keep one TCP adapter behind the interface.
+- [ ] Add a second transport adapter only when a real second transport ships; until then keep one TCP adapter behind the interface.
 
 
 
-## 2. Implementing design patterns
+### Design patterns on the server
 
-- [ ] Sidecar Design Patter - Dynamic logic service changers in servers
-
-
-
-## 3. Architecture
-
-- [ ] Clear cluster presence on node boot (`online_users` should not survive a crash as “still online”).
-- [ ] Client health checks the server he is connected to
-- [ ] Live peer sockets on Ports (optional `GossipManager` ~~snapshot getters).~~
+- [ ] **Sidecar** — optional side process / plugin for dynamic logic (metrics scrape, audit export, hot-config) without bloating `PacketProcessor`.
+- [ ] **Strategy** for join / ACL / ADMIN gates so room privacy rules are swappable without touching TCP.
+- [ ] **Observer / event bus** for GUI + website: domain events (`UserOnline`, `MessagePosted`, `RoomCreated`) instead of Qt `QTimer` polls only.
+- [ ] Keep singletons (`DatabaseManager`, `RoomManager`) or migrate to DI owned by `Server` if Ambassador / website tests need fakes.
 
 
 
-## 4. Gossip payload
+### Health checks (Adapter + Composite)
 
-- [ ] Inhance the payload to be object oriented and scalable (not defined by 5 fields)
-- [ ] RESTfulness on API's
+Shared `IHealthCheck` (Adapter target) and `HealthMonitor` (Composite). Same monitor type on client and server; each process registers different leaf adapters.
+
+- [x] Define `IHealthCheck` → `HealthReport` (`name`, `Up` / `Degraded` / `Down`, optional detail).
+- [x] `HealthMonitor` holds `IHealthCheck` children, exposes `checkAll()` / overall status (Composite; may itself implement `IHealthCheck`).
+- [x] **Server adapters:** `DatabaseHealthAdapter`, `HeartbeatHealthAdapter`, `ServerHealthAdapter` (`isAlive` / listening) — register in `Server::start`.
+- [ ] **Client adapters:** `ClientHealthAdapter` (`Network` connected + Ambassador/transport `health()`) — register in `Client::start`.
+- [x] Do not register DB / Heartbeat adapters on the client (those objects do not live there).
+- [ ] Wire failover (§3) and GUI status to `HealthMonitor`, not ad-hoc `isAlive()` only.
+- [ ] Unit-test each adapter with fakes; test monitor rollup (one child Down → overall Down / Degraded).
+
+
+
+### Logger
+
+- [ ] Introduce `ILogger` (info / warn / error / heartbeat); keep the current in-memory ring as the default sink for the Qt Log panel.
+- [ ] Optional sinks: console, file rotate; inject into Client / Server instead of only static `Logger::log*`.
+- [ ] Tests use a recording / `NullLogger` sink (no singleton coupling).
+- [ ] Do **not** block the chat path on remote log shipping — async or best-effort only.
+
+
+
+## 2. Architecture — cluster presence & node lifecycle
+
+Today each node has its own SQLite; gossip syncs events. Crash leaves stale `online_users` (no clear-on-boot).
+
+- [ ] Clear cluster presence on node boot (`online_users` must not survive a crash as “still online”); rumor peer cleanup or local wipe + HELLO.
+- [ ] On graceful `Server::stop`, clear local sessions / rumor LOGOUT for still-connected users.
+- [ ] Live peer sockets on Ports panel (`GossipManager` snapshot getters — connected node ids, not only `config::PEERS`).
+- [ ] Document “source of truth”: per-node SQLite remains chat store; website/AWS is a **separate** account/admin surface (see §5–§6), not a replacement for gossip.
+- [ ] Optional: node readiness flag (accept clients only after DB open + gossip listen + presence wipe).
+
+
+
+## 3. Client failover — connect to another server if one dies **(goal)**
+
+`Network::connect` uses a single `config::SERVER_HOST` / `PORT`. No multi-endpoint list, no auto-relogin after hop.
+
+- [ ] Config: `--servers host:port,host:port` (client listen ports, not gossip `--peers`). Keep `--host`/`--port` as single-endpoint shorthand.
+- [ ] Ambassador/Network: on connect failure, peer close, or failed health check (`HealthMonitor` / Client adapter), try the next endpoint (round-robin or priority).
+- [ ] After failover: restore session — re-`LOGIN` (or guest reconnect), re-`ROOM_JOIN` current room, drain/clear stale chat queue; surface “reconnecting…” in console + Qt.
+- [ ] Prefer endpoints whose gossip peers still report the user/room via a lightweight **directory** packet or shared seed list (do not hardcode only localhost demos).
+- [ ] Heartbeat miss / `isAlive() == false` triggers the same failover path as TCP close.
+- [ ] Cap reconnect storms (backoff + jitter); do not retry forever without UI cancel.
+- [ ] E2E: kill node A while client is in a room; client lands on node B and receives MESSAGE again (pairs with §7).
+
+
+
+## 4. Website integration **(goal)**
+
+Desktop Qt/console stay primary for chat; website is admin + light client / status, not a second gossip peer.
+
+- [ ] Thin **gateway** (separate process or sidecar): REST and/or WebSocket → same domain ops as Ambassador (login, rooms list, history read, optional send).
+- [ ] Do **not** put HTTP inside `server_lib` packet path; gateway talks TCP/`Packet` to a chosen node (or Ambassador adapter).
+- [ ] Public pages: cluster status (nodes up/down), room directory (public only), optional read-only message feed.
+- [ ] Auth pages: register / login against chat cluster (via gateway); session cookie/JWT for website only — chat nodes keep Argon2id + binary sessions.
+- [ ] Admin UI: kick/invite/delete room (ADMIN), view online users across nodes (aggregated from gateway polls or events).
+- [ ] CORS / TLS termination at reverse proxy (nginx / ALB); chat servers stay on private ports.
+- [ ] Document threat model: website creds ≠ wire `Packet` auth; no plaintext passwords in browser storage beyond normal session practice.
+
+
+
+## 5. AWS database for the website **(goal)**
+
+Chat traffic stays on per-node SQLite + gossip. Website gets its own remote DB for accounts/metadata that the browser product needs.
+
+- [ ] Provision managed DB (e.g. **Amazon RDS** PostgreSQL or Aurora) for website schema only — users mirror / profile cache, sessions, audit log, feature flags — **not** live `messages` gossip log.
+- [ ] Sync strategy (pick one and document):
+  - **A.** Gateway writes website DB on REGISTER/UPDATE; chat nodes remain authoritative for passwords via cluster login API; or
+  - **B.** Website DB stores website-only accounts; link username to chat user after first successful cluster login.
+- [ ] Never point `DatabaseManager` / `init.sql` at RDS for node local chat — keep SQLite on each Windows node for low-latency rumor apply.
+- [ ] Optional later: S3 for exports / attachments; Secrets Manager for gateway DB URL; IAM auth for RDS.
+- [ ] Migrations (Flyway/Liquibase or SQL scripts) versioned beside website code; separate from `src/database/init.sql`.
+- [ ] Backup / PITR on RDS; chat SQLite backup remains per-node (`data/*.db`) + gossip recovery.
+
+
+
+## 6. Gossip payload — object-oriented & scalable
+
+Five fixed fields (`type`, `eventId`, `username`, `content`, `field5`) already limit ROOM_CREATED+ACL and force overloading `field5`.
+
+- [ ] Versioned envelope: `{ version, type, eventId, body }` with typed body structs per event (LOGIN, MESSAGE, ROOM_CREATED, …).
+- [ ] Keep length-prefixed binary or add JSON/CBOR for website/gateway debugging — same semantic types either way.
+- [ ] Backward-compatible decode: v1 five-field still accepted for one release; peers advertise version on HELLO.
+- [ ] Unit tests for every event type round-trip; reject unknown version cleanly.
+
+
+
+## 7. Testing — more kinds **(goal)**
+
+Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, gateway, and load (see `tests/TESTS.md`).
+
+### 7.1 Unit / component (still missing)
+
+- [ ] `config::parseArgs` / `parsePort` / `parsePeers` (and new `--servers`).
+- [ ] `ThreadPool` enqueue / shutdown (even if unused for session I/O).
+- [ ] `PacketHandler` for every RPC type, not only LOGIN/REGISTER/UPDATE_USER.
+- [ ] Ambassador + fake adapter (happy path + timeout + malformed).
+- [ ] `IHealthCheck` adapters + `HealthMonitor` rollup (§1).
+- [ ] `allow_list` CRUD edges as dedicated `DatabaseManager` cases.
+- [ ] Clear-`online_users`-on-boot once implemented.
+
+
+
+### 7.2 Integration / E2E (live `Server` + `Client`)
+
+- [ ] Disconnect while logged in → presence cleared + LOGOUT rumor.
+- [ ] Client reconnect after server restart (anonymous until login).
+- [ ] Invite + private join allow-list across live client.
+- [ ] Full-stack heartbeat timeout clears presence (`Network` + `Heartbeat` together).
+
+
+
+### 7.3 Cluster / multi-process
+
+- [ ] Two `chat_server` processes: LOGIN on A → B `online_users`; USER_CREATED cross-login; duplicate login rejected across nodes.
+- [ ] ROOM_JOIN / MESSAGE / ACL over real peer sockets (not only in-process gossip fixtures).
+- [ ] `MAX_EVENT_LOG` drop: late PULL cannot resurrect ids.
+- [ ] **Failover E2E:** stop node A; client fails over to B; messaging resumes (§3).
+
+
+
+### 7.4 New test kinds
+
+- [ ] **Contract / golden** tests for `Serializer` + gossip envelope bytes (fixtures under `tests/fixtures/`).
+- [ ] **Property / fuzz** light: random oversize/malformed frames must not kill `handleClient`.
+- [ ] **Load / soak** (optional Catch2 `[slow]` or separate script): N clients, M msg/s, gossip lag bounds.
+- [ ] **Chaos:** kill gossip peer mid-rumor; anti-entropy heals within digest interval.
+- [ ] **Website/gateway API** tests (HTTP status + JSON schema) once §4 ships — separate from Catch2 C++ if stack is different.
+- [ ] **GUI smoke** (optional): Qt Test or scripted `--test` console paths for login → join → send.
+- [ ] CI matrix: Debug/Release + `ctest --output-on-failure`; tag `[slow]` / `[cluster]` excluded from default PR job if flaky.
+
+
+
+## 8. GUI additions **(goal)**
+
+Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-polled; Ports shows config, not live gossip sockets; no failover UX.
+
+### Server GUI
+
+- [ ] Event-driven refresh (subscribe to Logger / connection / room events) — keep timer as fallback.
+- [ ] Ports: live peer table (node id, socket, last HELLO/DIGEST time, up/down).
+- [ ] Users: show which **node** holds the session (from `online_users`), not only local `getSessions()`.
+- [ ] Gossip/event-log panel: recent rumor types, digest size, dropped ids near `MAX_EVENT_LOG`.
+- [ ] Health panel or Ports footer: `HealthMonitor` reports (DB / Heartbeat / Server).
+- [ ] Controls: drain listeners, “clear stale online”, copy node config.
+
+
+
+### Client GUI
+
+- [ ] Connection status strip: connected host:port, reconnecting, failed over to X (`HealthMonitor` / Client adapter).
+- [ ] Server picker / auto-failover progress (ties to §3); manual “switch server”.
+- [ ] Unread badge / scroll-to-bottom; optional toast on kick/invite/ROOM_LIST change.
+- [ ] Dark/light or denser chat layout without putting logic in widgets (still `Client` / Ambassador only).
+- [ ] Accessibility: tab order, high-contrast errors, no updates off the GUI thread (keep queued signals).
+
+
+
+### Optional third UI
+
+- [ ] Website admin/status pages (§4) styled separately; do not embed Qt WebEngine unless product requires it.
+
+
+
+## 9. Transport & API surface (website + Ambassador)
+
+- [ ] WebSocket and/or REST gateway implementing Ambassador ops (§1 / §4).
+- [ ] OpenAPI (REST) or schema doc for gateway; map HTTP errors to existing `200`/`400`/`404`/`500` meanings.
+- [ ] Rate limits on gateway register/login; same Argon2id verification path via cluster, not a second hash scheme.
+- [ ] “RESTfulness on APIs” = gateway resources (`/rooms`, `/rooms/{id}/messages`), not rewriting binary `Packet` into REST inside each node.
+
+
+
+## 10. Docs & ops
+
+- [ ] Update README architecture diagram: clients → multi-server failover; website → gateway → node; AWS RDS for website only.
+- [ ] Runbook: node crash, client failover, RDS failover, gossip partition.
+- [ ] Sync `tests/TESTS.md` checkboxes when §7 cases land; fix doc typo link `FUTURE_WORKs.md` → `FUTURE_WORK.md`.
+- [ ] Version badge / changelog note for 3.0.0 when shipping.

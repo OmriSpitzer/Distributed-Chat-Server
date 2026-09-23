@@ -1,5 +1,5 @@
 /**
- * Packet header file class
+ * Packet class header file
  *
  * @date 12-09-2026
  */
@@ -65,4 +65,7 @@ public:
 
   // convert string to packet type
   static PacketType stringToPacketType(std::string_view type);
+
+  // check if a packet type is valid
+  static bool isValidPacketType(PacketType type);
 };

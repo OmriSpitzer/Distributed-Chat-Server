@@ -1,8 +1,11 @@
 /**
- * Packet class
+ * Packet class implementation file
  *
- * @brief Packet class to store a packet and its metadata.
+ * @brief Packet class to store a packet and its metadata
  * @date 12-09-2026
+ *
+ * Packet class with fields: type, sender, receiver, room, message, timestamp, responseCode
+ * Used for sending and receiving packets between the server and the clients
  */
 
 #include "utils/models/packet.h"
@@ -33,29 +36,6 @@ static const std::unordered_map<Packet::PacketType, std::string> packet_type_to_
     {Packet::PacketType::ROOM_KICK, "ROOM_KICK"},
 };
 
-// string to packet type map
-static const std::unordered_map<std::string, Packet::PacketType> string_to_packet_type = {
-    {"LOGIN", Packet::PacketType::LOGIN},
-    {"LOGOUT", Packet::PacketType::LOGOUT},
-    {"MESSAGE", Packet::PacketType::MESSAGE},
-    {"ROOM_JOIN", Packet::PacketType::ROOM_JOIN},
-    {"ROOM_LEAVE", Packet::PacketType::ROOM_LEAVE},
-    {"DEFAULT", Packet::PacketType::DEFAULT},
-    {"HEARTBEAT", Packet::PacketType::HEARTBEAT},
-    {"REGISTER", Packet::PacketType::REGISTER},
-    {"GOSSIP_HELLO", Packet::PacketType::GOSSIP_HELLO},
-    {"GOSSIP_EVENT", Packet::PacketType::GOSSIP_EVENT},
-    {"GOSSIP_DIGEST", Packet::PacketType::GOSSIP_DIGEST},
-    {"GOSSIP_PULL", Packet::PacketType::GOSSIP_PULL},
-    {"UPDATE_USER", Packet::PacketType::UPDATE_USER},
-    {"ROOM_CREATE", Packet::PacketType::ROOM_CREATE},
-    {"ROOM_LIST", Packet::PacketType::ROOM_LIST},
-    {"LOAD_MESSAGE_HISTORY", Packet::PacketType::LOAD_MESSAGE_HISTORY},
-    {"ROOM_INVITE", Packet::PacketType::ROOM_INVITE},
-    {"ROOM_DELETE", Packet::PacketType::ROOM_DELETE},
-    {"ROOM_KICK", Packet::PacketType::ROOM_KICK},
-};
-
 // constructor
 Packet::Packet() : type(Packet::PacketType::DEFAULT), timestamp(0), responseCode(0) {}
 Packet::Packet(std::string_view sender, std::string_view receiver, Packet::PacketType type,
@@ -74,9 +54,14 @@ std::string Packet::packetTypeToString(Packet::PacketType type) {
 
 // string to type
 Packet::PacketType Packet::stringToPacketType(std::string_view type) {
-  auto it = string_to_packet_type.find(std::string(type));
-  if (it != string_to_packet_type.end()) {
-    return it->second;
+  for (const auto &[key, value] : packet_type_to_string) {
+    if (value == type)
+      return key;
   }
-  return Packet::PacketType::DEFAULT;
+  return PacketType::DEFAULT;
+}
+
+// check if a packet type is valid
+bool Packet::isValidPacketType(PacketType type) {
+  return packet_type_to_string.find(type) != packet_type_to_string.end();
 }

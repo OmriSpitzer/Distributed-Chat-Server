@@ -6,6 +6,8 @@
 
 #include "server/gui/panels/ports_panel.h"
 #include "config/config.h"
+#include "server/server.h"
+#include "utils/health/i_health_check.h"
 #include <QGridLayout>
 #include <QLabel>
 #include <QTimer>
@@ -34,6 +36,9 @@ PortsPanel::PortsPanel(QWidget *parent, Server *server) : Panel("Node & ports", 
   peerLabel = makeValue(this);
   peersLabel = makeValue(this);
   dbLabel = makeValue(this);
+  healthOverall = makeValue(this);
+  healthDetails = makeValue(this);
+  healthDetails->setWordWrap(true);
   auto *grid = new QGridLayout();
   refreshTimer = new QTimer(this);
 
@@ -50,6 +55,10 @@ PortsPanel::PortsPanel(QWidget *parent, Server *server) : Panel("Node & ports", 
   grid->addWidget(peersLabel, 3, 1);
   grid->addWidget(makeKey("Database", this), 4, 0);
   grid->addWidget(dbLabel, 4, 1);
+  grid->addWidget(makeKey("Health", this), 5, 0);
+  grid->addWidget(healthOverall, 5, 1);
+  grid->addWidget(makeKey("Checks", this), 6, 0);
+  grid->addWidget(healthDetails, 6, 1);
   grid->setColumnStretch(1, 1);
 
   getBodyLayout()->addLayout(grid);
@@ -67,15 +76,43 @@ void PortsPanel::refresh() {
 
   if (config::PEERS.empty()) {
     peersLabel->setText("(none)");
+  } else {
+    std::ostringstream oss;
+    for (std::size_t i = 0; i < config::PEERS.size(); ++i) {
+      if (i > 0) {
+        oss << ", ";
+      }
+      oss << config::PEERS[i];
+    }
+    peersLabel->setText(QString::fromStdString(oss.str()));
+  }
+
+  if (server() == nullptr) {
+    healthOverall->setText("—");
+    healthDetails->setText("—");
     return;
   }
 
-  std::ostringstream oss;
-  for (std::size_t i = 0; i < config::PEERS.size(); ++i) {
-    if (i > 0) {
-      oss << ", ";
+  // one pass: per-check lines + overall (avoid double ping via check() + checkAll())
+  const auto reports = server()->health().checkAll();
+  HealthStatus overallStatus = HealthStatus::Up;
+  QStringList lines;
+  QStringList downDetails;
+  for (const auto &report : reports) {
+    QString line = QString::fromStdString(report.name) + ": " +
+                   QString::fromStdString(report.statusToString());
+    if (!report.detail.empty()) {
+      line += " (" + QString::fromStdString(report.detail) + ")";
     }
-    oss << config::PEERS[i];
+    lines << line;
+    if (report.status == HealthStatus::Down) {
+      overallStatus = HealthStatus::Down;
+      downDetails << QString::fromStdString(report.name) + ":Down";
+    } else if (report.status == HealthStatus::Degraded && overallStatus != HealthStatus::Down) {
+      overallStatus = HealthStatus::Degraded;
+    }
   }
-  peersLabel->setText(QString::fromStdString(oss.str()));
+  healthOverall->setText(QString::fromStdString(healthStatusToString(overallStatus)) +
+                         (downDetails.isEmpty() ? QString() : " (" + downDetails.join("; ") + ")"));
+  healthDetails->setText(lines.isEmpty() ? "(none)" : lines.join("\n"));
 }

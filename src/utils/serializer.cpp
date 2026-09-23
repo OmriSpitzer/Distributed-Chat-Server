@@ -1,12 +1,10 @@
 /**
  * Serializer class
  *
- * @brief Serializes and deserializes packets.
+ * @brief Serializes and deserializes packets
  * @date 11-09-2026
  *
  * Wire format: [4-byte big-endian payload size][serialized Packet bytes]
- * Payload: [u8 type][u64 BE timestamp][u32 BE responseCode]
- * then sender, receiver, room, message each as [u32 BE byte length][bytes].
  *
  */
 
@@ -47,9 +45,12 @@ bool remainingAtLeast(const std::string &in, std::size_t offset, std::size_t nee
 
 // read a uint8_t from a string
 bool readU8(const std::string &in, std::size_t &offset, std::uint8_t &value) {
+  // check if there are at least 1 byte remaining in the string
   if (!remainingAtLeast(in, offset, 1)) {
     return false;
   }
+
+  // read the uint8_t from the string
   value = static_cast<std::uint8_t>(static_cast<unsigned char>(in[offset]));
   offset += 1;
   return true;
@@ -57,9 +58,12 @@ bool readU8(const std::string &in, std::size_t &offset, std::uint8_t &value) {
 
 // read a uint32_t from a string in big endian
 bool readU32BE(const std::string &in, std::size_t &offset, std::uint32_t &value) {
+  // check if there are at least 4 bytes remaining in the string
   if (!remainingAtLeast(in, offset, 4)) {
     return false;
   }
+
+  // read the uint32_t from the string
   const auto *bytes = reinterpret_cast<const unsigned char *>(in.data() + offset);
   value = (static_cast<std::uint32_t>(bytes[0]) << 24) |
           (static_cast<std::uint32_t>(bytes[1]) << 16) |
@@ -82,68 +86,51 @@ bool readU64BE(const std::string &in, std::size_t &offset, std::uint64_t &value)
 // read a length prefixed string from a string
 bool readLenPrefixed(const std::string &in, std::size_t &offset, std::string &value) {
   std::uint32_t length = 0;
+
+  // read the uint32_t from the string
   if (!readU32BE(in, offset, length)) {
     return false;
   }
+
+  // check if there are at least the length bytes remaining in the string
   if (!remainingAtLeast(in, offset, length)) {
     return false;
   }
+
+  // change the value of the string to the length prefixed string
   value.assign(in, offset, length);
   offset += length;
   return true;
-}
-
-// check if a packet type is valid
-bool isValidPacketType(Packet::PacketType type) {
-  switch (type) {
-  case Packet::PacketType::LOGIN:
-  case Packet::PacketType::LOGOUT:
-  case Packet::PacketType::MESSAGE:
-  case Packet::PacketType::ROOM_JOIN:
-  case Packet::PacketType::ROOM_LEAVE:
-  case Packet::PacketType::DEFAULT:
-  case Packet::PacketType::HEARTBEAT:
-  case Packet::PacketType::REGISTER:
-  case Packet::PacketType::GOSSIP_HELLO:
-  case Packet::PacketType::GOSSIP_EVENT:
-  case Packet::PacketType::GOSSIP_DIGEST:
-  case Packet::PacketType::GOSSIP_PULL:
-  case Packet::PacketType::UPDATE_USER:
-  case Packet::PacketType::ROOM_CREATE:
-  case Packet::PacketType::ROOM_LIST:
-  case Packet::PacketType::LOAD_MESSAGE_HISTORY:
-  case Packet::PacketType::ROOM_INVITE:
-  case Packet::PacketType::ROOM_DELETE:
-  case Packet::PacketType::ROOM_KICK:
-    return true;
-  }
-  return false;
 }
 } // namespace
 
 // serialize a packet
 std::string Serializer::serialize(const Packet &packet) {
   // check if the packet type is valid
-  if (!isValidPacketType(packet.type)) {
+  if (!Packet::isValidPacketType(packet.type)) {
     return "";
   }
 
-  // serialize the packet
+  // create the payload
   std::string payload;
+
+  // serialize the packet type, timestamp, and response code
   appendU8(payload, static_cast<std::uint8_t>(packet.type));
   appendU64BE(payload, packet.timestamp);
   appendU32BE(payload, static_cast<std::uint32_t>(packet.responseCode));
+
+  // serialize the sender, receiver, room, and message
   appendLenPrefixed(payload, packet.sender);
   appendLenPrefixed(payload, packet.receiver);
   appendLenPrefixed(payload, packet.room);
   appendLenPrefixed(payload, packet.message);
 
-  // check if the payload size is valid
+  // check if the payload size is too large
   if (payload.size() > MAX_PAYLOAD_BYTES) {
     return "";
   }
 
-  // create the framed packet
+  // create the framed packet by appending the payload size and the payload
   std::string framed;
   appendU32BE(framed, static_cast<std::uint32_t>(payload.size()));
   framed.append(payload);
@@ -152,60 +139,63 @@ std::string Serializer::serialize(const Packet &packet) {
 
 // deserialize a packet
 std::optional<Packet> Serializer::deserialize(const std::string &serializedPacket) {
-  // check if the serialized packet is valid
+  // check if the serialized packet is too small
   if (serializedPacket.size() < 4) {
     return std::nullopt;
   }
 
-  // deserialize the packet
+  // read the payload size
   std::size_t offset = 0;
   std::uint32_t payloadSize = 0;
+
+  // read the payload size
   if (!readU32BE(serializedPacket, offset, payloadSize)) {
     return std::nullopt;
   }
+
+  // check if the payload size is invalid
   if (payloadSize == 0 || payloadSize > MAX_PAYLOAD_BYTES) {
     return std::nullopt;
   }
+
+  // check if the serialized packet is too large
   if (serializedPacket.size() != 4 + payloadSize) {
     return std::nullopt;
   }
 
-  // read the packet type
+  // read the packet type from the serialized packet
   std::uint8_t typeByte = 0;
   if (!readU8(serializedPacket, offset, typeByte)) {
     return std::nullopt;
   }
 
-  // check if the packet type is valid
+  // convert the packet type to the enum type
   const auto type = static_cast<Packet::PacketType>(typeByte);
-  if (!isValidPacketType(type)) {
+  if (!Packet::isValidPacketType(type)) {
     return std::nullopt;
   }
 
   // create the packet
   Packet packet;
+
+  // read the timestamp from the serialized packet
   packet.type = type;
-  if (!readU64BE(serializedPacket, offset, packet.timestamp)) {
-    return std::nullopt;
-  }
   std::uint32_t responseCode = 0;
-  if (!readU32BE(serializedPacket, offset, responseCode)) {
+
+  if (!readU64BE(serializedPacket, offset, packet.timestamp) ||
+      !readU32BE(serializedPacket, offset, responseCode)) {
     return std::nullopt;
   }
+
+  // set the response code
   packet.responseCode = static_cast<int>(responseCode);
-  if (!readLenPrefixed(serializedPacket, offset, packet.sender)) {
-    return std::nullopt;
-  }
-  if (!readLenPrefixed(serializedPacket, offset, packet.receiver)) {
-    return std::nullopt;
-  }
-  if (!readLenPrefixed(serializedPacket, offset, packet.room)) {
-    return std::nullopt;
-  }
-  if (!readLenPrefixed(serializedPacket, offset, packet.message)) {
-    return std::nullopt;
-  }
-  if (offset != serializedPacket.size()) {
+
+  // read the sender, receiver, room, and message from the serialized packet
+  if (!readLenPrefixed(serializedPacket, offset, packet.sender) ||
+      !readLenPrefixed(serializedPacket, offset, packet.receiver) ||
+      !readLenPrefixed(serializedPacket, offset, packet.room) ||
+      !readLenPrefixed(serializedPacket, offset, packet.message) ||
+      offset != serializedPacket.size()) {
     return std::nullopt;
   }
 

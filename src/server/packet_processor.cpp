@@ -1,7 +1,10 @@
 /**
- * PacketProcessor class
+ * PacketProcessor class implementation file
  *
- * @brief Routes incoming packets to the appropriate manager and builds a response.
+ * @brief Routes incoming packets to the appropriate manager and builds a response
+ *
+ * Used for processing incoming packets and building responses
+ *
  * @date 13-09-2026
  */
 
@@ -24,11 +27,11 @@
 #include <variant>
 #include <vector>
 
-
 namespace {
+// next presence sequence
 std::atomic<std::uint64_t> nextPresenceSeq{0};
 
-// generate a unique event id
+// generate a unique event ID
 std::string makeEventId(const std::string &kind, const std::string &username) {
   return config::NODE_ID + "-" + kind + "-" + username + "-" +
          std::to_string(static_cast<long long>(std::time(nullptr))) + "-" +
@@ -39,9 +42,16 @@ std::string makeEventId(const std::string &kind, const std::string &username) {
 void rumorEvent(ConnectionManager &connections, const std::string &type,
                 const std::string &username, const std::string &content, const std::string &field5,
                 const std::string &room = "") {
+  // generate the event ID
   const std::string eventId = makeEventId(type, username);
+
+  // encode the payload
   const std::string payload = gossip_payload::encode(type, eventId, username, content, field5);
+
+  // create the event packet
   Packet event(config::NODE_ID, "*", Packet::PacketType::GOSSIP_EVENT, room, payload);
+
+  // send the event to the network
   connections.rumor(event);
 }
 
@@ -51,11 +61,10 @@ void rumorPresence(ConnectionManager &connections, const char *kind, const std::
   rumorEvent(connections, kind, username, config::NODE_ID, ts);
 }
 
-// send a user created event to the network (passwordHash = Argon2id, not plaintext)
+// send a user created event to the network
 void rumorUserCreated(ConnectionManager &connections, const std::string &username,
                       std::string_view passwordHash, std::string_view email) {
-  rumorEvent(connections, "USER_CREATED", username, std::string(passwordHash),
-             std::string(email));
+  rumorEvent(connections, "USER_CREATED", username, std::string(passwordHash), std::string(email));
 }
 
 // send a room join event to the network
@@ -78,36 +87,41 @@ void rumorRoomCreated(ConnectionManager &connections, const std::string &usernam
              Room::privacyToString(room.getPrivacy()), room.getName());
 }
 
-// replicate an allow-list add (invitee username; content "1" = creator)
+// send an allow-list add event to the network
 void rumorAclAdd(ConnectionManager &connections, const std::string &username,
                  const std::string &roomName, bool creator) {
-  rumorEvent(connections, "ROOM_ACL_ADD", username, creator ? "1" : "0", "", roomName);
+  // code for if the user is the creator of the room
+  std::string content = creator ? "1" : "0";
+  rumorEvent(connections, "ROOM_ACL_ADD", username, content, "", roomName);
 }
 
-// replicate an allow-list remove + force-leave (kick)
+// send an allow-list remove event to the network
 void rumorRoomKick(ConnectionManager &connections, const std::string &username,
                    const std::string &roomName) {
   rumorEvent(connections, "ROOM_KICK", username, config::NODE_ID, "", roomName);
 }
 
-// replicate a room delete
+// send a room deleted event to the network
 void rumorRoomDeleted(ConnectionManager &connections, const std::string &username,
                       const std::string &roomName) {
   rumorEvent(connections, "ROOM_DELETED", username, config::NODE_ID, "", roomName);
 }
 
-// encode the current room directory for clients
+// encode the current room list for clients
 std::string encodeRoomDirectory() {
   return Room::serializeList(RoomManager::getInstance().listRooms());
 }
 
-// push the full room directory to all local clients
+// push the full room list to all local clients
 void pushRoomDirectory(ConnectionManager &connections, SOCKET skipSocket = INVALID_SOCKET) {
+  // create the room list packet
   Packet push("server", "*", Packet::PacketType::ROOM_LIST, "", encodeRoomDirectory(), 0);
+
+  // broadcast the room list to all local clients
   RoomManager::getInstance().broadcastAll(push, connections, skipSocket);
 }
 
-// encode history newest-first DB rows as oldest-first lines: [user][unix] text
+// encode message history as a string. format: [user][timestamp] <content>
 std::string encodeHistory(const std::vector<Message> &messages) {
   std::string out;
   for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
@@ -117,15 +131,18 @@ std::string encodeHistory(const std::vector<Message> &messages) {
   return out;
 }
 
+// check if the user is an admin
 bool isAdmin(const ClientSession &session) {
   return session.isAuthenticated() && session.getUser().getUserType() == User::UserType::ADMIN;
 }
 
+// deny the request
 void denyForbidden(Packet &response, std::string_view message) {
   response.responseCode = static_cast<int>(RESPONSE_CODES::FORBIDDEN);
   response.message = std::string(message);
 }
 
+// find a session by username
 ClientSession *findSessionByUsername(ConnectionManager &connections, const std::string &username) {
   for (const auto &entry : connections.getSessions()) {
     const auto &session = entry.second;
@@ -136,9 +153,13 @@ ClientSession *findSessionByUsername(ConnectionManager &connections, const std::
   return nullptr;
 }
 
+// push the lobby to a specific client
 void pushLobbyTo(ConnectionManager &connections, SOCKET socket) {
+  // create the lobby packet
   Packet push("server", "*", Packet::PacketType::ROOM_LIST, RoomManager::LOBBY.getName(),
               encodeRoomDirectory(), 0);
+
+  // send the lobby packet to the client
   connections.sendPacket(socket, push);
 }
 } // namespace
@@ -172,6 +193,13 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
+  // room list packet
+  case Packet::PacketType::ROOM_LIST: {
+    response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+    response.message = "unsupported on client port";
+    break;
+  }
+
     // login packet
   case Packet::PacketType::LOGIN: {
     try {
@@ -184,9 +212,10 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
+      // create the user object
       User user = std::get<User>(dbResult);
 
-      // local socket or another node's presence row
+      // check if the user is already logged in
       if (connections.hasSession(user) ||
           DatabaseManager::getInstance().isUserOnline(user.getUsername())) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
@@ -194,13 +223,23 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
+      // get the previous room
       const std::string prevRoom = session.getRoom().getName();
+
+      // set the session user and authenticated
       session.setUser(user);
       session.setAuthenticated(true);
+
+      // join the lobby
       RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), session);
+
+      // send the login event to the network
       rumorPresence(connections, "LOGIN", user.getUsername());
+
+      // send the room join event to the network
       rumorRoomJoin(connections, user.getUsername(), RoomManager::LOBBY.getName(), prevRoom);
 
+      // set the response code and message
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
       response.room = encodeRoomDirectory();
@@ -238,12 +277,20 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       User user = DatabaseManager::getInstance().createUser(username, hashedPassword, email);
       rumorUserCreated(connections, user.getUsername(), hashedPassword, email);
 
-      // set the session
+      // get the previous room
       const std::string prevRoom = session.getRoom().getName();
+
+      // set the session user and authenticated
       session.setUser(user);
       session.setAuthenticated(true);
+
+      // join the lobby
       RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), session);
+
+      // send the login event to the network
       rumorPresence(connections, "LOGIN", user.getUsername());
+
+      // send the room join event to the network
       rumorRoomJoin(connections, user.getUsername(), RoomManager::LOBBY.getName(), prevRoom);
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
@@ -264,15 +311,20 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
     // logout packet
   case Packet::PacketType::LOGOUT: {
-    const bool wasAuth = session.isAuthenticated();
-    const std::string username = session.getUser().getUsername();
+    const bool wasAuth = session.isAuthenticated();               // get user authentication status
+    const std::string username = session.getUser().getUsername(); // get username
 
+    // leave all rooms
     RoomManager::getInstance().leaveAll(session);
+
+    // set the session user and authenticated
     session.setAuthenticated(false);
     session.setUser(User::anonymousUser());
+
     // keep connected anonymous socket in Lobby for live broadcasts
     RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), session);
 
+    // send the logout event to the network
     if (wasAuth && !username.empty()) {
       rumorPresence(connections, "LOGOUT", username);
     }
@@ -282,8 +334,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-  // message packet — registered users rumor+persist; guests broadcast in-memory only
+  // message packet
   case Packet::PacketType::MESSAGE: {
+    // check if the message is empty
     if (packet.message.empty()) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
       response.message = "empty message";
@@ -291,13 +344,14 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
 
     try {
-      const std::string username = session.getUser().getUsername();
-      const Room room = session.getRoom();
+      const std::string username = session.getUser().getUsername(); // get username
+      const Room room = session.getRoom();                          // get room
 
+      // check if the user is authenticated
       if (session.isAuthenticated()) {
         rumorMessage(connections, username, packet.message, room.getName());
       } else {
-        // guests are not in users — skip DB persist / gossip FK; local room push only
+        // if guest, broadcast the message to the room
         Packet push(username, "", Packet::PacketType::MESSAGE, room.getName(), packet.message, 0);
         RoomManager::getInstance().broadcast(room, push, connections);
       }
@@ -317,8 +371,11 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     // room join packet
   case Packet::PacketType::ROOM_JOIN: {
     try {
-      const std::string roomName = packet.room.empty() ? RoomManager::LOBBY.getName() : packet.room;
-      auto room = RoomManager::getInstance().getRoom(roomName);
+      const std::string roomName =
+          packet.room.empty() ? RoomManager::LOBBY.getName() : packet.room; // get the room name
+      auto room = RoomManager::getInstance().getRoom(roomName);             // get the room
+
+      // check if the room exists
       if (!room) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
         response.message = "unknown room: " + roomName;
@@ -327,27 +384,31 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
 
       DatabaseManager &db = DatabaseManager::getInstance();
       const std::string email = session.getUser().getEmail();
-      if (room->getPrivacy() == Room::Privacy::PRIVATE && !isAdmin(session)) {
-        if (!session.isAuthenticated() || !db.isAllowed(room->getId(), email)) {
-          response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
-          response.message = "not allowed to join " + roomName;
-          break;
-        }
+
+      // check if the room is private and the user is not an admin
+      if (room->getPrivacy() == Room::Privacy::PRIVATE && !isAdmin(session) &&
+          (!session.isAuthenticated() || !db.isAllowed(room->getId(), email))) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "not allowed to join " + roomName;
+        break;
       }
 
+      // get the previous room
       const std::string prevRoom = session.getRoom().getName();
+
+      // join the room
       if (!RoomManager::getInstance().joinRoom(roomName, session)) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "failed to join " + roomName;
         break;
       }
 
-      // only persist allow-list for registered users
+      // add to allow-list for registered users in public rooms
       if (session.isAuthenticated() && room->getPrivacy() == Room::Privacy::PUBLIC) {
         db.addToAllowList(room->getId(), email, false);
       }
 
-      // guests are in-memory only — membership FK requires a registered username
+      // users are only rumored for joining rooms
       if (session.isAuthenticated()) {
         rumorRoomJoin(connections, session.getUser().getUsername(), roomName, prevRoom);
       }
@@ -365,16 +426,19 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // room leave packet — returns to Lobby; membership replica via ROOM_JOIN
+    // room leave packet
   case Packet::PacketType::ROOM_LEAVE: {
     try {
-      const std::string prevRoom = session.getRoom().getName();
+      const std::string prevRoom = session.getRoom().getName(); // get the previous room
+
+      // join the lobby
       if (!RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), session)) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "failed to leave room";
         break;
       }
 
+      // send the room join event to the network
       if (session.isAuthenticated()) {
         rumorRoomJoin(connections, session.getUser().getUsername(), RoomManager::LOBBY.getName(),
                       prevRoom);
@@ -393,8 +457,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // create a room, then push the full directory to local clients
+    // create a room packet
   case Packet::PacketType::ROOM_CREATE: {
+    // check if the user is authenticated
     if (!session.isAuthenticated()) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
       response.message = "not authenticated";
@@ -402,35 +467,43 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
 
     try {
-      const std::string roomName = packet.room;
+      const std::string roomName = packet.room; // get the room name
+
+      // check if the room name is empty
       if (roomName.empty()) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "missing room name";
         break;
       }
 
-      auto privacy = Room::Privacy::PUBLIC;
-      const auto type = Room::RoomType::OTHER;
-
+      // privacy from packet.message (default PUBLIC)
+      Room::Privacy privacy = Room::Privacy::PUBLIC;
       if (!packet.message.empty()) {
         privacy = Room::stringToPrivacy(packet.message);
       }
 
-      Room draft(0, roomName, type, privacy);
+      // create the room and add to the database
+      Room draft(0, roomName, Room::RoomType::OTHER, privacy);
       if (!RoomManager::getInstance().createRoom(draft, session.getUser().getEmail())) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "room already exists or create failed";
         break;
       }
 
+      // get the created room
       auto created = RoomManager::getInstance().getRoom(roomName);
+
+      // check if the room was created
       if (!created) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
         response.message = "create failed";
         break;
       }
 
+      // send the room created event to the network
       rumorRoomCreated(connections, session.getUser().getUsername(), *created);
+
+      // push the room list to all local clients
       pushRoomDirectory(connections);
 
       response.room = roomName;
@@ -443,8 +516,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // invite a user to a private room
+    // user invite to room packet
   case Packet::PacketType::ROOM_INVITE: {
+    // check if the user is authenticated
     if (!session.isAuthenticated()) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
       response.message = "not authenticated";
@@ -452,26 +526,34 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
 
     try {
-      const std::string roomName = packet.room.empty() ? session.getRoom().getName() : packet.room;
-      const std::string inviteeUsername = packet.message;
+      const std::string roomName =
+          packet.room.empty() ? session.getRoom().getName() : packet.room; // get the room name
+      const std::string inviteeUsername = packet.message; // get the invitee username
+
+      // check if the room name or invitee username is empty
       if (roomName.empty() || inviteeUsername.empty()) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "missing room or invitee username";
         break;
       }
 
-      auto room = RoomManager::getInstance().getRoom(roomName);
+      auto room = RoomManager::getInstance().getRoom(roomName); // get the room
+
+      // check if the room exists
       if (!room) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
         response.message = "unknown room: " + roomName;
         break;
       }
+
+      // check if the room is private and the user is not an admin
       if (room->getPrivacy() != Room::Privacy::PRIVATE && !isAdmin(session)) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "invite only allowed for private rooms";
         break;
       }
 
+      // check if the user is an admin or the room creator
       DatabaseManager &db = DatabaseManager::getInstance();
       if (!isAdmin(session) &&
           !db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
@@ -479,14 +561,20 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
+      // get the invitee user
       auto invitee = db.getUser(inviteeUsername);
+
+      // check if the invitee user exists
       if (!invitee) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
         response.message = "unknown user: " + inviteeUsername;
         break;
       }
 
+      // add the invitee to the allow-list
       db.addToAllowList(room->getId(), invitee->getEmail(), false);
+
+      // send the allow-list add event to the network
       rumorAclAdd(connections, inviteeUsername, roomName, false);
 
       response.room = roomName;
@@ -502,33 +590,43 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // delete a room (ADMIN only; Lobby / General refused by RoomManager)
+    // delete room packet
   case Packet::PacketType::ROOM_DELETE: {
+    // check if the user is an admin
     if (!isAdmin(session)) {
       denyForbidden(response, "admin required");
       break;
     }
 
     try {
-      const std::string roomName = packet.room.empty() ? session.getRoom().getName() : packet.room;
+      const std::string roomName =
+          packet.room.empty() ? session.getRoom().getName() : packet.room; // get the room name
+
+      // check if the room name is empty
       if (roomName.empty()) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "missing room name";
         break;
       }
+
+      // check if the room name is the lobby or general
       if (roomName == RoomManager::LOBBY.getName() || roomName == RoomManager::GENERAL.getName()) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "cannot delete Lobby or General";
         break;
       }
 
+      // delete the room
       if (!RoomManager::getInstance().deleteRoom(roomName, connections)) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "unknown room or delete failed";
         break;
       }
 
+      // send the room deleted event to the network
       rumorRoomDeleted(connections, session.getUser().getUsername(), roomName);
+
+      // push the room list to all local clients
       pushRoomDirectory(connections);
 
       response.room = RoomManager::LOBBY.getName();
@@ -541,8 +639,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // kick a user from a room (ADMIN, or allow-list creator)
+    // kick user from room packet
   case Packet::PacketType::ROOM_KICK: {
+    // check if the user is authenticated
     if (!session.isAuthenticated()) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
       response.message = "not authenticated";
@@ -550,31 +649,42 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
 
     try {
-      const std::string roomName = packet.room.empty() ? session.getRoom().getName() : packet.room;
-      const std::string targetUsername = packet.message;
+      const std::string roomName =
+          packet.room.empty() ? session.getRoom().getName() : packet.room; // get the room name
+      const std::string targetUsername = packet.message; // get the target username
+
+      // check if the room name or target username is empty
       if (roomName.empty() || targetUsername.empty()) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "missing room or username";
         break;
       }
+
+      // check if the room name is the lobby
       if (roomName == RoomManager::LOBBY.getName()) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "cannot kick from Lobby";
         break;
       }
+
+      // check if the target username is the same as the current user
       if (targetUsername == session.getUser().getUsername()) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "cannot kick yourself";
         break;
       }
 
+      // get the room
       auto room = RoomManager::getInstance().getRoom(roomName);
+
+      // check if the room exists
       if (!room) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
         response.message = "unknown room: " + roomName;
         break;
       }
 
+      // check if the user is an admin or the room creator
       DatabaseManager &db = DatabaseManager::getInstance();
       if (!isAdmin(session) &&
           !db.isAllowListCreator(room->getId(), session.getUser().getEmail())) {
@@ -582,6 +692,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
+      // get the target user
       auto target = db.getUser(targetUsername);
       if (!target) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
@@ -589,17 +700,27 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
+      // remove the target user from the allow-list
       db.removeFromAllowList(room->getId(), target->getEmail());
 
-      if (ClientSession *targetSession = findSessionByUsername(connections, targetUsername)) {
-        if (targetSession->getRoom().getName() == roomName) {
-          const std::string prevRoom = roomName;
-          RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *targetSession);
-          rumorRoomJoin(connections, targetUsername, RoomManager::LOBBY.getName(), prevRoom);
-          pushLobbyTo(connections, targetSession->getSocket());
-        }
+      ClientSession *targetSession =
+          findSessionByUsername(connections, targetUsername); // get the target session
+
+      // check if the target user is in the room
+      if (targetSession && targetSession->getRoom().getName() == roomName) {
+        const std::string prevRoom = roomName; // get the previous room
+
+        // join the lobby
+        RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *targetSession);
+
+        // send the room join event to the network
+        rumorRoomJoin(connections, targetUsername, RoomManager::LOBBY.getName(), prevRoom);
+
+        // push the lobby to the target user
+        pushLobbyTo(connections, targetSession->getSocket());
       }
 
+      // send the room kick event to the network
       rumorRoomKick(connections, targetUsername, roomName);
 
       response.room = roomName;
@@ -615,17 +736,13 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // room list is server-push only on the client port
-  case Packet::PacketType::ROOM_LIST: {
-    response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
-    response.message = "unsupported on client port";
-    break;
-  }
-
-    // load recent message history for a room (guests allowed — read-only)
+    // load message history packet
   case Packet::PacketType::LOAD_MESSAGE_HISTORY: {
     try {
-      const std::string roomName = packet.room.empty() ? session.getRoom().getName() : packet.room;
+      const std::string roomName =
+          packet.room.empty() ? session.getRoom().getName() : packet.room; // get the room name
+
+      // check if the room exists
       auto room = RoomManager::getInstance().getRoom(roomName);
       if (!room) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::NOT_FOUND);
@@ -633,7 +750,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
         break;
       }
 
+      // load the message history
       const auto history = DatabaseManager::getInstance().loadHistory(room->getId());
+
       response.room = roomName;
       response.message = encodeHistory(history);
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
@@ -647,8 +766,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
-    // update profile (username and/or password); email must match the session user
+    // update user packet
   case Packet::PacketType::UPDATE_USER: {
+    // check if the user is authenticated
     if (!session.isAuthenticated()) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
       response.message = "not authenticated";
@@ -656,20 +776,24 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     }
 
     try {
-      const std::string currentUsername = session.getUser().getUsername();
-      const std::string_view newUsername = packet.sender;
-      const std::string_view newPassword = packet.message;
-      const std::string_view email = packet.room;
+      const std::string currentUsername =
+          session.getUser().getUsername();                 // get the current username
+      const std::string_view newUsername = packet.sender;  // get the new username
+      const std::string_view newPassword = packet.message; // get the new password
+      const std::string_view email = packet.room;          // get the email
 
+      // check if the new username or email is empty
       if (newUsername.empty() || email.empty()) {
         response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
         response.message = "missing username or email";
         break;
       }
 
+      // update the user
       User updated = DatabaseManager::getInstance().updateUser(currentUsername, newUsername,
                                                                newPassword, email);
-      session.setUser(updated);
+      // set the updated user
+      session.setUser(updated); // set the updated user
 
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = updated.serialize();
@@ -686,6 +810,7 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
+  // unknown packet type
   default: {
     response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
     response.message = "unknown packet type";

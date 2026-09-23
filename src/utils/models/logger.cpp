@@ -1,10 +1,13 @@
 /**
- * Logger class
+ * Logger class implementation file (Singleton Design Pattern)
  *
- * @brief Logger class to store a list of messages.
+ * @brief Logger class to store a list of messages
+ *
+ * Design pattern: Singleton
+ * Logger class with fields: messages_mutex, messages
+ * Used for storing and displaying log messages in the server
  * @date 12-09-2026
  */
-
 #include "utils/models/logger.h"
 #include "utils/models/log_message.h"
 #include <iostream>
@@ -68,16 +71,20 @@ std::ostream &operator<<(std::ostream &out, const Logger &logger) {
 
 // add a message to the logger
 void Logger::addMessage(std::string_view source, std::string_view message, LogMessage::Type type) {
-  LogMessage logMessage(source, message, type);
+  LogMessage logMessage(source, message, type); // create the log message
 
+  // lock the messages mutex and add the message to the queue
   {
     std::lock_guard lock(messages_mutex);
     messages.push_back(logMessage);
-    while (messages.size() > kMaxMessages) {
+
+    // remove the oldest message if the queue is full
+    while (messages.size() > MAX_MESSAGES) {
       messages.pop_front();
     }
   }
 
+  // print the message to the console
   if (type == LogMessage::Type::ERROR) {
     std::cerr << logMessage << "\n";
   } else {

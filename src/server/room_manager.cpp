@@ -1,7 +1,12 @@
 /**
- * RoomManager class
+ * Room Manager class implementation file (Singleton)
  *
- * @brief In-memory room membership and live broadcast.
+ * @brief In-memory room membership and live broadcast
+ *
+ * Desgin pattern: Singleton
+ * RoomManager class with fields: mutex, members, knownRooms, LOBBY, GENERAL
+ * Used for managing room membership and live broadcast
+ *
  * @date 13-09-2026
  */
 
@@ -18,7 +23,7 @@
 
 // default rooms
 const Room RoomManager::LOBBY(1, "Lobby", Room::RoomType::LOBBY);
-const Room RoomManager::GENERAL(2, "General");
+const Room RoomManager::GENERAL(2, "General", Room::RoomType::OTHER);
 
 // constructor
 RoomManager::RoomManager() {
@@ -43,10 +48,13 @@ std::optional<Room> RoomManager::getRoom(const std::string &name) const {
 
 // remove a socket from a room
 void RoomManager::removeSocketLocked(SOCKET socket, const std::string &roomName) {
+  // find the room
   auto it = members.find(roomName);
   if (it == members.end()) {
     return;
   }
+
+  // remove the socket from the room
   it->second.erase(socket);
   if (it->second.empty()) {
     members.erase(it);
@@ -55,17 +63,19 @@ void RoomManager::removeSocketLocked(SOCKET socket, const std::string &roomName)
 
 // join a room
 bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) {
-  const std::string name = roomName.empty() ? LOBBY.getName() : roomName;
-  const int previousRoomId = session.getRoom().getId();
-  const std::string previousRoom = session.getRoom().getName();
-  const std::string username = session.getUser().getUsername();
-  const bool persist = session.isAuthenticated();
-  const SOCKET socket = session.getSocket();
-  int joinedRoomId = LOBBY.getId();
+  const std::string name = roomName.empty() ? LOBBY.getName() : roomName; // get the room name
+  const int previousRoomId = session.getRoom().getId();         // get the previous room id
+  const std::string previousRoom = session.getRoom().getName(); // get the previous room name
+  const std::string username = session.getUser().getUsername(); // get the username
+  const bool persist = session.isAuthenticated(); // check if the user is authenticated
+  const SOCKET socket = session.getSocket();      // get the socket
+  int joinedRoomId = LOBBY.getId();               // get the joined room id
 
   // join the room
   {
     std::lock_guard<std::mutex> lock(mutex);
+
+    // check if the room exists
     auto roomIt = knownRooms.find(name);
     if (roomIt == knownRooms.end()) {
       Logger::logWarning("RoomManager", "Unknown room: " + name);
@@ -74,6 +84,8 @@ bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) 
 
     // remove the socket from the previous room
     removeSocketLocked(socket, previousRoom);
+
+    // set the room id and insert the socket into the room
     session.setRoom(roomIt->second);
     joinedRoomId = roomIt->second.getId();
     members[name].insert(socket);
@@ -83,9 +95,13 @@ bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) 
   if (persist) {
     try {
       DatabaseManager &db = DatabaseManager::getInstance();
+
+      // clear the membership from the previous room
       if (previousRoomId != joinedRoomId) {
         db.clearMembership(username, previousRoomId);
       }
+
+      // set the membership in the database
       db.setMembership(username, joinedRoomId, config::NODE_ID);
     } catch (const std::exception &e) {
       Logger::logError("RoomManager", "Failed to persist membership: " + std::string(e.what()));
@@ -113,10 +129,10 @@ bool RoomManager::joinRoom(const std::string &roomName, ClientSession &session) 
 
 // leave all rooms
 void RoomManager::leaveAll(ClientSession &session) {
-  const std::string previousRoom = session.getRoom().getName();
-  const std::string username = session.getUser().getUsername();
-  const bool persist = session.isAuthenticated();
-  const SOCKET socket = session.getSocket();
+  const std::string previousRoom = session.getRoom().getName(); // get the previous room name
+  const std::string username = session.getUser().getUsername(); // get the username
+  const bool persist = session.isAuthenticated(); // check if the user is authenticated
+  const SOCKET socket = session.getSocket();      // get the socket
 
   // leave the room
   {
@@ -145,13 +161,15 @@ bool RoomManager::broadcast(const Room &room, const Packet &packet, ConnectionMa
   // get the sockets
   {
     std::lock_guard<std::mutex> lock(mutex);
+
+    // find the sockets in the room
     auto it = members.find(room.getName());
     if (it != members.end()) {
       sockets.assign(it->second.begin(), it->second.end());
     }
   }
 
-  // broadcast the packet
+  // broadcast the packet to the sockets
   bool ok = true;
   for (SOCKET socket : sockets) {
     if (socket == skipSocket) {
@@ -176,9 +194,13 @@ bool RoomManager::createRoom(const Room &room, std::string_view creatorEmail) {
   }
 
   try {
-    Room created = DatabaseManager::getInstance().createRoom(
-        room.getName(), room.getType(), room.getPrivacy(), creatorEmail);
+    // create the room in the database
+    Room created = DatabaseManager::getInstance().createRoom(room.getName(), room.getType(),
+                                                             room.getPrivacy(), creatorEmail);
+    // insert the room into the known rooms
     knownRooms.emplace(created.getName(), created);
+
+    // log the room creation
     Logger::logInfo("RoomManager", "Room created: " + created.getName() +
                                        " id=" + std::to_string(created.getId()));
     return true;
@@ -279,6 +301,8 @@ bool RoomManager::broadcastAll(const Packet &packet, ConnectionManager &connecti
   // get all rooms
   {
     std::lock_guard<std::mutex> lock(mutex);
+
+    // get all rooms
     rooms.reserve(members.size());
     for (const auto &[roomName, _] : members) {
       auto it = knownRooms.find(roomName);
@@ -288,7 +312,7 @@ bool RoomManager::broadcastAll(const Packet &packet, ConnectionManager &connecti
     }
   }
 
-  // broadcast the packet to all members of all rooms
+  // broadcast the packet to all sockets in all rooms
   bool ok = true;
   for (const Room &room : rooms) {
     if (!broadcast(room, packet, connections, skipSocket)) {
@@ -301,10 +325,13 @@ bool RoomManager::broadcastAll(const Packet &packet, ConnectionManager &connecti
 // list all known rooms
 std::vector<Room> RoomManager::listRooms() const {
   std::lock_guard<std::mutex> lock(mutex);
+
+  // get all rooms and return them
   std::vector<Room> rooms;
   rooms.reserve(knownRooms.size());
   for (const auto &[_, room] : knownRooms) {
     rooms.push_back(room);
   }
+
   return rooms;
 }

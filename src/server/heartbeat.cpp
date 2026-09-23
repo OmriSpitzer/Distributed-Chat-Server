@@ -1,7 +1,13 @@
 /**
- * Heartbeat class
+ * Heartbeat class implementation file
  *
- * @brief Periodic keepalive: ping live clients and drop silent sockets.
+ * @brief Periodic keepalive: ping live clients and drop silent sockets
+ *
+ * Heartbeat class with fields: connections, lifecycle_mutex, stop_cv, heartbeat_thread, running,
+ * stopped
+ * Used for managing the heartbeat lifecycle
+ * Session format: [<username>,<room name>]
+ * Heartbeat format: sessions: <session1> <session2> ... total: <number of sessions>
  * @date 12-09-2026
  */
 
@@ -35,6 +41,7 @@ void Heartbeat::start() {
     heartbeat_thread.join();
   }
 
+  // set flags
   stopped = false;
   running = true;
 
@@ -51,6 +58,7 @@ void Heartbeat::start() {
     return;
   }
 
+  // log the heartbeat started
   Logger::logInfo("Heartbeat", "Started");
 }
 
@@ -58,7 +66,10 @@ void Heartbeat::start() {
 void Heartbeat::stop() {
   std::lock_guard lifecycle(lifecycle_mutex);
 
+  // set stopped flag
   stopped = true;
+
+  // notify all threads waiting on the condition variable
   stop_cv.notify_all();
 
   // check if the heartbeat thread is joinable
@@ -70,6 +81,8 @@ void Heartbeat::stop() {
   // join the heartbeat thread
   heartbeat_thread.join();
   running = false;
+
+  // log the heartbeat stopped
   Logger::logInfo("Heartbeat", "Stopped");
 }
 
@@ -77,6 +90,7 @@ void Heartbeat::stop() {
 void Heartbeat::run() {
   try {
     while (!stopped) {
+      // wait for the heartbeat interval or the stopped flag to be set
       {
         std::unique_lock lock(wait_mutex);
         if (stop_cv.wait_for(lock, std::chrono::milliseconds(config::HEARTBEAT_INTERVAL),
@@ -86,7 +100,7 @@ void Heartbeat::run() {
       }
 
       try {
-        pingOnce();
+        pingOnce(); // ping once to all sessions
       } catch (const std::exception &ex) {
         Logger::logError("Heartbeat", ex.what());
       } catch (...) {
@@ -102,21 +116,23 @@ void Heartbeat::run() {
 
 // snapshot pinging all sessions
 void Heartbeat::pingOnce() {
-  auto sessions = connections.getSessions();
-  Packet ping("server", "", Packet::PacketType::HEARTBEAT, "", "ping");
+  auto sessions = connections.getSessions();                            // get all sessions
+  Packet ping("server", "", Packet::PacketType::HEARTBEAT, "", "ping"); // create the ping packet
 
   // build the message
   std::string message = "sessions: ";
 
-  // ping each session
+  // ping each session in connections
   for (const auto &entry : sessions) {
     if (stopped) {
       break;
     }
 
+    // get the session
     const ClientSession &session = *entry.second;
     message += "[" + session.getUser().getUsername() + "," + session.getRoom().getName() + "] ";
 
+    // if the session is closed, skip it
     if (session.isClosed()) {
       continue;
     }
