@@ -12,6 +12,12 @@
 #include <string_view>
 #include <vector>
 
+// client TCP endpoint (failover neighbors; not gossip)
+struct ServerPoint {
+  std::string host;
+  std::uint16_t port{0};
+};
+
 namespace config {
 // server host
 inline std::string SERVER_HOST = "127.0.0.1";
@@ -27,6 +33,9 @@ inline std::string NODE_ID = "node1";
 
 // other nodes' gossip addresses (host:port)
 inline std::vector<std::string> PEERS;
+
+// other servers for failover
+inline std::vector<ServerPoint> NEIGHBOR_SERVERS;
 
 // number of worker threads in the thread pool
 inline constexpr std::size_t THREAD_COUNT = 4;
@@ -49,6 +58,7 @@ inline void printUsage(const char *program) {
             << "  --node-id ID          node identity (default: node1)\n"
             << "  --host HOST           client connect host (default: 127.0.0.1)\n"
             << "  --port N              client TCP port (default: 5555)\n"
+            << "  --servers H:P,H:P     other client endpoints for failover\n"
             << "  --peer-port N         gossip listen port (default: 5557)\n"
             << "  --peers H:P,H:P       other nodes' gossip addresses\n"
             << "  --db PATH             database path (default: data/node-1.db)\n"
@@ -86,6 +96,54 @@ inline void parsePeers(std::string_view text) {
       PEERS.push_back(item);
     }
   }
+}
+
+// drop a neighbor if it matches host:port
+inline void removeNeighborServer(const std::string &host, std::uint16_t port) {
+  for (auto it = NEIGHBOR_SERVERS.begin(); it != NEIGHBOR_SERVERS.end(); ++it) {
+    if (it->host == host && it->port == port) {
+      NEIGHBOR_SERVERS.erase(it);
+      break;
+    }
+  }
+}
+
+// parse a list of neighbor servers from a string
+inline bool parseNeighborServers(std::string_view text) {
+  NEIGHBOR_SERVERS.clear();
+
+  std::stringstream stream{std::string(text)};
+  std::string item;
+
+  while (std::getline(stream, item, ',')) {
+    if (item.empty()) {
+      continue;
+    }
+
+    const auto colon = item.rfind(':');
+    if (colon == std::string::npos || colon == 0 || colon + 1 >= item.size()) {
+      NEIGHBOR_SERVERS.clear();
+      return false;
+    }
+
+    ServerPoint endpoint;
+    endpoint.host = item.substr(0, colon);
+    if (!parsePort(item.substr(colon + 1), endpoint.port)) {
+      NEIGHBOR_SERVERS.clear();
+      return false;
+    }
+
+    // already the primary --host/--port; not a neighbor
+    if (endpoint.host == SERVER_HOST && endpoint.port == PORT) {
+      continue;
+    }
+
+    // remove the server if it already exists
+    removeNeighborServer(endpoint.host, endpoint.port);
+    NEIGHBOR_SERVERS.push_back(std::move(endpoint));
+  }
+
+  return true;
 }
 
 // parse the command line arguments into config values. returns false on --help or error.
@@ -126,6 +184,8 @@ inline bool parseArgs(int argc, char *argv[]) {
         return false;
       }
       SERVER_HOST = value;
+
+      removeNeighborServer(SERVER_HOST, PORT);
       continue;
     }
 
@@ -139,6 +199,8 @@ inline bool parseArgs(int argc, char *argv[]) {
         std::cerr << "Invalid --port\n";
         return false;
       }
+
+      removeNeighborServer(SERVER_HOST, PORT);
       continue;
     }
 
@@ -162,6 +224,19 @@ inline bool parseArgs(int argc, char *argv[]) {
         return false;
       }
       parsePeers(value);
+      continue;
+    }
+
+    // neighbor servers config
+    if (arg == "--servers") {
+      const char *value = next("--servers");
+      if (!value) {
+        return false;
+      }
+      if (!parseNeighborServers(value)) {
+        std::cerr << "Invalid --servers\n";
+        return false;
+      }
       continue;
     }
 

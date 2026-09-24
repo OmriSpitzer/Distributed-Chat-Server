@@ -206,7 +206,7 @@ Shared `IHealthCheck` (Adapter target) and `HealthMonitor` (Composite). Same mon
 
 ### Logger
 
-Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLogger` (Client / Server startup). In-memory ring stays on the façade for the Qt Log panel. No file / remote sinks for now — do **not** replace static `Logger::log*` with DI.
+Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLogger` (Client / Server startup). In-memory ring stays on the façade for the Qt Log panel. No file / remote sinks for now — do **not** replace static `Logger::log`* with DI.
 
 - [x] `ILogger` interface for façade sinks (`log(const LogMessage&)`).
 - [x] In-memory ring on `Logger` (default store for Qt Log panel).
@@ -232,7 +232,7 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 
 `Network::connect` uses a single `config::SERVER_HOST` / `PORT`. No multi-endpoint list, no auto-relogin after hop.
 
-- [ ] Config: `--servers host:port,host:port` (client listen ports, not gossip `--peers`). Keep `--host`/`--port` as single-endpoint shorthand.
+- [x] Config: `--servers host:port,host:port` (client listen ports, not gossip `--peers`). Keep `--host`/`--port` as single-endpoint shorthand.
 - [ ] Ambassador/Network: on connect failure, peer close, or failed health check (`HealthMonitor` / Client adapter), try the next endpoint (round-robin or priority).
 - [ ] After failover: restore session — re-`LOGIN` (or guest reconnect), re-`ROOM_JOIN` current room, drain/clear stale chat queue; surface “reconnecting…” in console + Qt.
 - [ ] Prefer endpoints whose gossip peers still report the user/room via a lightweight **directory** packet or shared seed list (do not hardcode only localhost demos).
