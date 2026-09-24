@@ -11,7 +11,7 @@
 #include "server/database_manager.h"
 #include "server/room_manager.h"
 #include "utils/gossip_payload.h"
-#include "utils/models/logger.h"
+#include "utils/logger/logger.h"
 #include "utils/models/message.h"
 #include "utils/models/user.h"
 #include "utils/socket_io.h"

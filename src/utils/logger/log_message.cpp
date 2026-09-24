@@ -8,7 +8,7 @@
  * Used for storing and displaying log messages in the server
  */
 
-#include "utils/models/log_message.h"
+#include "utils/logger/log_message.h"
 #include <atomic>
 #include <ctime>
 #include <ostream>

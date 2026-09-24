@@ -17,7 +17,8 @@
 #include "utils/health/db_health_adapter.h"
 #include "utils/health/heartbeat_health_adapter.h"
 #include "utils/health/server_health_adapter.h"
-#include "utils/models/logger.h"
+#include "utils/logger/consoleLogger.h"
+#include "utils/logger/logger.h"
 #include <iostream>
 #include <memory>
 #include <string>
@@ -35,6 +36,9 @@ HealthMonitor &Server::health() { return healthMonitor; }
 
 // start the server
 void Server::start() {
+  static ConsoleLogger consoleLogger;
+  Logger::getInstance().addLogger(&consoleLogger);
+
   // check if the server is already running
   if (running) {
     Logger::logInfo("Server", "Server is already running");

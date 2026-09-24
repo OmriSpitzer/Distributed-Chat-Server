@@ -8,14 +8,17 @@
 #include "client/client_state.h"
 #include "client/network.h"
 #include "client/packet_handler.h"
+#include "utils/health/client_health_adapter.h"
 #include "utils/models/packet.h"
 #include <condition_variable>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
 
 struct ChatLine {
   std::string author;
@@ -97,8 +100,9 @@ private:
   std::condition_variable welcomeCv; // signaled when ROOM_LIST applied
   bool welcomeReceived{false};       // first ROOM_LIST (connect snapshot) seen
 
-  std::mutex chatMutex;           // guards pendingChat
-  std::vector<ChatLine> pendingChat;
+  std::mutex chatMutex;              // guards pendingChat
+  std::vector<ChatLine> pendingChat; // queued chat messages
+  std::unique_ptr<ClientHealthAdapter> healthAdapter; // set after connect in start()
 
   // waiting for a packet of a specific type
   std::optional<Packet> waitFor(Packet::PacketType expected);

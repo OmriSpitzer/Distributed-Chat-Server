@@ -206,10 +206,13 @@ Shared `IHealthCheck` (Adapter target) and `HealthMonitor` (Composite). Same mon
 
 ### Logger
 
-- [ ] Introduce `ILogger` (info / warn / error / heartbeat); keep the current in-memory ring as the default sink for the Qt Log panel.
-- [ ] Optional sinks: console, file rotate; inject into Client / Server instead of only static `Logger::log*`.
-- [ ] Tests use a recording / `NullLogger` sink (no singleton coupling).
-- [ ] Do **not** block the chat path on remote log shipping — async or best-effort only.
+Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLogger` (Client / Server startup). In-memory ring stays on the façade for the Qt Log panel. No file / remote sinks for now — do **not** replace static `Logger::log*` with DI.
+
+- [x] `ILogger` interface for façade sinks (`log(const LogMessage&)`).
+- [x] In-memory ring on `Logger` (default store for Qt Log panel).
+- [x] `ConsoleLogger` sink; register via `addLogger` in Client / Server `start`.
+- [x] `QtLogger` sink for live Log panel updates (register in `LogPanel`).
+- [x] Facade fan-out tests (recording sink + `clearLoggers`); still use the singleton API.
 
 
 

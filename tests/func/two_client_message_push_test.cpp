@@ -11,7 +11,7 @@
 #include "config/config.h"
 #include "server/database_manager.h"
 #include "server/server.h"
-#include "utils/models/logger.h"
+#include "utils/logger/logger.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
@@ -112,6 +112,9 @@ struct LiveNode {
 
   LiveNode() {
     (void)db();
+    // shared temp DB can keep online_users from a prior crashed run
+    db().clearOnline("admin");
+    db().clearOnline("user");
     Logger::clear();
     port = nextPort();
     peerPort = nextPort();

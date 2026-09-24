@@ -7,7 +7,7 @@
 
 #include "client/network.h"
 #include "config/config.h"
-#include "utils/models/logger.h"
+#include "utils/logger/logger.h"
 #include "utils/models/packet.h"
 #include "utils/socket_io.h"
 #include <string>

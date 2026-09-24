@@ -26,8 +26,8 @@ ctest --test-dir build --output-on-failure
 | `room_test` | `tests/utils/room_test.cpp` | 12 |
 | `message_test` | `tests/utils/message_test.cpp` | 12 |
 | `packet_test` | `tests/utils/packet_test.cpp` | 11 |
-| `log_message_test` | `tests/utils/log_message_test.cpp` | 12 |
-| `logger_test` | `tests/utils/logger_test.cpp` | 12 |
+| `log_message_test` | `tests/utils/logger/log_message_test.cpp` | 12 |
+| `logger_test` | `tests/utils/logger/logger_test.cpp` | 21 |
 | `serializer_test` | `tests/utils/serializer_test.cpp` | 8 |
 | `socket_io_test` | `tests/utils/socket_io_test.cpp` | 10 |
 | `gossip_payload_test` | `tests/utils/gossip_payload_test.cpp` | 11 |
@@ -112,12 +112,21 @@ ctest --test-dir build --output-on-failure
 - Logger keeps insertion order
 - Logger getMessage bounds
 - Logger clear removes all messages
-- Logger evicts oldest messages past kMaxMessages
+- Logger evicts oldest messages past MAX_MESSAGES
 - Logger stream output
 - Logger is a singleton
 - Logger heartbeat messages receive unique ids
 - Logger mixed types keep distinct ids and fields
 - Logger size tracks additions and clear
+- Logger facade forwards to registered sinks
+- ConsoleLogger registers as facade sink
+- Logger addLogger ignores nullptr
+- Logger clear does not unregister sinks
+- Logger late addLogger receives future messages only
+- Logger throwing sink skips later sinks
+- Logger reentrant sink log does not deadlock
+- Logger concurrent log size and getMessage
+- ConsoleLogger ERROR writes to stderr
 
 ### Serializer (`[serializer]`)
 

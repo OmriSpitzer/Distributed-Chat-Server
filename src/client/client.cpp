@@ -11,7 +11,8 @@
 #include "client/packet_builder.h"
 #include "client/packet_handler.h"
 #include "utils/RESPONSE_CODES.h"
-#include "utils/models/logger.h"
+#include "utils/logger/consoleLogger.h"
+#include "utils/logger/logger.h"
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
@@ -20,6 +21,7 @@
 #include <cstdint>
 #include <ctime>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -89,6 +91,9 @@ void Client::applyRoomListPush(const Packet &packet) {
 
 // start the client
 bool Client::start() {
+  static ConsoleLogger consoleLogger;
+  Logger::getInstance().addLogger(&consoleLogger);
+
   id = std::to_string(++next_client_id); // create a unique id for the client
 
   {
@@ -134,21 +139,21 @@ bool Client::start() {
     state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
   }
 
+  healthAdapter = std::make_unique<ClientHealthAdapter>(*this);
+
   return true;
 }
 
 // enqueue a chat push for the UI
 void Client::enqueueChatPush(const Packet &packet) {
   // only surface messages for the room the client is currently in
-  if (state.currentRoom && !packet.room.empty() &&
-      packet.room != state.currentRoom->getName()) {
+  if (state.currentRoom && !packet.room.empty() && packet.room != state.currentRoom->getName()) {
     return;
   }
   std::lock_guard<std::mutex> lock(chatMutex);
-  pendingChat.push_back(
-      ChatLine{packet.sender, packet.message,
-               packet.timestamp != 0 ? packet.timestamp
-                                     : static_cast<std::uint64_t>(std::time(nullptr))});
+  pendingChat.push_back(ChatLine{
+      packet.sender, packet.message,
+      packet.timestamp != 0 ? packet.timestamp : static_cast<std::uint64_t>(std::time(nullptr))});
 }
 
 // drain chat pushes received on the network thread
@@ -704,7 +709,8 @@ std::string Client::updateProfile(std::string_view username, std::string_view ne
   return error;
 }
 
-// send a chat message in the current room (guests OK; not persisted). Empty = success; otherwise error text.
+// send a chat message in the current room (guests OK; not persisted). Empty = success; otherwise
+// error text.
 std::string Client::sendMessage(std::string_view text) {
   if (!isAlive()) {
     const std::string error = "Not connected to the server.";

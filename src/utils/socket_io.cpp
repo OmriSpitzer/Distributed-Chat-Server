@@ -62,23 +62,16 @@ SOCKET connectTo(std::string_view host, std::uint16_t port) {
     return INVALID_SOCKET;
   }
 
-  // set the socket to non-blocking
-  u_long nonBlocking = 1;
-  ioctlsocket(socketFd, FIONBIO, &nonBlocking);
-
-  // set the address
   sockaddr_in address{};
   address.sin_family = AF_INET;
   address.sin_port = htons(port);
 
-  // convert the host to a string
   const std::string hostStr(host);
   if (inet_pton(AF_INET, hostStr.c_str(), &address.sin_addr) != 1) {
     socket_io::close(socketFd);
     return INVALID_SOCKET;
   }
 
-  // connect to the address
   if (::connect(socketFd, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
     socket_io::close(socketFd);
     return INVALID_SOCKET;

@@ -519,8 +519,14 @@ TEST_CASE("RoomManager deleteRoom moves members to Lobby", "[room_manager][delet
   REQUIRE_FALSE(rooms().getRoom(name));
   REQUIRE(connected.session->getRoom().getName() == RoomManager::LOBBY.getName());
 
-  // still in Lobby members after forced move
+  // deleteRoom pushes ROOM_LIST for the Lobby move — drain it before chat
   REQUIRE(setRecvTimeout(connected.client, 500));
+  auto lobbyList = socket_io::readPacket(connected.client);
+  REQUIRE(lobbyList);
+  REQUIRE(lobbyList->type == Packet::PacketType::ROOM_LIST);
+  REQUIRE(lobbyList->room == RoomManager::LOBBY.getName());
+
+  // still in Lobby members after forced move
   REQUIRE(rooms().broadcast(RoomManager::LOBBY, makeMsg("lobby-hi", RoomManager::LOBBY.getName()),
                             net.connections));
   auto got = socket_io::readPacket(connected.client);

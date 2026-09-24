@@ -10,8 +10,8 @@
 #include "config/config.h"
 #include "server/database_manager.h"
 #include "server/server.h"
-#include "utils/models/log_message.h"
-#include "utils/models/logger.h"
+#include "utils/logger/log_message.h"
+#include "utils/logger/logger.h"
 #include "utils/socket_io.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>

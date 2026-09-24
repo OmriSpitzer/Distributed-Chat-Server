@@ -12,7 +12,7 @@
 #include "server/packet_processor.h"
 #include "server/room_manager.h"
 #include "utils/gossip_payload.h"
-#include "utils/models/logger.h"
+#include "utils/logger/logger.h"
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
 #include "utils/socket_io.h"

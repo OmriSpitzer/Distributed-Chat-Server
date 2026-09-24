@@ -12,8 +12,9 @@ include(FetchContent)
 
 # ------------ Utils Library ------------
 add_library(utils
-    src/utils/models/logger.cpp
-    src/utils/models/log_message.cpp
+    src/utils/logger/logger.cpp
+    src/utils/logger/consolelogger.cpp
+    src/utils/logger/log_message.cpp
     src/utils/models/message.cpp
     src/utils/models/user.cpp
     src/utils/models/room.cpp
@@ -168,6 +169,7 @@ target_sources(chat_server PRIVATE
   src/server/gui/panels/ports_panel.cpp
   src/server/gui/panels/rooms_panel.cpp
   src/server/gui/panels/users_panel.cpp
+  src/utils/logger/qtLogger.cpp
   # headers with Q_OBJECT must be listed so AUTOMOC can scan them
   include/server/gui/main_window.h
   include/server/gui/panels/panel.h
@@ -175,6 +177,7 @@ target_sources(chat_server PRIVATE
   include/server/gui/panels/ports_panel.h
   include/server/gui/panels/rooms_panel.h
   include/server/gui/panels/users_panel.h
+  include/utils/logger/qtLogger.h
 )
 target_link_libraries(chat_server PRIVATE Qt6::Widgets)
 
@@ -224,14 +227,16 @@ add_executable(socket_io_test tests/utils/socket_io_test.cpp)
 target_link_libraries(socket_io_test PRIVATE utils Catch2::Catch2WithMain)
 add_executable(message_test tests/utils/message_test.cpp)
 target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
-add_executable(log_message_test tests/utils/log_message_test.cpp)
+add_executable(log_message_test tests/utils/logger/log_message_test.cpp)
 target_link_libraries(log_message_test PRIVATE utils Catch2::Catch2WithMain)
-add_executable(logger_test tests/utils/logger_test.cpp)
-target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(logger_test tests/utils/logger/logger_test.cpp)
+target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
 add_executable(packet_test tests/utils/packet_test.cpp)
 target_link_libraries(packet_test PRIVATE utils Catch2::Catch2WithMain)
 add_executable(gossip_payload_test tests/utils/gossip_payload_test.cpp)
 target_link_libraries(gossip_payload_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(health_test tests/utils/health_test.cpp tests/client/main_page_stub.cpp)
+target_link_libraries(health_test PRIVATE server_lib client_lib Catch2::Catch2WithMain Threads::Threads)
 
 # ------------ Auth connections ------------
 
@@ -305,6 +310,7 @@ catch_discover_tests(log_message_test)
 catch_discover_tests(logger_test)
 catch_discover_tests(packet_test)
 catch_discover_tests(gossip_payload_test)
+catch_discover_tests(health_test)
 catch_discover_tests(authentication_test)
 
 # ------------ Client tests ------------
