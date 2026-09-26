@@ -153,40 +153,14 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 
 ## 1. Design Patterns - Implementation **(goal)**
 
-Ship the structural patterns below so client/server stay testable and transport-agnostic. Shared types (`IHealthCheck`, `HealthMonitor`, transport interfaces) live in a common place; each process wires only the adapters it owns.
-
-### Ambassador
-
-Introduce a client-side Ambassador as the only path from `Client` to the remote server, so UI/application code stays protocol-agnostic and new transports (WebSocket, REST, …) plug in as adapters.
-
-- [ ] Define an Ambassador interface with domain operations (`login`, `signUp`, `logout`, `joinRoom`, `leaveRoom`, `createRoom`, `deleteRoom`, `invite`, `kick`, `sendMessage`, `updateProfile`, `loadHistory`, connect/disconnect, health).
-- [ ] Return typed domain results / clear error strings — never expose raw `Packet`, sockets, or protocol status codes to `Client` / UI.
-- [ ] Keep pushes (`ROOM_LIST`, live `MESSAGE`) behind the same façade (callbacks or a small inbox API), not a second path into `Network`.
-
-- [ ] Implement a TCP/`Packet` adapter (`IChatTransport`) that owns `PacketBuilder`, `Network`, `waitFor`, and `PacketHandler`.
-- [ ] Align `PacketHandler` with **all** RPC success paths (not only LOGIN / REGISTER / UPDATE_USER): validate `responseCode` **and** payload; refuse `200` with empty/malformed bodies.
-- [ ] Move reply parsing out of `Client` action methods; `Client` only applies Ambassador results to `ClientState`.
-- [ ] Treat `responseCode == 0` pushes as unsolicited events, not RPC success.
-
-- [ ] Wire `Client` to call only the Ambassador (no direct `handler.handlePacket` / duplicated `responseCode` checks).
-- [ ] Preserve console + Qt behavior (same public `Client` methods; internals swap to Ambassador).
-- [ ] Unit-test Ambassador with a fake adapter; keep `PacketHandler` tests protocol-local (TCP adapter).
-
-- [ ] Timeouts / reconnect policy on the Ambassador (not in UI code); pair health with Health checks below and failover (§3).
-- [ ] Optional: retries / circuit-break only for idempotent ops; document which calls may retry.
-
-- [ ] Document adapter contract so WebSocket / REST implement the same Ambassador operations.
-- [ ] Do **not** reuse `PacketHandler` for non-`Packet` protocols — each adapter has its own codec mapping to the same domain types.
-- [ ] Add a second transport adapter only when a real second transport ships; until then keep one TCP adapter behind the interface.
-
-
+Ship the structural patterns below so client and server stay testable. Shared types (`IHealthCheck`, `HealthMonitor`) live in a common place; each process wires only the adapters it owns.
 
 ### Design patterns on the server
 
 - [ ] **Sidecar** — optional side process / plugin for dynamic logic (metrics scrape, audit export, hot-config) without bloating `PacketProcessor`.
 - [ ] **Strategy** for join / ACL / ADMIN gates so room privacy rules are swappable without touching TCP.
 - [ ] **Observer / event bus** for GUI + website: domain events (`UserOnline`, `MessagePosted`, `RoomCreated`) instead of Qt `QTimer` polls only.
-- [ ] Keep singletons (`DatabaseManager`, `RoomManager`) or migrate to DI owned by `Server` if Ambassador / website tests need fakes.
+- [ ] Keep singletons (`DatabaseManager`, `RoomManager`) or migrate to DI owned by `Server` if website tests need fakes.
 
 
 
@@ -197,7 +171,7 @@ Shared `IHealthCheck` (Adapter target) and `HealthMonitor` (Composite). Same mon
 - [x] Define `IHealthCheck` → `HealthReport` (`name`, `Up` / `Degraded` / `Down`, optional detail).
 - [x] `HealthMonitor` holds `IHealthCheck` children, exposes `checkAll()` / overall status (Composite; may itself implement `IHealthCheck`).
 - [x] **Server adapters:** `DatabaseHealthAdapter`, `HeartbeatHealthAdapter`, `ServerHealthAdapter` (`isAlive` / listening) — register in `Server::start`.
-- [ ] **Client adapters:** `ClientHealthAdapter` (`Network` connected + Ambassador/transport `health()`) — register in `Client::start`.
+- [ ] **Client adapters:** `ClientHealthAdapter` (`Network` connected) — register in `Client::start`.
 - [x] Do not register DB / Heartbeat adapters on the client (those objects do not live there).
 - [ ] Wire failover (§3) and GUI status to `HealthMonitor`, not ad-hoc `isAlive()` only.
 - [ ] Unit-test each adapter with fakes; test monitor rollup (one child Down → overall Down / Degraded).
@@ -228,17 +202,53 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 
 
 
-## 3. Client failover — connect to another server if one dies **(goal)**
+## 3. Client failover — servers publish neighbors; clients reconnect **(goal)**
 
-`Network::connect` uses a single `config::SERVER_HOST` / `PORT`. No multi-endpoint list, no auto-relogin after hop.
+**Design:** Topology for client failover lives with the servers (they already gossip). Clients stay dumb: bootstrap from a seed, cache a directory, reconnect when the current node dies, re-auth. Dead nodes cannot hand clients off; peers do not dial clients.
+
+`Network::connect` still uses a single `config::SERVER_HOST` / `PORT` today. Config seed list exists; no runtime directory, no auto-relogin after hop.
+
+### Ownership
+
+
+| Who        | Owns                                                                                               | Does not                                            |
+| ---------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **Server** | Known **client-facing** neighbors (`host:port` chat TCP), pushed as a directory from gossip/health | Client TCP sessions on other nodes; dialing clients |
+| **Client** | Seed + cached directory; reconnect / round-robin; re-`LOGIN` + re-`ROOM_JOIN`                      | Gossip `--peers` / `PEER_PORT`                      |
+
+
+`--servers` / `NEIGHBOR_SERVERS` = client failover endpoints. `--peers` = server-to-server gossip only.
+
+### Bootstrap (client / ops)
 
 - [x] Config: `--servers host:port,host:port` (client listen ports, not gossip `--peers`). Keep `--host`/`--port` as single-endpoint shorthand.
-- [ ] Ambassador/Network: on connect failure, peer close, or failed health check (`HealthMonitor` / Client adapter), try the next endpoint (round-robin or priority).
-- [ ] After failover: restore session — re-`LOGIN` (or guest reconnect), re-`ROOM_JOIN` current room, drain/clear stale chat queue; surface “reconnecting…” in console + Qt.
-- [ ] Prefer endpoints whose gossip peers still report the user/room via a lightweight **directory** packet or shared seed list (do not hardcode only localhost demos).
-- [ ] Heartbeat miss / `isAlive() == false` triggers the same failover path as TCP close.
-- [ ] Cap reconnect storms (backoff + jitter); do not retry forever without UI cancel.
-- [ ] E2E: kill node A while client is in a room; client lands on node B and receives MESSAGE again (pairs with §7).
+- [ ] Always keep a static seed (CLI / scripts / DNS) — directory can go stale if the last node dies before a push; do not hardcode only localhost demos.
+
+
+
+### Server — publish directory
+
+- [x] Each node tracks live **client** endpoints of cluster members (from gossip HELLO / peer health — not raw `--peers` gossip ports).
+- [x] Push (or reply to) a lightweight **directory** packet of `host:port` chat endpoints to connected clients (on connect, on membership change, and/or periodically).
+- [ ] Directory is **hints**, not trust: clients must still LOGIN/auth on the next node.
+- [x] Refresh after login so the client’s cache matches who the new node believes is up.
+
+
+
+### Client — cache and reconnect
+
+- [ ] Merge seed + server directory into a failover list; prefer endpoints the last directory reported as up.
+- [ ] On connect failure, peer close, heartbeat miss / `isAlive() == false`, or failed `HealthMonitor` / Client adapter: try the next endpoint (round-robin or priority) with backoff + jitter.
+- [ ] After hop: restore session — re-`LOGIN` (or guest reconnect), re-`ROOM_JOIN` current room, drain/clear stale chat queue; surface “reconnecting…” in console + Qt.
+- [ ] Cap reconnect storms; do not retry forever without UI cancel.
+- [ ] Wire reconnect triggers to `HealthMonitor` (pairs with §1), not ad-hoc checks only.
+
+
+
+### Verify
+
+- [ ] E2E: kill node A while client is in a room; client uses cached directory, lands on node B, re-auths, and receives MESSAGE again (pairs with §7).
+- [ ] Optional later: LB / gateway (§4) so clients hit one address and may not need a neighbor list — does not replace this path for direct TCP clients.
 
 
 
@@ -246,8 +256,8 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 
 Desktop Qt/console stay primary for chat; website is admin + light client / status, not a second gossip peer.
 
-- [ ] Thin **gateway** (separate process or sidecar): REST and/or WebSocket → same domain ops as Ambassador (login, rooms list, history read, optional send).
-- [ ] Do **not** put HTTP inside `server_lib` packet path; gateway talks TCP/`Packet` to a chosen node (or Ambassador adapter).
+- [ ] Thin **gateway** (separate process or sidecar): REST and/or WebSocket for domain ops (login, rooms list, history read, optional send).
+- [ ] Do **not** put HTTP inside `server_lib` packet path; gateway talks TCP/`Packet` to a chosen node.
 - [ ] Public pages: cluster status (nodes up/down), room directory (public only), optional read-only message feed.
 - [ ] Auth pages: register / login against chat cluster (via gateway); session cookie/JWT for website only — chat nodes keep Argon2id + binary sessions.
 - [ ] Admin UI: kick/invite/delete room (ADMIN), view online users across nodes (aggregated from gateway polls or events).
@@ -291,7 +301,6 @@ Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, gat
 - [ ] `config::parseArgs` / `parsePort` / `parsePeers` (and new `--servers`).
 - [ ] `ThreadPool` enqueue / shutdown (even if unused for session I/O).
 - [ ] `PacketHandler` for every RPC type, not only LOGIN/REGISTER/UPDATE_USER.
-- [ ] Ambassador + fake adapter (happy path + timeout + malformed).
 - [ ] `IHealthCheck` adapters + `HealthMonitor` rollup (§1).
 - [ ] `allow_list` CRUD edges as dedicated `DatabaseManager` cases.
 - [ ] Clear-`online_users`-on-boot once implemented.
@@ -330,7 +339,7 @@ Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, gat
 
 ## 8. GUI additions **(goal)**
 
-Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-polled; Ports shows config, not live gossip sockets; no failover UX.
+Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-polled; Ports shows gossip seeds + live client endpoints from HELLO; no failover UX.
 
 ### Server GUI
 
@@ -348,7 +357,7 @@ Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-
 - [ ] Connection status strip: connected host:port, reconnecting, failed over to X (`HealthMonitor` / Client adapter).
 - [ ] Server picker / auto-failover progress (ties to §3); manual “switch server”.
 - [ ] Unread badge / scroll-to-bottom; optional toast on kick/invite/ROOM_LIST change.
-- [ ] Dark/light or denser chat layout without putting logic in widgets (still `Client` / Ambassador only).
+- [ ] Dark/light or denser chat layout without putting logic in widgets (still `Client` only).
 - [ ] Accessibility: tab order, high-contrast errors, no updates off the GUI thread (keep queued signals).
 
 
@@ -359,9 +368,9 @@ Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-
 
 
 
-## 9. Transport & API surface (website + Ambassador)
+## 9. Transport & API surface (website)
 
-- [ ] WebSocket and/or REST gateway implementing Ambassador ops (§1 / §4).
+- [ ] WebSocket and/or REST gateway implementing website ops (§4).
 - [ ] OpenAPI (REST) or schema doc for gateway; map HTTP errors to existing `200`/`400`/`404`/`500` meanings.
 - [ ] Rate limits on gateway register/login; same Argon2id verification path via cluster, not a second hash scheme.
 - [ ] “RESTfulness on APIs” = gateway resources (`/rooms`, `/rooms/{id}/messages`), not rewriting binary `Packet` into REST inside each node.

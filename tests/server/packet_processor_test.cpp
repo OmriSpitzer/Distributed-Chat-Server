@@ -531,6 +531,12 @@ TEST_CASE("PacketProcessor ROOM_CREATE", "[packet_processor][create]") {
     REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
   }
 
+  SECTION("SERVER_DIRECTORY on client port rejected") {
+    Packet dir(user.getUsername(), "server", Packet::PacketType::SERVER_DIRECTORY, "", "");
+    const Packet denied = process(dir, fx.session, fx.connections);
+    REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+  }
+
   SECTION("private room: stranger denied until invited") {
     const std::string privateName = unique("vault");
     Packet privateReq(user.getUsername(), "server", Packet::PacketType::ROOM_CREATE, privateName,

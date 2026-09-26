@@ -31,6 +31,9 @@
 // get connections
 ConnectionManager &Server::connections() { return connectionManager; }
 
+// get gossip manager
+GossipManager &Server::gossip() { return gossipManager; }
+
 // get health monitor
 HealthMonitor &Server::health() { return healthMonitor; }
 
@@ -119,7 +122,7 @@ void Server::dashboard() {
   std::cout << "Port: " << config::PORT << " Peer port: " << config::PEER_PORT
             << " Thread count: " << config::THREAD_COUNT << std::endl;
   std::cout << "Database path: " << config::DB_PATH << std::endl;
-  std::cout << "Peers: ";
+  std::cout << "Gossip seeds: ";
   if (config::PEERS.empty()) {
     std::cout << "(none)";
   } else {
@@ -128,6 +131,23 @@ void Server::dashboard() {
         std::cout << ", ";
       }
       std::cout << config::PEERS[i];
+    }
+  }
+  std::cout << std::endl;
+  std::cout << "Client endpoints: ";
+  {
+    const auto live = gossipManager.getClientPeers();
+    if (live.empty()) {
+      std::cout << "(none)";
+    } else {
+      bool first = true;
+      for (const auto &entry : live) {
+        if (!first) {
+          std::cout << ", ";
+        }
+        first = false;
+        std::cout << entry.second.nodeId << "=" << entry.second.host << ":" << entry.second.port;
+      }
     }
   }
   std::cout << std::endl;

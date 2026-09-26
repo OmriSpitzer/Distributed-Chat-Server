@@ -47,6 +47,25 @@ void ConnectionManager::rumor(const Packet &event) {
   }
 }
 
+void ConnectionManager::pushServerDirectory(const std::string &body, SOCKET only) {
+  Packet packet("server", "*", Packet::PacketType::SERVER_DIRECTORY, "", body, 0);
+  if (only != INVALID_SOCKET) {
+    sendPacket(only, packet);
+    return;
+  }
+
+  for (const auto &entry : getSessions()) {
+    if (entry.second && !entry.second->isClosed())
+      sendPacket(entry.first, packet);
+  }
+}
+
+void ConnectionManager::refreshServerDirectory(SOCKET only) {
+  if (!gossip_)
+    return;
+  pushServerDirectory(gossip_->buildServerDirectory(), only);
+}
+
 // start listening on given port
 bool ConnectionManager::startListening(std::uint16_t port) {
   // check if already listening
@@ -151,6 +170,11 @@ void ConnectionManager::acceptLoop() {
     Logger::logInfo("ConnectionManager", "Sent connect welcome with " +
                                              std::to_string(directory.size()) + " rooms, socket " +
                                              std::to_string(fd));
+
+    // push live chat-endpoint directory (failover hints) when gossip is wired
+    if (gossip_) {
+      pushServerDirectory(gossip_->buildServerDirectory(), fd);
+    }
 
     // handle the client in a new thread
     std::thread([this, fd] { handleClient(fd); }).detach();

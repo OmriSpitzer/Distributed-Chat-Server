@@ -22,7 +22,8 @@ private:
   QLabel *nodeLabel{nullptr};     // node label
   QLabel *clientLabel{nullptr};   // client label
   QLabel *peerLabel{nullptr};     // peer label
-  QLabel *peersLabel{nullptr};    // peers label
+  QLabel *peersLabel{nullptr};    // gossip seed peers label
+  QLabel *endpointsLabel{nullptr}; // live client endpoints from gossip HELLO
   QLabel *dbLabel{nullptr};       // db label
   QLabel *healthOverall{nullptr}; // overall health
   QLabel *healthDetails{nullptr}; // per-check health lines

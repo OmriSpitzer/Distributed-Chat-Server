@@ -374,7 +374,8 @@ TEST_CASE("Server dashboard while stopped", "[server][dashboard]") {
   REQUIRE(text.find("Port: " + std::to_string(fixture.port)) != std::string::npos);
   REQUIRE(text.find("Peer port: " + std::to_string(fixture.peerPort)) != std::string::npos);
   REQUIRE(text.find("Database path: " + config::DB_PATH) != std::string::npos);
-  REQUIRE(text.find("Peers: (none)") != std::string::npos);
+  REQUIRE(text.find("Gossip seeds: (none)") != std::string::npos);
+  REQUIRE(text.find("Client endpoints: (none)") != std::string::npos);
   REQUIRE(text.find("Listening: no") != std::string::npos);
 }
 
@@ -405,8 +406,8 @@ TEST_CASE("Server dashboard lists peers", "[server][dashboard]") {
   config::PEERS = {"127.0.0.1:1", "127.0.0.1:2"};
   const std::string text = captureDashboard(fixture.server);
 
-  REQUIRE(text.find("Peers: 127.0.0.1:1, 127.0.0.1:2") != std::string::npos);
-  REQUIRE(text.find("(none)") == std::string::npos);
+  REQUIRE(text.find("Gossip seeds: 127.0.0.1:1, 127.0.0.1:2") != std::string::npos);
+  REQUIRE(text.find("Client endpoints: (none)") != std::string::npos);
 }
 
 // 11. start fails when the client port is exclusive

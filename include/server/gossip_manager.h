@@ -6,6 +6,7 @@
 
 #pragma once
 #include "server/connection_manager.h"
+#include "utils/models/client_endpoint.h"
 #include "utils/models/packet.h"
 #include <atomic>
 #include <condition_variable>
@@ -43,6 +44,12 @@ public:
   // rumor a packet
   void rumor(const Packet &packet);
 
+  // live client-facing endpoints of cluster members (self + HELLO-advertised peers)
+  std::unordered_map<std::string, ClientEndpoint> getClientPeers() const;
+
+  // serialize live client endpoints for SERVER_DIRECTORY (endpoint(...);...)
+  std::string buildServerDirectory() const;
+
 private:
   ConnectionManager &connections;         // local client sockets for apply
   SOCKET listeningSocket{INVALID_SOCKET}; // listening socket
@@ -52,12 +59,13 @@ private:
   std::thread dialThread;        // dial thread
   std::thread antiEntropyThread; // anti-entropy thread
 
-  std::unordered_map<SOCKET, std::string> peers;         // socket -> remote NODE_ID
-  std::unordered_set<std::string> seenEvents;            // seen events
-  std::deque<std::string> recentEventIds;                // ordered ids for digests
-  std::unordered_map<std::string, Packet> eventLog;      // id -> full event for PULL
-  std::unordered_map<SOCKET, std::string> outboundAddrs; // socket -> "host:port"
-  std::unordered_set<SOCKET> openPeerSockets;            // all sockets with a live handlePeer
+  std::unordered_map<SOCKET, std::string> outboundAddrs;       // socket -> "host:port"
+  std::unordered_map<std::string, ClientEndpoint> clientPeers; // nodeId -> client peer
+
+  std::unordered_set<std::string> seenEvents;       // seen events
+  std::deque<std::string> recentEventIds;           // ordered ids for digests
+  std::unordered_map<std::string, Packet> eventLog; // id -> full event for PULL
+  std::unordered_set<SOCKET> openPeerSockets;       // all sockets with a live handlePeer
 
   mutable std::mutex peersMutex;         // peers mutex
   std::mutex sendMutex;                  // send mutex
@@ -97,8 +105,19 @@ private:
   // remove a peer
   void removePeer(SOCKET socket);
 
-  // register a peer
-  bool registerPeer(SOCKET socket, const std::string &nodeId);
+  // register a peer and track its client listen endpoint (host/port may be empty if HELLO omitted
+  // them)
+  bool registerPeer(SOCKET socket, const std::string &nodeId, const std::string &host,
+                    std::uint16_t port);
+
+  // sockets of remote peers that can receive gossip (excludes local self entry)
+  std::vector<SOCKET> peerSocketsLocked() const;
+
+  // build SERVER_DIRECTORY body (caller holds peersMutex)
+  std::string buildServerDirectoryLocked() const;
+
+  // push updated directory to all connected chat clients
+  void notifyServerDirectoryChanged();
 
   // INSERT OR IGNORE + local broadcast for chat MESSAGE events
   bool applyEvent(const Packet &event);

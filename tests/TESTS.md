@@ -23,6 +23,7 @@ ctest --test-dir build --output-on-failure
 | Executable | File | Cases |
 |---|---|---|
 | `user_test` | `tests/utils/user_test.cpp` | 10 |
+| `client_endpoint_test` | `tests/utils/client_endpoint_test.cpp` | 3 |
 | `room_test` | `tests/utils/room_test.cpp` | 12 |
 | `message_test` | `tests/utils/message_test.cpp` | 12 |
 | `packet_test` | `tests/utils/packet_test.cpp` | 11 |
@@ -44,6 +45,12 @@ ctest --test-dir build --output-on-failure
 - User anonymousUser
 - User serialize / deserialize
 - User deserialize rejects invalid input
+
+### ClientEndpoint (`[client_endpoint]`)
+
+- ClientEndpoint serialize round-trip
+- ClientEndpoint deserialize rejects bad input
+- ClientEndpoint isLiveClientEndpoint
 
 ### Room (`[room]`)
 
@@ -445,6 +452,7 @@ ctest --test-dir build --output-on-failure
 - ConnectionManager stopListening closes clients
 - ConnectionManager typical connect login message disconnect flow
 - ConnectionManager hasSession false for guest and wrong user
+- ConnectionManager pushes SERVER_DIRECTORY after login
 
 ### GossipManager (`[gossip_manager]`)
 
@@ -472,6 +480,8 @@ ctest --test-dir build --output-on-failure
 - GossipManager dial connects to listening peer
 - GossipManager concurrent rumor is safe
 - GossipManager typical LOGIN MESSAGE LOGOUT flow
+- GossipManager tracks live client endpoints from HELLO
+- GossipManager pushes SERVER_DIRECTORY to chat clients on peer change
 
 ### Server (`[server]`)
 

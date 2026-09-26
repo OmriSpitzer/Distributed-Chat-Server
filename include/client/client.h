@@ -113,6 +113,9 @@ private:
   // apply the room list push
   void applyRoomListPush(const Packet &packet);
 
+  // apply SERVER_DIRECTORY push (failover hints)
+  void applyServerDirectoryPush(const Packet &packet);
+
   // enqueue a chat push for the UI
   void enqueueChatPush(const Packet &packet);
 };

@@ -193,6 +193,14 @@ TEST_CASE("Packet constructor stores all fields", "[packet][ctor]") {
     REQUIRE(packet.room == "Secure");
     REQUIRE(packet.message == "bob");
   }
+
+  SECTION("SERVER_DIRECTORY") {
+    const Packet packet("server", "*", Packet::PacketType::SERVER_DIRECTORY, "",
+                        "endpoint(node-a|127.0.0.1|5555)", 0);
+    REQUIRE(packet.type == Packet::PacketType::SERVER_DIRECTORY);
+    REQUIRE(packet.message == "endpoint(node-a|127.0.0.1|5555)");
+    REQUIRE(packet.responseCode == 0);
+  }
 }
 
 // 3. constructor default arguments
@@ -518,6 +526,7 @@ TEST_CASE("Packet packetTypeToString", "[packet][packetTypeToString]") {
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_INVITE) == "ROOM_INVITE");
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_DELETE) == "ROOM_DELETE");
   REQUIRE(Packet::packetTypeToString(Packet::PacketType::ROOM_KICK) == "ROOM_KICK");
+  REQUIRE(Packet::packetTypeToString(Packet::PacketType::SERVER_DIRECTORY) == "SERVER_DIRECTORY");
 
   SECTION("invalid enum value defaults to DEFAULT") {
     const auto bogus = static_cast<Packet::PacketType>(999);
@@ -552,6 +561,7 @@ TEST_CASE("Packet stringToPacketType", "[packet][stringToPacketType]") {
   REQUIRE(Packet::stringToPacketType("ROOM_INVITE") == Packet::PacketType::ROOM_INVITE);
   REQUIRE(Packet::stringToPacketType("ROOM_DELETE") == Packet::PacketType::ROOM_DELETE);
   REQUIRE(Packet::stringToPacketType("ROOM_KICK") == Packet::PacketType::ROOM_KICK);
+  REQUIRE(Packet::stringToPacketType("SERVER_DIRECTORY") == Packet::PacketType::SERVER_DIRECTORY);
 
   SECTION("unknown / edge strings default to DEFAULT") {
     REQUIRE(Packet::stringToPacketType("") == Packet::PacketType::DEFAULT);
@@ -586,7 +596,7 @@ TEST_CASE("Packet type conversion round-trip", "[packet][type-roundtrip]") {
       Packet::PacketType::UPDATE_USER,   Packet::PacketType::ROOM_CREATE,
       Packet::PacketType::ROOM_LIST,     Packet::PacketType::LOAD_MESSAGE_HISTORY,
       Packet::PacketType::ROOM_INVITE,   Packet::PacketType::ROOM_DELETE,
-      Packet::PacketType::ROOM_KICK};
+      Packet::PacketType::ROOM_KICK,     Packet::PacketType::SERVER_DIRECTORY};
 
   for (const auto type : types) {
     REQUIRE(Packet::stringToPacketType(Packet::packetTypeToString(type)) == type);

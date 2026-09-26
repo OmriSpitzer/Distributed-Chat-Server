@@ -34,9 +34,8 @@ TEST_CASE("ClientState default state is empty", "[client_state][ctor][edge]") {
   REQUIRE_FALSE(state.isLoggedIn());
   REQUIRE_FALSE(state.isAdmin());
   REQUIRE(state.getRooms().empty());
+  REQUIRE(state.getServerEndpoints().empty());
 }
-
-// 2. isLoggedIn follows non-guest user
 TEST_CASE("ClientState isLoggedIn follows non-guest user", "[client_state][login][edge]") {
   ClientState state;
 
@@ -72,6 +71,7 @@ TEST_CASE("ClientState clear after login session", "[client_state][clear]") {
   REQUIRE_FALSE(state.currentRoom.has_value());
   REQUIRE_FALSE(state.isLoggedIn());
   REQUIRE(state.getRooms().empty());
+  REQUIRE(state.getServerEndpoints().empty());
 }
 
 // 5. room without user is not logged in

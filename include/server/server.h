@@ -34,6 +34,9 @@ public:
   // get connections
   ConnectionManager &connections();
 
+  // get gossip manager
+  GossipManager &gossip();
+
   // get health monitor
   HealthMonitor &health();
 

@@ -32,6 +32,7 @@ public:
     ROOM_INVITE,
     ROOM_DELETE,
     ROOM_KICK,
+    SERVER_DIRECTORY,
   };
 
   // constructors

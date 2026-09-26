@@ -168,9 +168,11 @@ void Network::readerLoop() {
       continue;
     }
 
-    // unsolicited chat / room-directory pushes
-    if (packet->responseCode == 0 && (packet->type == Packet::PacketType::MESSAGE ||
-                                      packet->type == Packet::PacketType::ROOM_LIST)) {
+    // unsolicited chat / room / server-directory pushes
+    if (packet->responseCode == 0 &&
+        (packet->type == Packet::PacketType::MESSAGE ||
+         packet->type == Packet::PacketType::ROOM_LIST ||
+         packet->type == Packet::PacketType::SERVER_DIRECTORY)) {
       if (packet->type == Packet::PacketType::MESSAGE) {
         Logger::logInfo("Network", "[" + packet->sender + "]: " + packet->message);
       }
@@ -184,6 +186,8 @@ void Network::readerLoop() {
         handler(*packet);
       } else if (packet->type == Packet::PacketType::ROOM_LIST) {
         Logger::logWarning("Network", "ROOM_LIST ignored — no push handler");
+      } else if (packet->type == Packet::PacketType::SERVER_DIRECTORY) {
+        Logger::logWarning("Network", "SERVER_DIRECTORY ignored — no push handler");
       }
       continue;
     }

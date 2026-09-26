@@ -34,6 +34,7 @@ static const std::unordered_map<Packet::PacketType, std::string> packet_type_to_
     {Packet::PacketType::ROOM_INVITE, "ROOM_INVITE"},
     {Packet::PacketType::ROOM_DELETE, "ROOM_DELETE"},
     {Packet::PacketType::ROOM_KICK, "ROOM_KICK"},
+    {Packet::PacketType::SERVER_DIRECTORY, "SERVER_DIRECTORY"},
 };
 
 // constructor

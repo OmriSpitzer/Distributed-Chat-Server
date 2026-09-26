@@ -200,6 +200,13 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
+  // server directory is push-only
+  case Packet::PacketType::SERVER_DIRECTORY: {
+    response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+    response.message = "unsupported on client port";
+    break;
+  }
+
     // login packet
   case Packet::PacketType::LOGIN: {
     try {
@@ -243,6 +250,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
       response.room = encodeRoomDirectory();
+
+      // refresh failover hints so the client matches this node's live view
+      connections.refreshServerDirectory(session.getSocket());
     } catch (...) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
       response.message = std::string("login failed");
@@ -296,6 +306,9 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
       response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
       response.message = user.serialize();
       response.room = encodeRoomDirectory();
+
+      // refresh failover hints so the client matches this node's live view
+      connections.refreshServerDirectory(session.getSocket());
     } catch (const DatabaseManager::ConstraintError &e) {
       response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
       response.message = e.what();

@@ -64,6 +64,8 @@
  * 20. dial connects to peer
  * 21. concurrent rumor
  * 22. typical LOGIN / MESSAGE / LOGOUT flow
+ * 23. tracks live client endpoints from HELLO / disconnect
+ * 24. pushes SERVER_DIRECTORY on HELLO / peer disconnect
  */
 
 namespace {
@@ -182,6 +184,8 @@ struct GossipFixture {
     peerPort = nextPort();
     config::NODE_ID = nodeId;
     config::PEER_PORT = peerPort;
+    config::SERVER_HOST = "127.0.0.1";
+    config::PORT = nextPort();
     config::PEERS.clear();
     gossip = std::make_unique<GossipManager>(connections);
   }
@@ -230,13 +234,16 @@ struct GossipFixture {
     return client;
   }
 
-  bool handshake(SOCKET client, const std::string &remoteNodeId) {
+  bool handshake(SOCKET client, const std::string &remoteNodeId,
+                 std::uint16_t clientPort = 0) {
     auto hello = socket_io::readPacket(client);
     if (!hello || hello->type != Packet::PacketType::GOSSIP_HELLO) {
       return false;
     }
 
     Packet reply(remoteNodeId, "*", Packet::PacketType::GOSSIP_HELLO);
+    const std::uint16_t port = clientPort == 0 ? nextPort() : clientPort;
+    reply.message = "127.0.0.1:" + std::to_string(port);
     if (!socket_io::writePacket(client, reply)) {
       return false;
     }
@@ -831,5 +838,116 @@ TEST_CASE("GossipManager typical LOGIN MESSAGE LOGOUT flow", "[gossip_manager][f
   fixture.gossip->rumor(makeEvent("LOGOUT", unique("fo"), user, fixture.nodeId, "0"));
   REQUIRE(waitUntil(std::chrono::seconds(1), [&] { return !db().isUserOnline(user); }));
 
+  fixture.gossip->stop();
+}
+
+// 23. tracks live client endpoints from HELLO / disconnect
+TEST_CASE("GossipManager tracks live client endpoints from HELLO",
+          "[gossip_manager][peer][hello][endpoints]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  REQUIRE(fixture.start());
+
+  auto self = fixture.gossip->getClientPeers();
+  REQUIRE(self.size() == 1);
+  REQUIRE(self.count(fixture.nodeId) == 1);
+  REQUIRE(self.at(fixture.nodeId).host == "127.0.0.1");
+  REQUIRE(self.at(fixture.nodeId).port == config::PORT);
+  REQUIRE(self.at(fixture.nodeId).getSocket() == INVALID_SOCKET);
+
+  SOCKET peer = fixture.connectAsPeer();
+  REQUIRE(peer != INVALID_SOCKET);
+  const std::string remote = unique("peer");
+  const std::uint16_t remoteClientPort = nextPort();
+  REQUIRE(fixture.handshake(peer, remote, remoteClientPort));
+
+  REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
+    const auto live = fixture.gossip->getClientPeers();
+    auto it = live.find(remote);
+    return it != live.end() && it->second.host == "127.0.0.1" &&
+           it->second.port == remoteClientPort && it->second.getSocket() != INVALID_SOCKET;
+  }));
+
+  socket_io::close(peer);
+  REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
+    return fixture.gossip->getClientPeers().count(remote) == 0;
+  }));
+
+  auto after = fixture.gossip->getClientPeers();
+  REQUIRE(after.size() == 1);
+  REQUIRE(after.count(fixture.nodeId) == 1);
+
+  fixture.gossip->stop();
+}
+
+// 24. pushes SERVER_DIRECTORY on HELLO / peer disconnect
+TEST_CASE("GossipManager pushes SERVER_DIRECTORY to chat clients on peer change",
+          "[gossip_manager][peer][directory]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  config::SERVER_HOST = "127.0.0.1";
+  config::PORT = nextPort();
+  REQUIRE(fixture.start());
+
+  REQUIRE(fixture.connections.startListening(0));
+  std::thread acceptThread([&] { fixture.connections.acceptLoop(); });
+
+  SOCKET listenFd = fixture.connections.getListeningSocket();
+  sockaddr_in bound{};
+  int boundLen = sizeof(bound);
+  REQUIRE(getsockname(listenFd, reinterpret_cast<sockaddr *>(&bound), &boundLen) == 0);
+
+  SOCKET client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  REQUIRE(client != INVALID_SOCKET);
+  sockaddr_in dest{};
+  dest.sin_family = AF_INET;
+  dest.sin_port = bound.sin_port;
+  dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  REQUIRE(::connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) == 0);
+  REQUIRE(setRecvTimeout(client, 3000));
+
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return !fixture.connections.getSessions().empty(); }));
+
+  auto welcome = socket_io::readPacket(client);
+  REQUIRE(welcome);
+  REQUIRE(welcome->type == Packet::PacketType::ROOM_LIST);
+  auto connectDir = socket_io::readPacket(client);
+  REQUIRE(connectDir);
+  REQUIRE(connectDir->type == Packet::PacketType::SERVER_DIRECTORY);
+  REQUIRE(connectDir->message.find("endpoint(" + fixture.nodeId + "|") != std::string::npos);
+
+  SOCKET peer = fixture.connectAsPeer();
+  REQUIRE(peer != INVALID_SOCKET);
+  const std::string remote = unique("dirpeer");
+  const std::uint16_t remoteClientPort = nextPort();
+  REQUIRE(fixture.handshake(peer, remote, remoteClientPort));
+
+  REQUIRE(setRecvTimeout(client, 500));
+  bool sawRemote = false;
+  for (int i = 0; i < 20 && !sawRemote; ++i) {
+    auto push = socket_io::readPacket(client);
+    if (!push || push->type != Packet::PacketType::SERVER_DIRECTORY)
+      continue;
+    sawRemote = push->message.find("endpoint(" + remote + "|127.0.0.1|" +
+                                   std::to_string(remoteClientPort) + ")") != std::string::npos;
+  }
+  REQUIRE(sawRemote);
+
+  socket_io::close(peer);
+  bool sawDrop = false;
+  for (int i = 0; i < 20 && !sawDrop; ++i) {
+    auto push = socket_io::readPacket(client);
+    if (!push || push->type != Packet::PacketType::SERVER_DIRECTORY)
+      continue;
+    sawDrop = push->message.find(remote) == std::string::npos &&
+              push->message.find("endpoint(" + fixture.nodeId + "|") != std::string::npos;
+  }
+  REQUIRE(sawDrop);
+
+  socket_io::close(client);
+  fixture.connections.stopListening();
+  if (acceptThread.joinable())
+    acceptThread.join();
   fixture.gossip->stop();
 }

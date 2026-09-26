@@ -13,6 +13,7 @@
 #include "utils/RESPONSE_CODES.h"
 #include "utils/logger/consoleLogger.h"
 #include "utils/logger/logger.h"
+#include "utils/models/client_endpoint.h"
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
@@ -89,6 +90,32 @@ void Client::applyRoomListPush(const Packet &packet) {
   welcomeCv.notify_all();
 }
 
+// apply SERVER_DIRECTORY push (failover hints from gossip HELLO map)
+void Client::applyServerDirectoryPush(const Packet &packet) {
+  std::vector<ClientEndpoint> next;
+  std::size_t start = 0;
+  const std::string &body = packet.message;
+  while (start <= body.size()) {
+    const std::size_t end = body.find(';', start);
+    const std::string piece =
+        (end == std::string::npos) ? body.substr(start) : body.substr(start, end - start);
+    if (!piece.empty()) {
+      try {
+        next.push_back(ClientEndpoint::deserialize(piece));
+      } catch (const std::exception &) {
+        // skip malformed pieces so one bad entry does not wipe the directory
+      }
+    }
+    if (end == std::string::npos)
+      break;
+    start = end + 1;
+  }
+
+  const std::size_t count = next.size();
+  state.setServerEndpoints(std::move(next));
+  Logger::logInfo("Client " + id, "Server directory updated (" + std::to_string(count) + ")");
+}
+
 // start the client
 bool Client::start() {
   static ConsoleLogger consoleLogger;
@@ -104,6 +131,8 @@ bool Client::start() {
   network.setPushHandler([this](const Packet &packet) {
     if (packet.type == Packet::PacketType::ROOM_LIST) {
       applyRoomListPush(packet);
+    } else if (packet.type == Packet::PacketType::SERVER_DIRECTORY) {
+      applyServerDirectoryPush(packet);
     } else if (packet.type == Packet::PacketType::MESSAGE) {
       enqueueChatPush(packet);
     }

@@ -35,6 +35,7 @@ PortsPanel::PortsPanel(QWidget *parent, Server *server) : Panel("Node & ports", 
   clientLabel = makeValue(this);
   peerLabel = makeValue(this);
   peersLabel = makeValue(this);
+  endpointsLabel = makeValue(this);
   dbLabel = makeValue(this);
   healthOverall = makeValue(this);
   healthDetails = makeValue(this);
@@ -51,14 +52,16 @@ PortsPanel::PortsPanel(QWidget *parent, Server *server) : Panel("Node & ports", 
   grid->addWidget(clientLabel, 1, 1);
   grid->addWidget(makeKey("Peer port", this), 2, 0);
   grid->addWidget(peerLabel, 2, 1);
-  grid->addWidget(makeKey("Peers", this), 3, 0);
+  grid->addWidget(makeKey("Gossip seeds", this), 3, 0);
   grid->addWidget(peersLabel, 3, 1);
-  grid->addWidget(makeKey("Database", this), 4, 0);
-  grid->addWidget(dbLabel, 4, 1);
-  grid->addWidget(makeKey("Health", this), 5, 0);
-  grid->addWidget(healthOverall, 5, 1);
-  grid->addWidget(makeKey("Checks", this), 6, 0);
-  grid->addWidget(healthDetails, 6, 1);
+  grid->addWidget(makeKey("Client endpoints", this), 4, 0);
+  grid->addWidget(endpointsLabel, 4, 1);
+  grid->addWidget(makeKey("Database", this), 5, 0);
+  grid->addWidget(dbLabel, 5, 1);
+  grid->addWidget(makeKey("Health", this), 6, 0);
+  grid->addWidget(healthOverall, 6, 1);
+  grid->addWidget(makeKey("Checks", this), 7, 0);
+  grid->addWidget(healthDetails, 7, 1);
   grid->setColumnStretch(1, 1);
 
   getBodyLayout()->addLayout(grid);
@@ -88,9 +91,28 @@ void PortsPanel::refresh() {
   }
 
   if (server() == nullptr) {
+    endpointsLabel->setText("—");
     healthOverall->setText("—");
     healthDetails->setText("—");
     return;
+  }
+
+  {
+    const auto live = server()->gossip().getClientPeers();
+    if (live.empty()) {
+      endpointsLabel->setText("(none)");
+    } else {
+      std::ostringstream oss;
+      bool first = true;
+      for (const auto &entry : live) {
+        if (!first) {
+          oss << ", ";
+        }
+        first = false;
+        oss << entry.second.nodeId << "=" << entry.second.host << ":" << entry.second.port;
+      }
+      endpointsLabel->setText(QString::fromStdString(oss.str()));
+    }
   }
 
   // one pass: per-check lines + overall (avoid double ping via check() + checkAll())

@@ -324,7 +324,7 @@ TEST_CASE("socket_io writePacket / readPacket round-trip edges", "[socket_io][ro
         Packet::PacketType::UPDATE_USER,   Packet::PacketType::ROOM_CREATE,
         Packet::PacketType::ROOM_LIST,     Packet::PacketType::LOAD_MESSAGE_HISTORY,
         Packet::PacketType::ROOM_INVITE,   Packet::PacketType::ROOM_DELETE,
-        Packet::PacketType::ROOM_KICK,
+        Packet::PacketType::ROOM_KICK,     Packet::PacketType::SERVER_DIRECTORY,
     };
     for (Packet::PacketType type : types) {
       ConnectedPair typed;
