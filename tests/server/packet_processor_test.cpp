@@ -7,6 +7,7 @@
  * @date 13-09-2026
  */
 
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/client_session.h"
 #include "server/connection_manager.h"
@@ -44,8 +45,12 @@
  * 11. message success including pipes
  * 12. room join / leave: guest public OK, guest private denied, unknown room
  * 13. room join empty room -> Lobby; leave -> Lobby
- * 14. response envelope fields
- * 15. typical register / message / logout flow
+ * 14. UPDATE_USER
+ * 15. response envelope fields
+ * 16. ROOM_CREATE
+ * 17. LOAD_MESSAGE_HISTORY
+ * 18. typical register / message / logout flow
+ * 19. ADMIN privilege checks
  */
 
 namespace {
@@ -111,7 +116,13 @@ struct Fixture {
 
   User createUser(std::string_view password = "secret") {
     const std::string name = unique("user");
-    return db().createUser(name, password, name + "@example.com");
+    return db().createUser(name, Authentication::hashPassword(password), name + "@example.com");
+  }
+
+  User createAdmin(std::string_view password = "secret") {
+    User user = createUser(password);
+    user.setUserType(User::UserType::ADMIN);
+    return user;
   }
 
   void authenticate(const User &user) {
@@ -520,6 +531,12 @@ TEST_CASE("PacketProcessor ROOM_CREATE", "[packet_processor][create]") {
     REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
   }
 
+  SECTION("SERVER_DIRECTORY on client port rejected") {
+    Packet dir(user.getUsername(), "server", Packet::PacketType::SERVER_DIRECTORY, "", "");
+    const Packet denied = process(dir, fx.session, fx.connections);
+    REQUIRE(denied.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+  }
+
   SECTION("private room: stranger denied until invited") {
     const std::string privateName = unique("vault");
     Packet privateReq(user.getUsername(), "server", Packet::PacketType::ROOM_CREATE, privateName,
@@ -609,4 +626,126 @@ TEST_CASE("PacketProcessor typical register message logout flow", "[packet_proce
           static_cast<int>(RESPONSE_CODES::SUCCESS));
   REQUIRE_FALSE(db().isUserOnline(name));
   REQUIRE_FALSE(fx.session.isAuthenticated());
+}
+
+// 18. ADMIN privilege checks
+TEST_CASE("PacketProcessor ADMIN privilege checks", "[packet_processor][admin]") {
+  Fixture ownerFx;
+  const User owner = ownerFx.createUser();
+  ownerFx.authenticate(owner);
+
+  const std::string privateName = unique("vault");
+  Packet create(owner.getUsername(), "server", Packet::PacketType::ROOM_CREATE, privateName,
+                "PRIVATE");
+  REQUIRE(process(create, ownerFx.session, ownerFx.connections).responseCode ==
+          static_cast<int>(RESPONSE_CODES::SUCCESS));
+  const auto room = RoomManager::getInstance().getRoom(privateName);
+  REQUIRE(room.has_value());
+
+  Fixture adminFx;
+  const User admin = adminFx.createAdmin();
+  adminFx.authenticate(admin);
+
+  Fixture userFx;
+  const User stranger = userFx.createUser();
+  userFx.authenticate(stranger);
+
+  SECTION("admin joins private without allow_list") {
+    Packet join(admin.getUsername(), "server", Packet::PacketType::ROOM_JOIN, privateName, "");
+    const Packet res = process(join, adminFx.session, adminFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(adminFx.session.getRoom().getName() == privateName);
+  }
+
+  SECTION("user still denied private without invite") {
+    Packet join(stranger.getUsername(), "server", Packet::PacketType::ROOM_JOIN, privateName, "");
+    const Packet res = process(join, userFx.session, userFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+    REQUIRE(res.message.find("not allowed") != std::string::npos);
+  }
+
+  SECTION("admin invites without being creator") {
+    Packet invite(admin.getUsername(), "server", Packet::PacketType::ROOM_INVITE, privateName,
+                  stranger.getUsername());
+    const Packet res = process(invite, adminFx.session, adminFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(db().isAllowed(room->getId(), stranger.getEmail()));
+
+    Packet join(stranger.getUsername(), "server", Packet::PacketType::ROOM_JOIN, privateName, "");
+    REQUIRE(process(join, userFx.session, userFx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::SUCCESS));
+  }
+
+  SECTION("user invite without being creator is forbidden") {
+    Packet invite(stranger.getUsername(), "server", Packet::PacketType::ROOM_INVITE, privateName,
+                  admin.getUsername());
+    const Packet res = process(invite, userFx.session, userFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::FORBIDDEN));
+  }
+
+  SECTION("admin kicks without being creator") {
+    Packet invite(owner.getUsername(), "server", Packet::PacketType::ROOM_INVITE, privateName,
+                  stranger.getUsername());
+    REQUIRE(process(invite, ownerFx.session, ownerFx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE(db().isAllowed(room->getId(), stranger.getEmail()));
+
+    Packet kick(admin.getUsername(), "server", Packet::PacketType::ROOM_KICK, privateName,
+                stranger.getUsername());
+    const Packet res = process(kick, adminFx.session, adminFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE_FALSE(db().isAllowed(room->getId(), stranger.getEmail()));
+  }
+
+  SECTION("user kick without being creator is forbidden") {
+    Packet kick(stranger.getUsername(), "server", Packet::PacketType::ROOM_KICK, privateName,
+                owner.getUsername());
+    const Packet res = process(kick, userFx.session, userFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::FORBIDDEN));
+  }
+
+  SECTION("creator can kick") {
+    Packet invite(owner.getUsername(), "server", Packet::PacketType::ROOM_INVITE, privateName,
+                  stranger.getUsername());
+    REQUIRE(process(invite, ownerFx.session, ownerFx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::SUCCESS));
+
+    Packet kick(owner.getUsername(), "server", Packet::PacketType::ROOM_KICK, privateName,
+                stranger.getUsername());
+    const Packet res = process(kick, ownerFx.session, ownerFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE_FALSE(db().isAllowed(room->getId(), stranger.getEmail()));
+  }
+
+  SECTION("admin deletes a private room") {
+    Packet del(admin.getUsername(), "server", Packet::PacketType::ROOM_DELETE, privateName, "");
+    const Packet res = process(del, adminFx.session, adminFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+    REQUIRE_FALSE(RoomManager::getInstance().getRoom(privateName).has_value());
+  }
+
+  SECTION("user cannot delete a room") {
+    Packet del(stranger.getUsername(), "server", Packet::PacketType::ROOM_DELETE, privateName, "");
+    const Packet res = process(del, userFx.session, userFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::FORBIDDEN));
+    REQUIRE(RoomManager::getInstance().getRoom(privateName).has_value());
+  }
+
+  SECTION("admin cannot delete Lobby or General") {
+    Packet lobby(admin.getUsername(), "server", Packet::PacketType::ROOM_DELETE, "Lobby", "");
+    REQUIRE(process(lobby, adminFx.session, adminFx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::ERROR));
+    Packet general(admin.getUsername(), "server", Packet::PacketType::ROOM_DELETE, "General", "");
+    REQUIRE(process(general, adminFx.session, adminFx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::ERROR));
+    REQUIRE(RoomManager::getInstance().getRoom("Lobby").has_value());
+    REQUIRE(RoomManager::getInstance().getRoom("General").has_value());
+  }
+
+  SECTION("anonymous cannot delete") {
+    ClientSession anon(nextFakeSocket(), User::anonymousUser(), RoomManager::LOBBY);
+    Packet del("anon", "server", Packet::PacketType::ROOM_DELETE, privateName, "");
+    const Packet res = process(del, anon, ownerFx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::FORBIDDEN));
+  }
 }

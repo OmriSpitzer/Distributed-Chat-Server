@@ -7,10 +7,11 @@
 
 #include "server/gossip_manager.h"
 #include "config/config.h"
+#include "server/client_session.h"
 #include "server/database_manager.h"
 #include "server/room_manager.h"
 #include "utils/gossip_payload.h"
-#include "utils/models/logger.h"
+#include "utils/logger/logger.h"
 #include "utils/models/message.h"
 #include "utils/models/user.h"
 #include "utils/socket_io.h"
@@ -31,6 +32,53 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <ws2tcpip.h>
+
+// getters
+std::unordered_map<std::string, ClientEndpoint> GossipManager::getClientPeers() const {
+  std::lock_guard lock(peersMutex);
+  std::unordered_map<std::string, ClientEndpoint> out;
+  for (const auto &entry : clientPeers) {
+    if (entry.second.isLiveClientEndpoint()) {
+      out.emplace(entry.first, entry.second);
+    }
+  }
+  return out;
+}
+
+// sockets of remote peers that can receive gossip (caller holds peersMutex)
+std::vector<SOCKET> GossipManager::peerSocketsLocked() const {
+  std::vector<SOCKET> sockets;
+  sockets.reserve(clientPeers.size());
+  for (const auto &entry : clientPeers) {
+    const SOCKET fd = entry.second.getSocket();
+    if (fd != INVALID_SOCKET) {
+      sockets.push_back(fd);
+    }
+  }
+  return sockets;
+}
+
+std::string GossipManager::buildServerDirectoryLocked() const {
+  std::string out;
+  for (const auto &entry : clientPeers) {
+    if (!entry.second.isLiveClientEndpoint())
+      continue;
+    if (!out.empty())
+      out.push_back(';');
+    out += entry.second.serialize();
+  }
+  return out;
+}
+
+std::string GossipManager::buildServerDirectory() const {
+  std::lock_guard lock(peersMutex);
+  return buildServerDirectoryLocked();
+}
+
+void GossipManager::notifyServerDirectoryChanged() {
+  const std::string body = buildServerDirectory();
+  connections.pushServerDirectory(body);
+}
 
 // parse host and port from a string
 bool GossipManager::parseHostPort(const std::string &addr, std::string &host, std::uint16_t &port) {
@@ -82,6 +130,11 @@ void GossipManager::start() {
   // start the accept, dial, and anti-entropy threads
   listeningSocket = socketFd;
   stopped = false;
+  {
+    std::lock_guard lock(peersMutex);
+    clientPeers.insert_or_assign(
+        config::NODE_ID, ClientEndpoint(config::NODE_ID, config::SERVER_HOST, config::PORT));
+  }
   acceptThread = std::thread([this] { acceptLoop(); });
   dialThread = std::thread([this] { dialLoop(); });
   antiEntropyThread = std::thread([this] { antiEntropyLoop(); });
@@ -111,8 +164,8 @@ void GossipManager::stop() {
     std::lock_guard lock(peersMutex);
     sockets.assign(openPeerSockets.begin(), openPeerSockets.end());
     openPeerSockets.clear();
-    peers.clear();
     outboundAddrs.clear();
+    clientPeers.clear();
   }
   for (SOCKET fd : sockets)
     socket_io::close(fd);
@@ -147,13 +200,14 @@ void GossipManager::acceptLoop() {
     if (peer == INVALID_SOCKET)
       break;
 
-    // send a hello packet to the peer
+    // send a hello packet to the peer and advertise the client endpoint
     SOCKET fd = peer;
     {
       std::lock_guard lock(peersMutex);
       openPeerSockets.insert(fd);
     }
     Packet hello(config::NODE_ID, "*", Packet::PacketType::GOSSIP_HELLO);
+    hello.message = config::SERVER_HOST + ":" + std::to_string(config::PORT);
     sendPacket(fd, hello);
 
     // create a thread to handle the peer
@@ -164,15 +218,23 @@ void GossipManager::acceptLoop() {
 // dial loop
 void GossipManager::dialLoop() {
   while (!stopped) {
+    const std::string selfGossip =
+        config::SERVER_HOST + ":" + std::to_string(config::PEER_PORT);
+
     // dial all peers
     for (const auto &addr : config::PEERS) {
       if (stopped)
         break;
 
+      // one dialer per undirected edge (avoid dual dial + HELLO reject churn)
+      if (selfGossip >= addr)
+        continue;
+
       // check if we have reached the maximum number of peers
       {
         std::lock_guard lock(peersMutex);
-        if (!config::PEERS.empty() && peers.size() >= config::PEERS.size())
+        const std::size_t remoteCount = peerSocketsLocked().size();
+        if (!config::PEERS.empty() && remoteCount >= config::PEERS.size())
           break;
 
         // check if the address is already in the list of outbound addresses
@@ -200,9 +262,10 @@ void GossipManager::dialLoop() {
       if (sock == INVALID_SOCKET)
         continue;
 
-      // send a hello packet to the peer
+      // send a hello packet to the peer and advertise the client endpoint
       const SOCKET fd = sock;
       Packet hello(config::NODE_ID, "*", Packet::PacketType::GOSSIP_HELLO);
+      hello.message = config::SERVER_HOST + ":" + std::to_string(config::PORT);
       if (!sendPacket(fd, hello)) {
         socket_io::close(sock);
         continue;
@@ -250,10 +313,7 @@ void GossipManager::antiEntropyLoop() {
     std::vector<SOCKET> sockets;
     {
       std::lock_guard lock(peersMutex);
-      sockets.reserve(peers.size());
-      for (const auto &entry : peers) {
-        sockets.push_back(entry.first);
-      }
+      sockets = peerSocketsLocked();
     }
     for (SOCKET fd : sockets) {
       sendPacket(fd, digest);
@@ -277,8 +337,18 @@ void GossipManager::handlePeer(SOCKET peerSocket) {
     switch (packet->type) {
       // hello packet
     case Packet::PacketType::GOSSIP_HELLO: {
-      // register the peer
-      if (!registerPeer(peerSocket, packet->sender)) {
+      // parse the client endpoint from the hello message (chat TCP, not gossip port)
+      std::string host;
+      std::uint16_t port = 0;
+      if (!parseHostPort(packet->message, host, port)) {
+        Logger::logWarning("GossipManager",
+                           "HELLO from " + packet->sender + " missing client endpoint");
+        host.clear();
+        port = 0;
+      }
+
+      // register the peer and track its client endpoint when advertised
+      if (!registerPeer(peerSocket, packet->sender, host, port)) {
         Logger::logWarning("GossipManager", "Rejected peer HELLO from " + packet->sender);
         reject = true;
         break;
@@ -287,6 +357,10 @@ void GossipManager::handlePeer(SOCKET peerSocket) {
       // set the peer as registered
       registered = true;
       Logger::logInfo("GossipManager", "Peer registered: " + packet->sender);
+
+      // live client endpoint advertised — refresh directory for chat clients
+      if (!host.empty() && port != 0)
+        notifyServerDirectoryChanged();
       break;
     }
 
@@ -397,20 +471,20 @@ void GossipManager::handlePeer(SOCKET peerSocket) {
 }
 
 // register a peer
-bool GossipManager::registerPeer(SOCKET socket, const std::string &nodeId) {
+bool GossipManager::registerPeer(SOCKET socket, const std::string &nodeId, const std::string &host,
+                                 std::uint16_t port) {
   // check if the peer is the local node
-  if (nodeId == config::NODE_ID)
+  if (nodeId.empty() || nodeId == config::NODE_ID)
     return false;
 
-  // check if the peer is already registered
   std::lock_guard lock(peersMutex);
-  for (const auto &p : peers) {
-    if (p.second == nodeId)
-      return false;
-  }
 
-  // add the peer to the list of peers
-  peers[socket] = nodeId;
+  // check if the peer is already registered (live client map is keyed by node id)
+  auto existing = clientPeers.find(nodeId);
+  if (existing != clientPeers.end())
+    return false;
+
+  clientPeers.insert_or_assign(nodeId, ClientEndpoint(nodeId, host, port, socket));
   return true;
 }
 
@@ -581,6 +655,70 @@ bool GossipManager::applyEvent(const Packet &event) {
     return true;
   }
 
+  // room deleted — drop locally if still present (idempotent)
+  if (type == "ROOM_DELETED") {
+    const std::string roomName = event.room;
+    if (roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_DELETED event");
+      return false;
+    }
+    if (roomName == RoomManager::LOBBY.getName() || roomName == RoomManager::GENERAL.getName()) {
+      Logger::logWarning("GossipManager", "ROOM_DELETED refused for seed room: " + roomName);
+      return false;
+    }
+
+    if (RoomManager::getInstance().getRoom(roomName)) {
+      if (!RoomManager::getInstance().deleteRoom(roomName, connections)) {
+        Logger::logWarning("GossipManager", "ROOM_DELETED apply failed for " + roomName);
+        return false;
+      }
+    }
+
+    Packet push("server", "*", Packet::PacketType::ROOM_LIST, "",
+                Room::serializeList(RoomManager::getInstance().listRooms()), 0);
+    RoomManager::getInstance().broadcastAll(push, connections);
+    Logger::logInfo("GossipManager", "Applied ROOM_DELETED for " + roomName);
+    return true;
+  }
+
+  // kick — drop allow-list entry and force-leave if the user is here
+  if (type == "ROOM_KICK") {
+    const std::string roomName = event.room;
+    if (username.empty() || roomName.empty()) {
+      Logger::logWarning("GossipManager", "Malformed ROOM_KICK event");
+      return false;
+    }
+
+    auto room = RoomManager::getInstance().getRoom(roomName);
+    auto user = db.getUser(username);
+    if (room && user) {
+      try {
+        db.removeFromAllowList(room->getId(), user->getEmail());
+      } catch (const std::exception &e) {
+        Logger::logWarning("GossipManager", std::string("ROOM_KICK ACL remove failed for ") +
+                                                username + " -> " + roomName + ": " + e.what());
+      }
+    }
+
+    for (const auto &entry : connections.getSessions()) {
+      const SOCKET socket = entry.first;
+      const auto &session = entry.second;
+      if (!session || !session->isAuthenticated() || session->getUser().getUsername() != username) {
+        continue;
+      }
+      if (session->getRoom().getName() != roomName) {
+        continue;
+      }
+      RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *session);
+      Packet lobbyPush("server", "*", Packet::PacketType::ROOM_LIST, RoomManager::LOBBY.getName(),
+                       Room::serializeList(RoomManager::getInstance().listRooms()), 0);
+      connections.sendPacket(socket, lobbyPush);
+    }
+
+    Logger::logInfo("GossipManager", "Applied ROOM_KICK for " + username + " from " + roomName);
+    return true;
+  }
+
   // room join event
   if (type == "ROOM_JOIN") {
     const std::string newRoom = event.room.empty() ? "Lobby" : event.room;
@@ -692,7 +830,7 @@ bool GossipManager::applyEvent(const Packet &event) {
   if (inserted) {
     Packet push(username, "", Packet::PacketType::MESSAGE, roomName, content, 0);
     push.timestamp = static_cast<std::uint64_t>(created);
-  RoomManager::getInstance().broadcast(*room, push, connections, INVALID_SOCKET);
+    RoomManager::getInstance().broadcast(*room, push, connections, INVALID_SOCKET);
   }
   return true;
 }
@@ -728,10 +866,7 @@ void GossipManager::rumor(const Packet &event) {
   std::vector<SOCKET> sockets;
   {
     std::lock_guard lock(peersMutex);
-    sockets.reserve(peers.size());
-    for (const auto &entry : peers) {
-      sockets.push_back(entry.first);
-    }
+    sockets = peerSocketsLocked();
   }
 
   // send the packet to all peers
@@ -748,11 +883,23 @@ bool GossipManager::sendPacket(SOCKET socket, const Packet &packet) {
   return socket_io::writePacket(socket, packet);
 }
 
-// remove a peer
+// remove a peer (peer disconnect = no longer a live client endpoint)
 void GossipManager::removePeer(SOCKET socket) {
-  std::lock_guard lock(peersMutex);
-  peers.erase(socket);
-  outboundAddrs.erase(socket);
+  bool removedLive = false;
+  {
+    std::lock_guard lock(peersMutex);
+    for (auto it = clientPeers.begin(); it != clientPeers.end();) {
+      if (it->second.getSocket() == socket) {
+        removedLive = it->second.isLiveClientEndpoint();
+        it = clientPeers.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    outboundAddrs.erase(socket);
+  }
+  if (removedLive)
+    notifyServerDirectoryChanged();
 }
 
 // spawn a peer handler

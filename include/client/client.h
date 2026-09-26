@@ -8,14 +8,17 @@
 #include "client/client_state.h"
 #include "client/network.h"
 #include "client/packet_handler.h"
+#include "utils/health/client_health_adapter.h"
 #include "utils/models/packet.h"
 #include <condition_variable>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
 
 struct ChatLine {
   std::string author;
@@ -65,6 +68,12 @@ public:
   // invite a user to a private room (requires login). Empty = success; otherwise error text.
   std::string inviteToRoom(std::string_view roomName, std::string_view inviteeUsername);
 
+  // kick a user from a room (ADMIN, or room creator). Empty = success; otherwise error text.
+  std::string kickFromRoom(std::string_view roomName, std::string_view targetUsername);
+
+  // delete a room (ADMIN only; not Lobby / General). Empty = success; otherwise error text.
+  std::string deleteRoom(std::string_view roomName);
+
   // update profile (username and optional new password). Empty = success; otherwise error text.
   std::string updateProfile(std::string_view username, std::string_view newPassword,
                             std::string_view email);
@@ -91,8 +100,9 @@ private:
   std::condition_variable welcomeCv; // signaled when ROOM_LIST applied
   bool welcomeReceived{false};       // first ROOM_LIST (connect snapshot) seen
 
-  std::mutex chatMutex;           // guards pendingChat
-  std::vector<ChatLine> pendingChat;
+  std::mutex chatMutex;              // guards pendingChat
+  std::vector<ChatLine> pendingChat; // queued chat messages
+  std::unique_ptr<ClientHealthAdapter> healthAdapter; // set after connect in start()
 
   // waiting for a packet of a specific type
   std::optional<Packet> waitFor(Packet::PacketType expected);
@@ -102,6 +112,9 @@ private:
 
   // apply the room list push
   void applyRoomListPush(const Packet &packet);
+
+  // apply SERVER_DIRECTORY push (failover hints)
+  void applyServerDirectoryPush(const Packet &packet);
 
   // enqueue a chat push for the UI
   void enqueueChatPush(const Packet &packet);

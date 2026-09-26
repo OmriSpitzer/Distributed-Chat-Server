@@ -1,6 +1,6 @@
 # Distributed Chat Server
 
-[![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)[![CMake](https://img.shields.io/badge/CMake-3.16%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)[![Platform](https://img.shields.io/badge/Windows-Winsock-0078D6?logo=windows&logoColor=white)](#quick-start)[![Tests](https://img.shields.io/badge/tests-Catch2%20v3.8-FF6B2B)](https://github.com/catchorg/Catch2)[![Version](https://img.shields.io/badge/version-1.0.0-informational)]()
+ [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/) [![CMake](https://img.shields.io/badge/CMake-3.16%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/) [![Platform](https://img.shields.io/badge/Windows-Winsock-0078D6?logo=windows&logoColor=white)](#quick-start) [![Tests](https://img.shields.io/badge/tests-Catch2%20v3.8-FF6B2B)](https://github.com/catchorg/Catch2) [![Version](https://img.shields.io/badge/version-1.0.0-informational)]()
 
 C++17 chat cluster for Windows. Clients talk to a TCP server over framed binary packets; servers gossip with each other so presence, membership, and messages stay in sync across nodes.
 
@@ -20,7 +20,7 @@ Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` f
 | [architecture.md](architecture.md) | Layered classes, Mermaid diagrams, client/server call paths, wire sequence |
 | [database.md](database.md) | Per-node SQLite schema, ER model, `allow_list`, query catalog, write paths |
 | [tests/TESTS.md](tests/TESTS.md) | Catch2 catalog and remaining gaps |
-| [STEPS.md](STEPS.md) | Backlog and open work |
+| [FUTURE_WORK.md](FUTURE_WORK.md) | Backlog and open work |
 
 ## Features
 
@@ -198,10 +198,10 @@ Headers live in `include/`; implementations live in `src/`. CMake adds `include/
 ctest --test-dir build --output-on-failure
 ```
 
-See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**24** executables, **326** `TEST_CASE`s).
+See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**24** executables, **339** `TEST_CASE`s).
 
 ## Status
 
-**Working today:** framed TCP, Qt and console clients/servers (`--test` for console), register / login / logout / profile, public and private rooms (join, leave, create, invite), live chat plus history for registered users, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, PowerShell cluster helpers, Catch2 coverage for utils, auth, client, and server.
+**Working today:** framed TCP, Qt and console clients/servers (`--test` for console), register / login / logout / profile, public and private rooms (join, leave, create, invite, kick, delete), ADMIN gates (invite/kick any room, delete except Lobby/General, join PRIVATE), live chat plus history for registered users, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, PowerShell cluster helpers, Catch2 coverage for utils, auth, client, and server.
 
-**Still open:** WebSocket or a shared remote database, ADMIN role checks, gossip replicating password hashes, clear stale `online_users` on node boot, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). See [STEPS.md](STEPS.md).
+**Still open:** WebSocket or a shared remote database, clear stale `online_users` on node boot, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). See [FUTURE_WORK.md](FUTURE_WORK.md).

@@ -11,7 +11,9 @@
 #include "client/packet_builder.h"
 #include "client/packet_handler.h"
 #include "utils/RESPONSE_CODES.h"
-#include "utils/models/logger.h"
+#include "utils/logger/consoleLogger.h"
+#include "utils/logger/logger.h"
+#include "utils/models/client_endpoint.h"
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
@@ -20,6 +22,7 @@
 #include <cstdint>
 #include <ctime>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -87,8 +90,37 @@ void Client::applyRoomListPush(const Packet &packet) {
   welcomeCv.notify_all();
 }
 
+// apply SERVER_DIRECTORY push (failover hints from gossip HELLO map)
+void Client::applyServerDirectoryPush(const Packet &packet) {
+  std::vector<ClientEndpoint> next;
+  std::size_t start = 0;
+  const std::string &body = packet.message;
+  while (start <= body.size()) {
+    const std::size_t end = body.find(';', start);
+    const std::string piece =
+        (end == std::string::npos) ? body.substr(start) : body.substr(start, end - start);
+    if (!piece.empty()) {
+      try {
+        next.push_back(ClientEndpoint::deserialize(piece));
+      } catch (const std::exception &) {
+        // skip malformed pieces so one bad entry does not wipe the directory
+      }
+    }
+    if (end == std::string::npos)
+      break;
+    start = end + 1;
+  }
+
+  const std::size_t count = next.size();
+  state.setServerEndpoints(std::move(next));
+  Logger::logInfo("Client " + id, "Server directory updated (" + std::to_string(count) + ")");
+}
+
 // start the client
 bool Client::start() {
+  static ConsoleLogger consoleLogger;
+  Logger::getInstance().addLogger(&consoleLogger);
+
   id = std::to_string(++next_client_id); // create a unique id for the client
 
   {
@@ -99,6 +131,8 @@ bool Client::start() {
   network.setPushHandler([this](const Packet &packet) {
     if (packet.type == Packet::PacketType::ROOM_LIST) {
       applyRoomListPush(packet);
+    } else if (packet.type == Packet::PacketType::SERVER_DIRECTORY) {
+      applyServerDirectoryPush(packet);
     } else if (packet.type == Packet::PacketType::MESSAGE) {
       enqueueChatPush(packet);
     }
@@ -134,21 +168,21 @@ bool Client::start() {
     state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
   }
 
+  healthAdapter = std::make_unique<ClientHealthAdapter>(*this);
+
   return true;
 }
 
 // enqueue a chat push for the UI
 void Client::enqueueChatPush(const Packet &packet) {
   // only surface messages for the room the client is currently in
-  if (state.currentRoom && !packet.room.empty() &&
-      packet.room != state.currentRoom->getName()) {
+  if (state.currentRoom && !packet.room.empty() && packet.room != state.currentRoom->getName()) {
     return;
   }
   std::lock_guard<std::mutex> lock(chatMutex);
-  pendingChat.push_back(
-      ChatLine{packet.sender, packet.message,
-               packet.timestamp != 0 ? packet.timestamp
-                                     : static_cast<std::uint64_t>(std::time(nullptr))});
+  pendingChat.push_back(ChatLine{
+      packet.sender, packet.message,
+      packet.timestamp != 0 ? packet.timestamp : static_cast<std::uint64_t>(std::time(nullptr))});
 }
 
 // drain chat pushes received on the network thread
@@ -551,6 +585,106 @@ std::string Client::inviteToRoom(std::string_view roomName, std::string_view inv
   return {};
 }
 
+// kick a user from a room (ADMIN, or room creator). Empty = success; otherwise error text.
+std::string Client::kickFromRoom(std::string_view roomName, std::string_view targetUsername) {
+  if (!isAlive()) {
+    const std::string error = "Not connected to the server.";
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+  if (!state.isLoggedIn() || !state.user) {
+    const std::string error = "Log in to kick users.";
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+
+  const std::string room =
+      roomName.empty() && state.currentRoom ? state.currentRoom->getName() : std::string(roomName);
+
+  Packet kickPacket;
+  try {
+    kickPacket = PacketBuilder::buildKickFromRoom(state.user->getUsername(), room, targetUsername);
+  } catch (const std::invalid_argument &e) {
+    Logger::logError("Client " + id, std::string("Kick failed: ") + e.what());
+    return std::string(e.what());
+  }
+
+  if (!network.sendPacket(kickPacket)) {
+    const std::string error = "Failed to send kick request.";
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+
+  auto response = waitFor(Packet::PacketType::ROOM_KICK);
+  if (!response) {
+    const std::string error = "Connection lost while kicking.";
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+
+  if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+    const std::string error =
+        response->message.empty() ? std::string("Kick failed.") : response->message;
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+
+  Logger::logInfo("Client " + id, response->message.empty() ? "User kicked" : response->message);
+  return {};
+}
+
+// delete a room (ADMIN only; not Lobby / General). Empty = success; otherwise error text.
+std::string Client::deleteRoom(std::string_view roomName) {
+  if (!isAlive()) {
+    const std::string error = "Not connected to the server.";
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+  if (!state.isAdmin() || !state.user) {
+    const std::string error = "Admin required to delete a room.";
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+
+  const std::string room =
+      roomName.empty() && state.currentRoom ? state.currentRoom->getName() : std::string(roomName);
+
+  Packet deletePacket;
+  try {
+    deletePacket = PacketBuilder::buildDeleteRoom(state.user->getUsername(), room);
+  } catch (const std::invalid_argument &e) {
+    Logger::logError("Client " + id, std::string("Delete room failed: ") + e.what());
+    return std::string(e.what());
+  }
+
+  if (!network.sendPacket(deletePacket)) {
+    const std::string error = "Failed to send delete-room request.";
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+
+  auto response = waitFor(Packet::PacketType::ROOM_DELETE);
+  if (!response) {
+    const std::string error = "Connection lost while deleting room.";
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+
+  if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+    const std::string error =
+        response->message.empty() ? std::string("Delete room failed.") : response->message;
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+
+  if (state.currentRoom && state.currentRoom->getName() == room) {
+    state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
+  }
+
+  Logger::logInfo("Client " + id, "Room deleted: " + room);
+  return {};
+}
+
 // update profile (username and optional new password). Empty = success; otherwise error text.
 std::string Client::updateProfile(std::string_view username, std::string_view newPassword,
                                   std::string_view email) {
@@ -604,7 +738,8 @@ std::string Client::updateProfile(std::string_view username, std::string_view ne
   return error;
 }
 
-// send a chat message in the current room (guests OK; not persisted). Empty = success; otherwise error text.
+// send a chat message in the current room (guests OK; not persisted). Empty = success; otherwise
+// error text.
 std::string Client::sendMessage(std::string_view text) {
   if (!isAlive()) {
     const std::string error = "Not connected to the server.";
@@ -868,9 +1003,38 @@ void Client::showDashboard() {
       break;
     }
 
-    // logout option
+    // kick (admin) or logout (user)
     case 8: {
-      logout();
+      if (state.isAdmin()) {
+        std::optional<Packet> kickPacket = ConsoleUI::showKickFromRoom(state);
+        if (!kickPacket) {
+          break;
+        }
+        kickFromRoom(kickPacket->room, kickPacket->message);
+      } else {
+        logout();
+      }
+      break;
+    }
+
+    // delete room (admin)
+    case 9: {
+      if (!state.isAdmin()) {
+        break;
+      }
+      std::optional<Packet> deletePacket = ConsoleUI::showDeleteRoom(state);
+      if (!deletePacket) {
+        break;
+      }
+      deleteRoom(deletePacket->room);
+      break;
+    }
+
+    // logout (admin)
+    case 10: {
+      if (state.isAdmin()) {
+        logout();
+      }
       break;
     }
     default:

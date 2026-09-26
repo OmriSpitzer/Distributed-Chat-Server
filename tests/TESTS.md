@@ -2,13 +2,13 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **24** executables, **330** `TEST_CASE`s.
+Totals: **26** executables, **344** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
 `tests/class/` is leftover and is **not** built.
 
-**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [STEPS.md](../STEPS.md)
+**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [FUTURE_WORK.md](../FUTURE_WORKs.md)
 
 Manual multi-node smoke (not Catch2): `.\scripts\run_cluster.ps1` — 2 servers + 2 clients.
 
@@ -23,11 +23,12 @@ ctest --test-dir build --output-on-failure
 | Executable | File | Cases |
 |---|---|---|
 | `user_test` | `tests/utils/user_test.cpp` | 10 |
+| `client_endpoint_test` | `tests/utils/client_endpoint_test.cpp` | 3 |
 | `room_test` | `tests/utils/room_test.cpp` | 12 |
 | `message_test` | `tests/utils/message_test.cpp` | 12 |
 | `packet_test` | `tests/utils/packet_test.cpp` | 11 |
-| `log_message_test` | `tests/utils/log_message_test.cpp` | 12 |
-| `logger_test` | `tests/utils/logger_test.cpp` | 12 |
+| `log_message_test` | `tests/utils/logger/log_message_test.cpp` | 12 |
+| `logger_test` | `tests/utils/logger/logger_test.cpp` | 21 |
 | `serializer_test` | `tests/utils/serializer_test.cpp` | 8 |
 | `socket_io_test` | `tests/utils/socket_io_test.cpp` | 10 |
 | `gossip_payload_test` | `tests/utils/gossip_payload_test.cpp` | 11 |
@@ -44,6 +45,12 @@ ctest --test-dir build --output-on-failure
 - User anonymousUser
 - User serialize / deserialize
 - User deserialize rejects invalid input
+
+### ClientEndpoint (`[client_endpoint]`)
+
+- ClientEndpoint serialize round-trip
+- ClientEndpoint deserialize rejects bad input
+- ClientEndpoint isLiveClientEndpoint
 
 ### Room (`[room]`)
 
@@ -112,12 +119,21 @@ ctest --test-dir build --output-on-failure
 - Logger keeps insertion order
 - Logger getMessage bounds
 - Logger clear removes all messages
-- Logger evicts oldest messages past kMaxMessages
+- Logger evicts oldest messages past MAX_MESSAGES
 - Logger stream output
 - Logger is a singleton
 - Logger heartbeat messages receive unique ids
 - Logger mixed types keep distinct ids and fields
 - Logger size tracks additions and clear
+- Logger facade forwards to registered sinks
+- ConsoleLogger registers as facade sink
+- Logger addLogger ignores nullptr
+- Logger clear does not unregister sinks
+- Logger late addLogger receives future messages only
+- Logger throwing sink skips later sinks
+- Logger reentrant sink log does not deadlock
+- Logger concurrent log size and getMessage
+- ConsoleLogger ERROR writes to stderr
 
 ### Serializer (`[serializer]`)
 
@@ -227,6 +243,10 @@ ctest --test-dir build --output-on-failure
 - PacketBuilder buildCreateRoom rejects empty arguments
 - PacketBuilder buildInviteToRoom maps fields
 - PacketBuilder buildInviteToRoom rejects empty arguments
+- PacketBuilder buildKickFromRoom maps fields
+- PacketBuilder buildKickFromRoom rejects empty arguments
+- PacketBuilder buildDeleteRoom maps fields
+- PacketBuilder buildDeleteRoom rejects empty arguments
 - PacketBuilder buildLoadMessageHistory maps fields
 - PacketBuilder buildLoadMessageHistory rejects empty arguments
 - PacketBuilder sets defaults and timestamp
@@ -264,6 +284,7 @@ ctest --test-dir build --output-on-failure
 - ConsoleUI showUserDashboard without user returns -1
 - ConsoleUI showUserDashboard accepts a valid choice
 - ConsoleUI showUserDashboard EOF returns Logout
+- ConsoleUI showUserDashboard admin EOF returns Logout
 - ConsoleUI showLogin builds a LOGIN packet
 - ConsoleUI showLogin cancel on username exit
 - ConsoleUI showLogin cancel on password exit
@@ -276,6 +297,8 @@ ctest --test-dir build --output-on-failure
 - ConsoleUI showUpdateProfile builds password UPDATE_USER
 - ConsoleUI showUpdateProfile back cancels
 - ConsoleUI showCreateRoom builds a ROOM_CREATE packet
+- ConsoleUI showKickFromRoom builds a ROOM_KICK packet
+- ConsoleUI showDeleteRoom builds a ROOM_DELETE packet
 
 ### Client (`[client]`) — mocked peer, not a live `chat_server`
 
@@ -330,6 +353,7 @@ ctest --test-dir build --output-on-failure
 - DatabaseManager createUser string edges
 - DatabaseManager loginUser success
 - DatabaseManager loginUser failures
+- DatabaseManager seed users login with real passwords
 - DatabaseManager saveMessage success and duplicate id
 - DatabaseManager saveMessage foreign keys
 - DatabaseManager saveMessage content edges
@@ -405,6 +429,7 @@ ctest --test-dir build --output-on-failure
 - PacketProcessor ROOM_CREATE
 - PacketProcessor LOAD_MESSAGE_HISTORY
 - PacketProcessor typical register message logout flow
+- PacketProcessor ADMIN privilege checks
 
 ### ConnectionManager (`[connection_manager]`)
 
@@ -427,6 +452,7 @@ ctest --test-dir build --output-on-failure
 - ConnectionManager stopListening closes clients
 - ConnectionManager typical connect login message disconnect flow
 - ConnectionManager hasSession false for guest and wrong user
+- ConnectionManager pushes SERVER_DIRECTORY after login
 
 ### GossipManager (`[gossip_manager]`)
 
@@ -440,6 +466,7 @@ ctest --test-dir build --output-on-failure
 - GossipManager rumor LOGIN and LOGOUT update presence
 - GossipManager rumor USER_CREATED inserts user
 - GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD
+- GossipManager rumor ROOM_DELETED and ROOM_KICK
 - GossipManager rumor ROOM_JOIN and ROOM_LEAVE
 - GossipManager rumor MESSAGE saves history
 - GossipManager duplicate rumor event id is ignored
@@ -453,6 +480,8 @@ ctest --test-dir build --output-on-failure
 - GossipManager dial connects to listening peer
 - GossipManager concurrent rumor is safe
 - GossipManager typical LOGIN MESSAGE LOGOUT flow
+- GossipManager tracks live client endpoints from HELLO
+- GossipManager pushes SERVER_DIRECTORY to chat clients on peer change
 
 ### Server (`[server]`)
 
@@ -472,19 +501,39 @@ ctest --test-dir build --output-on-failure
 
 ---
 
+## Func / E2E
+
+Live `Server` + `Client` (same libraries as `chat_server` / `chat_client`), not mocks.
+
+| Executable | File | Cases |
+|---|---|---|
+| `two_client_message_push_test` | `tests/func/two_client_message_push_test.cpp` | 1 |
+| `session_rules_test` | `tests/func/session_rules_test.cpp` | 4 |
+
+### Two-client MESSAGE push (`[func][e2e][message]`)
+
+- E2E two clients same room MESSAGE push received
+
+### Session rules (`[func][e2e][room]` / `[auth]`)
+
+- E2E join leave Lobby rules
+- E2E join unknown room returns error
+- E2E logout then login again
+- E2E double login rejected
+
+---
+
 ## Functionality still untested
 
 Product behaviors that exist (or are TODOs) without a dedicated Catch2 case. Highest value first. Cluster rumor / DIGEST / HELLO paths are covered in `gossip_manager_test` above; gaps below are mostly **live dual-process** or missing unit surfaces.
 
-### End-to-end (live `chat_server` + `chat_client` / Client)
+### End-to-end (live `Server` + `Client`)
 
-- Two clients on one node: login, join the same room, send a MESSAGE; the other client receives the push.
+- [x] Two clients on one node: seed login (admin/user), join the same room, send a MESSAGE; the other client receives the push (`tests/func/`).
+- [x] Cannot leave Lobby; leave General → Lobby; join unknown room error + state unchanged; logout/login; double-login rejected (`session_rules_test`).
 - Client join-room / leave-room / send-message full UI round-trips against a live server.
-- Client cannot leave Lobby; join unknown room returns NOT_FOUND and state is unchanged.
 - Disconnect / Ctrl+C while logged in: server clears `online_users` and rumors LOGOUT.
 - Client reconnect after server restart; session is anonymous until login again.
-- Register then login on a second client with the same username is rejected (`user already logged in`).
-- Logout then login again on the same connection.
 - Invite to private room + join allow-list path across a live client.
 
 ### Cluster / gossip (two live processes)
@@ -504,8 +553,6 @@ Smoke: `.\scripts\run_cluster.ps1`.
 
 - `allow_list` CRUD edges as dedicated `DatabaseManager` cases (join/invite covered via packet processor / gossip).
 - Server restart with the same `--db`: users, rooms, messages, membership survive; `online_users` should be empty until login (clear-on-boot not implemented).
-- `deleteRoom` over the wire (no client packet type yet).
-- ADMIN privilege checks (seed has ADMIN; no gates yet).
 
 ### Heartbeat (client + server together)
 

@@ -126,7 +126,7 @@ Identity and credentials. Domain `User` maps `username`, `email`, `user_type` �
 | `password` | `TEXT` | `NOT NULL` — Argon2id |
 | `user_type` | `TEXT` | `NOT NULL CHECK (ADMIN, USER, GUEST)` |
 
-New accounts are always `USER`. `ADMIN` exists in seed data; privilege checks are not enforced yet.
+New accounts are always `USER`. `ADMIN` exists in seed data. Admins may invite or kick in any room, create or delete rooms except Lobby/General, and join PRIVATE rooms without `allow_list`.
 
 ```mermaid
 flowchart LR
@@ -152,7 +152,7 @@ Chat spaces. `id` is assigned by SQLite `AUTOINCREMENT` (`sqlite3_last_insert_ro
 
 Ids **1** (Lobby) and **2** (General) are seed rooms. `deleteRoom` refuses `id < 3`.
 
-`PRIVATE` rooms require an `allow_list` hit (authenticated + listed). Guests cannot join private rooms. Creators are seeded on `ROOM_CREATE`; others via `ROOM_INVITE` / gossip `ROOM_ACL_ADD`.
+`PRIVATE` rooms require an `allow_list` hit (authenticated + listed), except **ADMIN** may join without being listed. Guests cannot join private rooms. Creators are seeded on `ROOM_CREATE`; others via `ROOM_INVITE` / gossip `ROOM_ACL_ADD`. Kick removes the allow-list row (`ROOM_KICK`).
 
 ### `messages`
 
@@ -359,12 +359,13 @@ sequenceDiagram
   participant S as SQLite
 
   alt REGISTER
-    PP->>DB: createUser(username, password, email)
-    DB->>A: hashPassword
-    A-->>DB: Argon2id
+    PP->>A: hashPassword(password)
+    A-->>PP: Argon2id
+    PP->>DB: createUser(username, hash, email)
     DB->>S: INSERT users (user_type = USER)
     S-->>DB: row or UNIQUE fail
     DB-->>PP: User or ConstraintError
+    Note over PP: rumor USER_CREATED with hash (not plaintext)
   else LOGIN
     PP->>DB: loginUser(username, password)
     DB->>S: SELECT … password WHERE username
@@ -413,13 +414,12 @@ Logout clears `online_users` and all `membership` rows for that username, then r
 
 Applied with `INSERT OR IGNORE` so a second boot does not clash.
 
-| `users` | email | type |
-|---------|-------|------|
-| `omri` | `omri@gmail.com` | `USER` |
-| `spitzer` | `spitzer@gmail.com` | `USER` |
-| `admin` | `admin@gmail.com` | `ADMIN` |
+| `users` | email | type | password |
+|---------|-------|------|----------|
+| `admin` | `admin@example.com` | `ADMIN` | Argon2id of `admin` |
+| `user` | `user@example.com` | `USER` | Argon2id of `user` |
 
-Seed password strings are **placeholders**, not real Argon2 hashes.
+Seed passwords are real Argon2id hashes (same parameters as `Authentication::hashPassword`).
 
 | `rooms` | name | type | privacy |
 |---------|------|------|---------|
@@ -443,13 +443,13 @@ flowchart TB
     MID["Message ids unique per node boot"]
     SEED["Cannot delete rooms id 1–2"]
     IGN["INSERT OR IGNORE for gossip idempotency"]
+    GossipHash["USER_CREATED gossip carries Argon2id hash only"]
   end
 
   subgraph Gaps["Still open"]
     OFK["online_users has no FK to users"]
     Casc["No ON DELETE CASCADE — delete_room.sql orders DELETEs"]
     Boot["Stale online_users after crash (no clear-on-boot)"]
-    Hash["USER_CREATED gossip may carry password material"]
   end
 ```
 

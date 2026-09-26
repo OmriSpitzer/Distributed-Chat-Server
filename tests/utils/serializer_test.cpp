@@ -116,6 +116,18 @@ TEST_CASE("Serializer round-trip all packet types", "[serializer][roundtrip]") {
     requireRoundTrip(
         makePacket(Packet::PacketType::ROOM_INVITE, "alice", "server", "Secure", "bob"));
   }
+  SECTION("ROOM_DELETE") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::ROOM_DELETE, "alice", "server", "Labs", ""));
+  }
+  SECTION("ROOM_KICK") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::ROOM_KICK, "alice", "server", "Secure", "bob"));
+  }
+  SECTION("SERVER_DIRECTORY") {
+    requireRoundTrip(makePacket(Packet::PacketType::SERVER_DIRECTORY, "server", "*", "",
+                                "endpoint(node-a|127.0.0.1|5555)", 1, 0));
+  }
 }
 
 // 2. empty and whitespace fields
@@ -242,11 +254,11 @@ TEST_CASE("Serializer serialize rejects invalid type", "[serializer][serialize][
     REQUIRE(Serializer::serialize(packet).empty());
   }
 
-  // first unused enum value after ROOM_INVITE
-  SECTION("first unused enum value after ROOM_INVITE") {
+  // first unused enum value after SERVER_DIRECTORY
+  SECTION("first unused enum value after SERVER_DIRECTORY") {
     Packet packet = makePacket(Packet::PacketType::MESSAGE);
     packet.type = static_cast<Packet::PacketType>(
-        static_cast<int>(Packet::PacketType::ROOM_INVITE) + 1);
+        static_cast<int>(Packet::PacketType::SERVER_DIRECTORY) + 1);
     REQUIRE(Serializer::serialize(packet).empty());
   }
 }

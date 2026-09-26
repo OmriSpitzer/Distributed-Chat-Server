@@ -8,14 +8,15 @@
  * @date 13-09-2026
  */
 
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
 #include "server/gossip_manager.h"
 #include "server/room_manager.h"
 #include "utils/gossip_payload.h"
-#include "utils/models/log_message.h"
-#include "utils/models/logger.h"
+#include "utils/logger/log_message.h"
+#include "utils/logger/logger.h"
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
 #include "utils/socket_io.h"
@@ -31,6 +32,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <variant>
 #include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -62,6 +64,8 @@
  * 20. dial connects to peer
  * 21. concurrent rumor
  * 22. typical LOGIN / MESSAGE / LOGOUT flow
+ * 23. tracks live client endpoints from HELLO / disconnect
+ * 24. pushes SERVER_DIRECTORY on HELLO / peer disconnect
  */
 
 namespace {
@@ -180,6 +184,8 @@ struct GossipFixture {
     peerPort = nextPort();
     config::NODE_ID = nodeId;
     config::PEER_PORT = peerPort;
+    config::SERVER_HOST = "127.0.0.1";
+    config::PORT = nextPort();
     config::PEERS.clear();
     gossip = std::make_unique<GossipManager>(connections);
   }
@@ -228,13 +234,16 @@ struct GossipFixture {
     return client;
   }
 
-  bool handshake(SOCKET client, const std::string &remoteNodeId) {
+  bool handshake(SOCKET client, const std::string &remoteNodeId,
+                 std::uint16_t clientPort = 0) {
     auto hello = socket_io::readPacket(client);
     if (!hello || hello->type != Packet::PacketType::GOSSIP_HELLO) {
       return false;
     }
 
     Packet reply(remoteNodeId, "*", Packet::PacketType::GOSSIP_HELLO);
+    const std::uint16_t port = clientPort == 0 ? nextPort() : clientPort;
+    reply.message = "127.0.0.1:" + std::to_string(port);
     if (!socket_io::writePacket(client, reply)) {
       return false;
     }
@@ -385,13 +394,15 @@ TEST_CASE("GossipManager rumor USER_CREATED inserts user", "[gossip_manager][rum
   const std::string user = unique("created");
   const std::string email = user + "@example.com";
   const std::string eventId = unique("uc");
-  fixture.gossip->rumor(makeEvent("USER_CREATED", eventId, user, "secret", email));
+  const std::string passwordHash = Authentication::hashPassword("secret");
+  fixture.gossip->rumor(makeEvent("USER_CREATED", eventId, user, passwordHash, email));
 
   REQUIRE(waitUntil(std::chrono::seconds(2), [&] { return db().userExists(user); }));
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Applied USER_CREATED for " + user));
+  REQUIRE(std::holds_alternative<User>(db().loginUser(user, "secret")));
 
   // duplicate apply for same username (new event id) should still succeed
-  fixture.gossip->rumor(makeEvent("USER_CREATED", unique("uc2"), user, "secret", email));
+  fixture.gossip->rumor(makeEvent("USER_CREATED", unique("uc2"), user, passwordHash, email));
   REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Applied USER_CREATED for " + user));
 
   fixture.gossip->stop();
@@ -409,8 +420,8 @@ TEST_CASE("GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD", "[gossip_manager]
   const std::string guestEmail = guest + "@example.com";
   const std::string roomName = unique("vault");
 
-  REQUIRE_NOTHROW(db().createUser(creator, "secret", creatorEmail));
-  REQUIRE_NOTHROW(db().createUser(guest, "secret", guestEmail));
+  REQUIRE_NOTHROW(db().createUser(creator, Authentication::hashPassword("secret"), creatorEmail));
+  REQUIRE_NOTHROW(db().createUser(guest, Authentication::hashPassword("secret"), guestEmail));
 
   fixture.gossip->rumor(makeEvent("ROOM_CREATED", unique("rc"), creator, "Other", "PRIVATE",
                                   roomName));
@@ -435,6 +446,42 @@ TEST_CASE("GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD", "[gossip_manager]
   fixture.gossip->stop();
 }
 
+TEST_CASE("GossipManager rumor ROOM_DELETED and ROOM_KICK", "[gossip_manager][rumor][admin]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  REQUIRE(fixture.start());
+
+  const std::string creator = unique("c");
+  const std::string creatorEmail = creator + "@example.com";
+  const std::string guest = unique("g");
+  const std::string guestEmail = guest + "@example.com";
+  REQUIRE_NOTHROW(db().createUser(creator, Authentication::hashPassword("secret"), creatorEmail));
+  REQUIRE_NOTHROW(db().createUser(guest, Authentication::hashPassword("secret"), guestEmail));
+
+  const std::string roomName = unique("doom");
+  fixture.gossip->rumor(makeEvent("ROOM_CREATED", unique("rc"), creator, "Other", "PRIVATE",
+                                  roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return RoomManager::getInstance().getRoom(roomName).has_value(); }));
+  auto created = RoomManager::getInstance().getRoom(roomName);
+  REQUIRE(created.has_value());
+
+  fixture.gossip->rumor(makeEvent("ROOM_ACL_ADD", unique("acl"), guest, "0", "", roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return db().isAllowed(created->getId(), guestEmail); }));
+
+  fixture.gossip->rumor(makeEvent("ROOM_KICK", unique("kick"), guest, fixture.nodeId, "", roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return !db().isAllowed(created->getId(), guestEmail); }));
+
+  fixture.gossip->rumor(
+      makeEvent("ROOM_DELETED", unique("rd"), creator, fixture.nodeId, "", roomName));
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return !RoomManager::getInstance().getRoom(roomName).has_value(); }));
+
+  fixture.gossip->stop();
+}
+
 // 10. rumor ROOM_JOIN / ROOM_LEAVE
 TEST_CASE("GossipManager rumor ROOM_JOIN and ROOM_LEAVE", "[gossip_manager][rumor][room]") {
   REQUIRE(winsock().ok);
@@ -442,7 +489,8 @@ TEST_CASE("GossipManager rumor ROOM_JOIN and ROOM_LEAVE", "[gossip_manager][rumo
   REQUIRE(fixture.start());
 
   const std::string user = unique("joiner");
-  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"),
+                                  user + "@example.com"));
   REQUIRE_NOTHROW(db().setMembership(user, 1, "n1"));
 
   fixture.gossip->rumor(
@@ -464,7 +512,7 @@ TEST_CASE("GossipManager rumor MESSAGE saves history", "[gossip_manager][rumor][
 
   const std::string user = unique("chat");
   const std::string email = user + "@example.com";
-  REQUIRE_NOTHROW(db().createUser(user, "secret", email));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"), email));
 
   const std::string msgId = unique("msg");
   const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)));
@@ -770,7 +818,7 @@ TEST_CASE("GossipManager typical LOGIN MESSAGE LOGOUT flow", "[gossip_manager][f
 
   const std::string user = unique("flow");
   const std::string email = user + "@example.com";
-  REQUIRE_NOTHROW(db().createUser(user, "secret", email));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"), email));
 
   fixture.gossip->rumor(makeEvent("LOGIN", unique("fl"), user, fixture.nodeId, "0"));
   REQUIRE(waitUntil(std::chrono::seconds(1), [&] { return db().isUserOnline(user); }));
@@ -790,5 +838,116 @@ TEST_CASE("GossipManager typical LOGIN MESSAGE LOGOUT flow", "[gossip_manager][f
   fixture.gossip->rumor(makeEvent("LOGOUT", unique("fo"), user, fixture.nodeId, "0"));
   REQUIRE(waitUntil(std::chrono::seconds(1), [&] { return !db().isUserOnline(user); }));
 
+  fixture.gossip->stop();
+}
+
+// 23. tracks live client endpoints from HELLO / disconnect
+TEST_CASE("GossipManager tracks live client endpoints from HELLO",
+          "[gossip_manager][peer][hello][endpoints]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  REQUIRE(fixture.start());
+
+  auto self = fixture.gossip->getClientPeers();
+  REQUIRE(self.size() == 1);
+  REQUIRE(self.count(fixture.nodeId) == 1);
+  REQUIRE(self.at(fixture.nodeId).host == "127.0.0.1");
+  REQUIRE(self.at(fixture.nodeId).port == config::PORT);
+  REQUIRE(self.at(fixture.nodeId).getSocket() == INVALID_SOCKET);
+
+  SOCKET peer = fixture.connectAsPeer();
+  REQUIRE(peer != INVALID_SOCKET);
+  const std::string remote = unique("peer");
+  const std::uint16_t remoteClientPort = nextPort();
+  REQUIRE(fixture.handshake(peer, remote, remoteClientPort));
+
+  REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
+    const auto live = fixture.gossip->getClientPeers();
+    auto it = live.find(remote);
+    return it != live.end() && it->second.host == "127.0.0.1" &&
+           it->second.port == remoteClientPort && it->second.getSocket() != INVALID_SOCKET;
+  }));
+
+  socket_io::close(peer);
+  REQUIRE(waitUntil(std::chrono::seconds(2), [&] {
+    return fixture.gossip->getClientPeers().count(remote) == 0;
+  }));
+
+  auto after = fixture.gossip->getClientPeers();
+  REQUIRE(after.size() == 1);
+  REQUIRE(after.count(fixture.nodeId) == 1);
+
+  fixture.gossip->stop();
+}
+
+// 24. pushes SERVER_DIRECTORY on HELLO / peer disconnect
+TEST_CASE("GossipManager pushes SERVER_DIRECTORY to chat clients on peer change",
+          "[gossip_manager][peer][directory]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  config::SERVER_HOST = "127.0.0.1";
+  config::PORT = nextPort();
+  REQUIRE(fixture.start());
+
+  REQUIRE(fixture.connections.startListening(0));
+  std::thread acceptThread([&] { fixture.connections.acceptLoop(); });
+
+  SOCKET listenFd = fixture.connections.getListeningSocket();
+  sockaddr_in bound{};
+  int boundLen = sizeof(bound);
+  REQUIRE(getsockname(listenFd, reinterpret_cast<sockaddr *>(&bound), &boundLen) == 0);
+
+  SOCKET client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  REQUIRE(client != INVALID_SOCKET);
+  sockaddr_in dest{};
+  dest.sin_family = AF_INET;
+  dest.sin_port = bound.sin_port;
+  dest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  REQUIRE(::connect(client, reinterpret_cast<sockaddr *>(&dest), sizeof(dest)) == 0);
+  REQUIRE(setRecvTimeout(client, 3000));
+
+  REQUIRE(waitUntil(std::chrono::seconds(2),
+                    [&] { return !fixture.connections.getSessions().empty(); }));
+
+  auto welcome = socket_io::readPacket(client);
+  REQUIRE(welcome);
+  REQUIRE(welcome->type == Packet::PacketType::ROOM_LIST);
+  auto connectDir = socket_io::readPacket(client);
+  REQUIRE(connectDir);
+  REQUIRE(connectDir->type == Packet::PacketType::SERVER_DIRECTORY);
+  REQUIRE(connectDir->message.find("endpoint(" + fixture.nodeId + "|") != std::string::npos);
+
+  SOCKET peer = fixture.connectAsPeer();
+  REQUIRE(peer != INVALID_SOCKET);
+  const std::string remote = unique("dirpeer");
+  const std::uint16_t remoteClientPort = nextPort();
+  REQUIRE(fixture.handshake(peer, remote, remoteClientPort));
+
+  REQUIRE(setRecvTimeout(client, 500));
+  bool sawRemote = false;
+  for (int i = 0; i < 20 && !sawRemote; ++i) {
+    auto push = socket_io::readPacket(client);
+    if (!push || push->type != Packet::PacketType::SERVER_DIRECTORY)
+      continue;
+    sawRemote = push->message.find("endpoint(" + remote + "|127.0.0.1|" +
+                                   std::to_string(remoteClientPort) + ")") != std::string::npos;
+  }
+  REQUIRE(sawRemote);
+
+  socket_io::close(peer);
+  bool sawDrop = false;
+  for (int i = 0; i < 20 && !sawDrop; ++i) {
+    auto push = socket_io::readPacket(client);
+    if (!push || push->type != Packet::PacketType::SERVER_DIRECTORY)
+      continue;
+    sawDrop = push->message.find(remote) == std::string::npos &&
+              push->message.find("endpoint(" + fixture.nodeId + "|") != std::string::npos;
+  }
+  REQUIRE(sawDrop);
+
+  socket_io::close(client);
+  fixture.connections.stopListening();
+  if (acceptThread.joinable())
+    acceptThread.join();
   fixture.gossip->stop();
 }

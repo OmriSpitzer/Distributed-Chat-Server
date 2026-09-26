@@ -69,7 +69,9 @@ TEST_CASE("gossip_payload round-trip typical events", "[gossip_payload][roundtri
   SECTION("LOGIN") { requireRoundTrip("LOGIN", "n1-LOGIN-bob-1-2", "bob", "node-a", "0"); }
   SECTION("LOGOUT") { requireRoundTrip("LOGOUT", "n1-LOGOUT-bob-1-3", "bob", "node-a", "1"); }
   SECTION("USER_CREATED") {
-    requireRoundTrip("USER_CREATED", "n1-USER_CREATED-u-1-4", "u", "secret", "u@mail.test");
+    // content is an Argon2id-shaped hash on the wire (opaque bytes for encode/decode)
+    requireRoundTrip("USER_CREATED", "n1-USER_CREATED-u-1-4", "u",
+                     "$argon2id$v=19$m=65536,t=2,p=1$c29tZXNhbHQ$c29tZWhhc2g", "u@mail.test");
   }
   SECTION("ROOM_JOIN") {
     requireRoundTrip("ROOM_JOIN", "n1-ROOM_JOIN-alice-1-5", "alice", "node-a", "Lobby");

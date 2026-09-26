@@ -103,6 +103,10 @@ void DashboardPage::buildWorkspace() {
       new Button("Create room", [this]() { openCreateRoomDialog(); }, false, side, "GhostButton");
   inviteButton =
       new Button("Invite", [this]() { openInviteDialog(); }, loggedIn, side, "PrimaryButton");
+  kickButton =
+      new Button("Kick", [this]() { openKickDialog(); }, false, side, "GhostButton");
+  deleteRoomButton =
+      new Button("Delete room", [this]() { openDeleteRoomDialog(); }, false, side, "GhostButton");
 
   // room actions
   auto *roomActions = new QHBoxLayout();
@@ -111,12 +115,16 @@ void DashboardPage::buildWorkspace() {
   auto *roomActions2 = new QHBoxLayout();
   roomActions2->addWidget(createRoomButton, 1);
   roomActions2->addWidget(inviteButton, 1);
+  auto *roomActions3 = new QHBoxLayout();
+  roomActions3->addWidget(kickButton, 1);
+  roomActions3->addWidget(deleteRoomButton, 1);
 
   // add widgets to the side layout
   sideLayout->addWidget(roomsLabel);
   sideLayout->addWidget(roomsList, 1);
   sideLayout->addLayout(roomActions);
   sideLayout->addLayout(roomActions2);
+  sideLayout->addLayout(roomActions3);
 
   // chat widget
   auto *chat = new QWidget(split);
@@ -199,6 +207,8 @@ void DashboardPage::refresh() {
   header()->setLoggedIn(state.isLoggedIn(), displayName());
   createRoomButton->setVisible(state.isLoggedIn());
   inviteButton->setVisible(state.isLoggedIn());
+  kickButton->setVisible(state.isAdmin());
+  deleteRoomButton->setVisible(state.isAdmin());
 
   // oldest created first (room id is AUTOINCREMENT)
   std::vector<Room> roomsSorted = rooms;
@@ -518,7 +528,7 @@ void DashboardPage::openInviteDialog() {
 
   const QString currentRoom = roomNameOf(client()->getState());
   if (currentRoom == "Lobby") {
-    QMessageBox::information(this, "Invite", "Join a private room before inviting.");
+    QMessageBox::information(this, "Invite", "Join a room before inviting.");
     return;
   }
 
@@ -547,6 +557,102 @@ void DashboardPage::openInviteDialog() {
   }
 
   QMessageBox::information(this, "Invite", "Invited " + username + " to " + currentRoom + ".");
+}
+
+// open the kick dialog (ADMIN stub — same shape as invite)
+void DashboardPage::openKickDialog() {
+  if (!client()) {
+    return;
+  }
+  if (!client()->getState().isAdmin()) {
+    QMessageBox::information(this, "Kick", "Admin required to kick users.");
+    return;
+  }
+
+  const QString currentRoom = roomNameOf(client()->getState());
+  if (currentRoom == "Lobby") {
+    QMessageBox::information(this, "Kick", "Join a room before kicking.");
+    return;
+  }
+
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *target = new QLineEdit(form);
+  layout->addRow("Room", new QLabel(currentRoom, form));
+  layout->addRow("Username", target);
+
+  if (!PopUpWindow::run(this, "Kick from room", form, target)) {
+    return;
+  }
+
+  const QString username = target->text().trimmed();
+  if (username.isEmpty()) {
+    QMessageBox::warning(this, "Kick", "Username cannot be empty.");
+    return;
+  }
+
+  const std::string error =
+      client()->kickFromRoom(currentRoom.toStdString(), username.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Kick", QString::fromStdString(error));
+    return;
+  }
+
+  QMessageBox::information(this, "Kick", "Kicked " + username + " from " + currentRoom + ".");
+}
+
+// open the delete-room dialog (ADMIN stub)
+void DashboardPage::openDeleteRoomDialog() {
+  if (!client()) {
+    return;
+  }
+  if (!client()->getState().isAdmin()) {
+    QMessageBox::information(this, "Delete room", "Admin required to delete a room.");
+    return;
+  }
+
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *roomField = new QComboBox(form);
+  roomField->setEditable(true);
+  const QString currentRoom = roomNameOf(client()->getState());
+  for (const Room &room : client()->getState().getRooms()) {
+    const QString name = QString::fromStdString(room.getName());
+    if (name == QStringLiteral("Lobby") || name == QStringLiteral("General")) {
+      continue;
+    }
+    roomField->addItem(name);
+  }
+  if (currentRoom != QStringLiteral("Lobby") && currentRoom != QStringLiteral("General")) {
+    const int idx = roomField->findText(currentRoom);
+    if (idx >= 0) {
+      roomField->setCurrentIndex(idx);
+    }
+  }
+  layout->addRow("Room", roomField);
+
+  if (!PopUpWindow::run(this, "Delete room", form, roomField->lineEdit())) {
+    return;
+  }
+
+  const QString name = roomField->currentText().trimmed();
+  if (name.isEmpty()) {
+    QMessageBox::warning(this, "Delete room", "Room name cannot be empty.");
+    return;
+  }
+  if (name == QStringLiteral("Lobby") || name == QStringLiteral("General")) {
+    QMessageBox::warning(this, "Delete room", "Cannot delete Lobby or General.");
+    return;
+  }
+
+  const std::string error = client()->deleteRoom(name.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Delete room", QString::fromStdString(error));
+    return;
+  }
+
+  resetTranscriptForCurrentRoom();
+  refresh();
 }
 
 // leave the room

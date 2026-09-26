@@ -199,12 +199,11 @@ bool DatabaseManager::userExists(const std::string_view &username) {
   return !query(db::sql::user_exists, {username}).empty();
 }
 
-// create user
-User DatabaseManager::createUser(const std::string_view &username, const std::string_view &password,
+// create user (passwordHash must already be Argon2id-encoded)
+User DatabaseManager::createUser(const std::string_view &username,
+                                 const std::string_view &passwordHash,
                                  const std::string_view &email) {
-  const std::string passwordHash = Authentication::hashPassword(password);
   const std::string userType = User::typeToString(User::UserType::USER);
-
   try {
     execute(db::sql::create_user, {username, email, passwordHash, userType});
   } catch (const ConstraintError &) {
@@ -428,6 +427,16 @@ std::vector<Room> DatabaseManager::listRooms() {
     rooms.push_back(roomFromRow(row));
   }
   return rooms;
+}
+
+// check connectivity
+bool DatabaseManager::ping() {
+  try {
+    query("SELECT 1");
+    return true;
+  } catch (...) {
+    return false;
+  }
 }
 
 // delete a room

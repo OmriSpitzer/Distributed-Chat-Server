@@ -7,7 +7,7 @@
  * @date 12-09-2026
  */
 
-#include "utils/models/log_message.h"
+#include "utils/logger/log_message.h"
 #include <catch2/catch_test_macros.hpp>
 #include <ctime>
 #include <sstream>

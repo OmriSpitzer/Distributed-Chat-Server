@@ -60,6 +60,12 @@ public:
   // fan-out via injected gossip; no-op if not set
   void rumor(const Packet &event);
 
+  // push SERVER_DIRECTORY to one client (only != INVALID) or all sessions
+  void pushServerDirectory(const std::string &body, SOCKET only = INVALID_SOCKET);
+
+  // push this node's live client-endpoint directory (no-op if gossip not wired)
+  void refreshServerDirectory(SOCKET only = INVALID_SOCKET);
+
 private:
   GossipManager *gossip_{nullptr}; // gossip manager owned by Server
 

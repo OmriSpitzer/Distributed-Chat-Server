@@ -12,8 +12,8 @@
 #include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/heartbeat.h"
-#include "utils/models/log_message.h"
-#include "utils/models/logger.h"
+#include "utils/logger/log_message.h"
+#include "utils/logger/logger.h"
 #include "utils/models/packet.h"
 #include "utils/socket_io.h"
 #include <atomic>

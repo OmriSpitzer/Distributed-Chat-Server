@@ -31,6 +31,8 @@ private:
   Button *leaveButton{nullptr};      // leave button
   Button *createRoomButton{nullptr}; // create room button
   Button *inviteButton{nullptr};     // invite button
+  Button *kickButton{nullptr};       // kick button (ADMIN stub)
+  Button *deleteRoomButton{nullptr}; // delete room button (ADMIN stub)
 
   // chat
   QLabel *roomTitle{nullptr};           // room title label
@@ -80,6 +82,12 @@ private:
 
   // open the invite dialog
   void openInviteDialog();
+
+  // open the kick dialog (ADMIN)
+  void openKickDialog();
+
+  // open the delete-room dialog (ADMIN)
+  void openDeleteRoomDialog();
 
   // leave the room
   void leaveRoom();

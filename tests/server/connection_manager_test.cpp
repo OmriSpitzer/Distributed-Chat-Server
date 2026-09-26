@@ -4,10 +4,12 @@
  * @brief Includes: listen / stop edges, accept session, heartbeat ping/pong,
  * ignore non-ping heartbeat, sendPacket / closeClient edges, hasSession,
  * rumor with/without gossip, disconnect clears presence, multi-client,
- * stop closes clients, typical connect / login / disconnect flow.
+ * stop closes clients, typical connect / login / disconnect flow,
+ * SERVER_DIRECTORY refresh after login.
  * @date 13-09-2026
  */
 
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/database_manager.h"
@@ -15,8 +17,8 @@
 #include "server/room_manager.h"
 #include "utils/RESPONSE_CODES.h"
 #include "utils/gossip_payload.h"
-#include "utils/models/log_message.h"
-#include "utils/models/logger.h"
+#include "utils/logger/log_message.h"
+#include "utils/logger/logger.h"
 #include "utils/models/packet.h"
 #include "utils/models/user.h"
 #include "utils/socket_io.h"
@@ -60,6 +62,7 @@
  * 17. stopListening closes live clients
  * 18. typical connect / login / message / disconnect flow
  * 19. hasSession false for guest / wrong user
+ * 20. SERVER_DIRECTORY refresh after login
  */
 
 namespace {
@@ -237,34 +240,44 @@ struct Fixture {
       return INVALID_SOCKET;
     }
 
-    // drain connect welcome (ROOM_LIST with anon user + room directory)
+    // drain connect welcome (ROOM_LIST) then optional SERVER_DIRECTORY when gossip is wired
     REQUIRE(setRecvTimeout(client, 2000));
     const auto welcome = socket_io::readPacket(client);
     if (!welcome || welcome->type != Packet::PacketType::ROOM_LIST) {
       return INVALID_SOCKET;
     }
     lastWelcome = *welcome;
+    if (gossip) {
+      const auto directory = socket_io::readPacket(client);
+      if (!directory || directory->type != Packet::PacketType::SERVER_DIRECTORY) {
+        return INVALID_SOCKET;
+      }
+      lastServerDirectory = *directory;
+    }
     return client;
   }
 
   std::optional<Packet> lastWelcome;
+  std::optional<Packet> lastServerDirectory;
 
   User createUser(std::string_view password = "secret") {
     const std::string name = unique("user");
-    return db().createUser(name, password, name + "@example.com");
+    return db().createUser(name, Authentication::hashPassword(password), name + "@example.com");
   }
 
   std::optional<Packet> request(SOCKET client, const Packet &packet) {
     if (!socket_io::writePacket(client, packet)) {
       return std::nullopt;
     }
-    // Skip ROOM_LIST directory pushes that may arrive before the typed reply.
+    // Skip ROOM_LIST / SERVER_DIRECTORY pushes that may arrive before the typed reply.
     for (int attempt = 0; attempt < 8; ++attempt) {
       auto res = socket_io::readPacket(client);
       if (!res) {
         return std::nullopt;
       }
-      if (res->type == Packet::PacketType::ROOM_LIST && res->responseCode == 0) {
+      if (res->responseCode == 0 &&
+          (res->type == Packet::PacketType::ROOM_LIST ||
+           res->type == Packet::PacketType::SERVER_DIRECTORY)) {
         continue;
       }
       return res;
@@ -495,7 +508,8 @@ TEST_CASE("ConnectionManager rumor with and without gossip", "[connection_manage
   REQUIRE(winsock().ok);
   (void)db();
   const std::string user = unique("rumor");
-  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"),
+                                  user + "@example.com"));
 
   ConnectionManager bare;
   const std::string eventId = unique("eid");
@@ -648,4 +662,31 @@ TEST_CASE("ConnectionManager hasSession false for guest and wrong user",
   REQUIRE(fx.request(client, login)->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
   REQUIRE(fx.connections.hasSession(alice));
   REQUIRE_FALSE(fx.connections.hasSession(bob));
+}
+
+// 20. successful LOGIN pushes a fresh SERVER_DIRECTORY before the reply
+TEST_CASE("ConnectionManager pushes SERVER_DIRECTORY after login",
+          "[connection_manager][login][directory]") {
+  REQUIRE(winsock().ok);
+  Fixture fx;
+  fx.attachGossip();
+  REQUIRE(fx.listen());
+  const SOCKET client = fx.connectClient();
+  REQUIRE(client != INVALID_SOCKET);
+  REQUIRE(setRecvTimeout(client, 10000));
+
+  const User user = fx.createUser("secret");
+  Packet login(user.getUsername(), "server", Packet::PacketType::LOGIN, "", "secret");
+  REQUIRE(socket_io::writePacket(client, login));
+
+  // refresh is sent during processPacket, then the LOGIN reply
+  const auto directory = socket_io::readPacket(client);
+  REQUIRE(directory);
+  REQUIRE(directory->type == Packet::PacketType::SERVER_DIRECTORY);
+  REQUIRE(directory->responseCode == 0);
+
+  const auto reply = socket_io::readPacket(client);
+  REQUIRE(reply);
+  REQUIRE(reply->type == Packet::PacketType::LOGIN);
+  REQUIRE(reply->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
 }

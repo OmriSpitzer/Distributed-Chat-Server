@@ -8,17 +8,77 @@ set(CMAKE_CXX_STANDARD 17)
 # - - - - - - - - - - - - - - - - - Libraries - - - - - - - - - - - - - - - - -
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# Authentication Library
 include(FetchContent)
+
+# ------------ Utils Library ------------
+add_library(utils
+    src/utils/logger/logger.cpp
+    src/utils/logger/consolelogger.cpp
+    src/utils/logger/log_message.cpp
+    src/utils/models/message.cpp
+    src/utils/models/user.cpp
+    src/utils/models/room.cpp
+    src/utils/models/packet.cpp
+    src/utils/models/client_endpoint.cpp
+    src/utils/serializer.cpp
+    src/utils/socket_io.cpp
+    src/utils/gossip_payload.cpp
+    src/utils/health/health_monitor.cpp
+)
+target_include_directories(utils PUBLIC include)
+target_link_libraries(utils PUBLIC ws2_32)
+
+find_package(Threads REQUIRED)
+
+# ------------ Server Library ------------
+add_library(server_lib
+    src/server/database_manager.cpp
+    src/server/room_manager.cpp
+    src/server/thread_pool.cpp
+    src/server/packet_processor.cpp
+    src/server/client_session.cpp
+    src/server/connection_manager.cpp
+    src/server/heartbeat.cpp
+    src/server/server.cpp
+    src/server/gossip_manager.cpp
+    src/utils/health/db_health_adapter.cpp
+    src/utils/health/heartbeat_health_adapter.cpp
+    src/utils/health/server_health_adapter.cpp
+)
+
+target_include_directories(server_lib PUBLIC include)
+target_link_libraries(server_lib PUBLIC utils ws2_32)
+
+add_executable(chat_server src/server/main.cpp)
+target_link_libraries(chat_server PRIVATE server_lib)
+
+# ------------ Client Library ------------
+add_library(client_lib
+    src/client/network.cpp
+    src/client/console_ui.cpp
+    src/client/packet_builder.cpp
+    src/client/packet_handler.cpp
+    src/client/client.cpp
+    src/utils/health/client_health_adapter.cpp
+)
+target_include_directories(client_lib PUBLIC include)
+target_link_libraries(client_lib PUBLIC utils)
+
+add_executable(chat_client src/client/main.cpp)
+target_link_libraries(chat_client PRIVATE client_lib)
+
+# ------------ Authentication Library ------------
 FetchContent_Declare(
   argon2
   GIT_REPOSITORY https://github.com/P-H-C/phc-winner-argon2.git
   GIT_TAG        20190702
 )
+
 FetchContent_GetProperties(argon2)
 if(NOT argon2_POPULATED)
   FetchContent_Populate(argon2)
 endif()
+
 add_library(argon2 STATIC
   ${argon2_SOURCE_DIR}/src/argon2.c
   ${argon2_SOURCE_DIR}/src/core.c
@@ -32,57 +92,6 @@ target_include_directories(argon2
   PRIVATE ${argon2_SOURCE_DIR}/src
 )
 
-# Utils Library
-add_library(utils
-    src/utils/models/logger.cpp
-    src/utils/models/log_message.cpp
-    src/utils/models/message.cpp
-    src/utils/models/user.cpp
-    src/utils/models/room.cpp
-    src/utils/models/packet.cpp
-    src/utils/serializer.cpp
-    src/utils/socket_io.cpp
-    src/utils/gossip_payload.cpp
-)
-target_include_directories(utils PUBLIC include)
-target_link_libraries(utils PUBLIC ws2_32)
-
-find_package(Threads REQUIRED)
-
-# Server library
-add_library(server_lib
-    src/server/database_manager.cpp
-    src/server/room_manager.cpp
-    src/server/thread_pool.cpp
-    src/server/packet_processor.cpp
-    src/server/client_session.cpp
-    src/server/connection_manager.cpp
-    src/server/heartbeat.cpp
-    src/server/server.cpp
-    src/server/gossip_manager.cpp
-)
-
-target_include_directories(server_lib PUBLIC include)
-target_link_libraries(server_lib PUBLIC utils ws2_32)
-
-add_executable(chat_server src/server/main.cpp)
-target_link_libraries(chat_server PRIVATE server_lib)
-
-# Client library
-add_library(client_lib
-    src/client/network.cpp
-    src/client/console_ui.cpp
-    src/client/packet_builder.cpp
-    src/client/packet_handler.cpp
-    src/client/client.cpp
-)
-target_include_directories(client_lib PUBLIC include)
-target_link_libraries(client_lib PUBLIC utils)
-
-add_executable(chat_client src/client/main.cpp)
-target_link_libraries(chat_client PRIVATE client_lib)
-
-# Authentication library
 add_library(auth
     src/auth/authentication.cpp
 )
@@ -91,12 +100,11 @@ target_link_libraries(auth PUBLIC utils argon2)
 target_link_libraries(server_lib PUBLIC utils auth ws2_32 Threads::Threads)
 target_link_libraries(client_lib PUBLIC utils auth ws2_32 Threads::Threads)
 
-# Database Library
+# ------------ Database Library ------------
 add_library(sqlite3 STATIC src/database/sqlite/sqlite3.c)
 target_include_directories(sqlite3 PRIVATE src/database/sqlite)
 
-
-# SQL schema / query registry: "c_name:relative/path.sql"
+# SQL registry: "c_name:relative/path.sql"
 set(DB_SCHEMAS
   "init:src/database/init.sql"
   "get_user:src/database/queries/get_user.sql"
@@ -148,12 +156,12 @@ target_include_directories(server_lib PRIVATE "${CMAKE_BINARY_DIR}/generated")
 
 target_link_libraries(server_lib PUBLIC sqlite3)
 
-# Qt 6 (server GUI via chat_server)
+# ------------ Qt 6 Library ------------
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 set(CMAKE_AUTOMOC ON)
-# chat_server was created above; enable moc on the target explicitly
 set_target_properties(chat_server PROPERTIES AUTOMOC ON)
 
+# Server Interface
 target_sources(chat_server PRIVATE
   src/server/gui/main_page.cpp
   src/server/gui/main_window.cpp
@@ -162,6 +170,7 @@ target_sources(chat_server PRIVATE
   src/server/gui/panels/ports_panel.cpp
   src/server/gui/panels/rooms_panel.cpp
   src/server/gui/panels/users_panel.cpp
+  src/utils/logger/qtLogger.cpp
   # headers with Q_OBJECT must be listed so AUTOMOC can scan them
   include/server/gui/main_window.h
   include/server/gui/panels/panel.h
@@ -169,10 +178,11 @@ target_sources(chat_server PRIVATE
   include/server/gui/panels/ports_panel.h
   include/server/gui/panels/rooms_panel.h
   include/server/gui/panels/users_panel.h
+  include/utils/logger/qtLogger.h
 )
 target_link_libraries(chat_server PRIVATE Qt6::Widgets)
 
-# Qt 6 (client GUI via chat_client)
+# Client Interface
 set_target_properties(chat_client PROPERTIES AUTOMOC ON)
 target_sources(chat_client PRIVATE
   src/client/gui/components/button.cpp
@@ -197,7 +207,6 @@ target_link_libraries(chat_client PRIVATE Qt6::Widgets)
 # - - - - - - - - - - - - - - - - - - Tests - - - - - - - - - - - - - - - - - -
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# Tests
 include(CTest)
 include(FetchContent)
 FetchContent_Declare(
@@ -208,93 +217,95 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Catch2)
 
 # ------------ Utils connections ------------
+
 add_executable(user_test tests/utils/user_test.cpp)
 target_link_libraries(user_test PRIVATE utils Catch2::Catch2WithMain)
-
+add_executable(client_endpoint_test tests/utils/client_endpoint_test.cpp)
+target_link_libraries(client_endpoint_test PRIVATE utils Catch2::Catch2WithMain)
 add_executable(room_test tests/utils/room_test.cpp)
 target_link_libraries(room_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(serializer_test tests/utils/serializer_test.cpp)
 target_link_libraries(serializer_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(socket_io_test tests/utils/socket_io_test.cpp)
 target_link_libraries(socket_io_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(message_test tests/utils/message_test.cpp)
 target_link_libraries(message_test PRIVATE utils Catch2::Catch2WithMain)
-
-add_executable(log_message_test tests/utils/log_message_test.cpp)
+add_executable(log_message_test tests/utils/logger/log_message_test.cpp)
 target_link_libraries(log_message_test PRIVATE utils Catch2::Catch2WithMain)
-
-add_executable(logger_test tests/utils/logger_test.cpp)
-target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain)
-
+add_executable(logger_test tests/utils/logger/logger_test.cpp)
+target_link_libraries(logger_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
 add_executable(packet_test tests/utils/packet_test.cpp)
 target_link_libraries(packet_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(gossip_payload_test tests/utils/gossip_payload_test.cpp)
 target_link_libraries(gossip_payload_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(health_test tests/utils/health_test.cpp tests/client/main_page_stub.cpp)
+target_link_libraries(health_test PRIVATE server_lib client_lib Catch2::Catch2WithMain Threads::Threads)
 
 # ------------ Auth connections ------------
+
 add_executable(authentication_test tests/auth/authentication_test.cpp)
 target_link_libraries(authentication_test PRIVATE auth Catch2::Catch2WithMain)
 
 # ------------ Client connections ------------
+
 add_executable(client_state_test tests/client/client_state_test.cpp)
 target_link_libraries(client_state_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(packet_builder_test tests/client/packet_builder_test.cpp
                src/client/packet_builder.cpp)
 target_link_libraries(packet_builder_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(packet_handler_test tests/client/packet_handler_test.cpp
                src/client/packet_handler.cpp)
 target_link_libraries(packet_handler_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(network_test tests/client/network_test.cpp src/client/network.cpp)
 target_link_libraries(network_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
-
 add_executable(console_ui_test tests/client/console_ui_test.cpp src/client/console_ui.cpp
                src/client/packet_builder.cpp)
 target_link_libraries(console_ui_test PRIVATE utils Catch2::Catch2WithMain)
-
 add_executable(client_test tests/client/client_test.cpp tests/client/main_page_stub.cpp)
 target_link_libraries(client_test PRIVATE client_lib Catch2::Catch2WithMain Threads::Threads)
 
 # ------------ Server connections ------------
+
 add_executable(client_session_test tests/server/client_session_test.cpp src/server/client_session.cpp)
 target_link_libraries(client_session_test PRIVATE utils Catch2::Catch2WithMain Threads::Threads)
-
 add_executable(database_manager_test tests/server/database_manager_test.cpp)
 target_link_libraries(database_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
-
 add_executable(heartbeat_test tests/server/heartbeat_test.cpp)
 target_link_libraries(heartbeat_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
-
 add_executable(room_manager_test tests/server/room_manager_test.cpp)
 target_link_libraries(room_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
-
 add_executable(gossip_manager_test tests/server/gossip_manager_test.cpp)
 target_link_libraries(gossip_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
-
 add_executable(packet_processor_test tests/server/packet_processor_test.cpp)
 target_link_libraries(packet_processor_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
-
 add_executable(connection_manager_test tests/server/connection_manager_test.cpp)
 target_link_libraries(connection_manager_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
-
 add_executable(server_test tests/server/server_test.cpp)
 target_link_libraries(server_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
+# ------------ Func / E2E connections ------------
+
+add_executable(two_client_message_push_test
+  tests/func/two_client_message_push_test.cpp
+  tests/client/main_page_stub.cpp)
+target_link_libraries(two_client_message_push_test PRIVATE
+  server_lib client_lib Catch2::Catch2WithMain Threads::Threads)
+
+add_executable(session_rules_test
+  tests/func/session_rules_test.cpp
+  tests/client/main_page_stub.cpp)
+target_link_libraries(session_rules_test PRIVATE
+  server_lib client_lib Catch2::Catch2WithMain Threads::Threads)
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
-# Discover at ctest time so partial builds (server/client only) do not leave
-# *_NOT_BUILT placeholder tests in CTestTestfile.cmake.
 set(CATCH_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST)
 
 # ------------ Utils tests ------------
+
 catch_discover_tests(user_test)
+catch_discover_tests(client_endpoint_test)
 catch_discover_tests(room_test)
 catch_discover_tests(serializer_test)
 catch_discover_tests(socket_io_test)
@@ -303,9 +314,11 @@ catch_discover_tests(log_message_test)
 catch_discover_tests(logger_test)
 catch_discover_tests(packet_test)
 catch_discover_tests(gossip_payload_test)
+catch_discover_tests(health_test)
 catch_discover_tests(authentication_test)
 
 # ------------ Client tests ------------
+
 catch_discover_tests(client_state_test)
 catch_discover_tests(packet_builder_test)
 catch_discover_tests(packet_handler_test)
@@ -314,6 +327,7 @@ catch_discover_tests(console_ui_test)
 catch_discover_tests(client_test)
 
 # ------------ Server tests ------------
+
 catch_discover_tests(client_session_test)
 catch_discover_tests(database_manager_test)
 catch_discover_tests(heartbeat_test)
@@ -322,6 +336,11 @@ catch_discover_tests(gossip_manager_test)
 catch_discover_tests(packet_processor_test)
 catch_discover_tests(connection_manager_test)
 catch_discover_tests(server_test)
+
+# ------------ Func / E2E tests ------------
+
+catch_discover_tests(two_client_message_push_test)
+catch_discover_tests(session_rules_test)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - Tests - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^

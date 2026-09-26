@@ -7,6 +7,7 @@
  * @date 12-09-2026
  */
 
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/database_manager.h"
 #include "utils/models/message.h"
@@ -36,6 +37,7 @@
  * 7. createUser string edges
  * 8. loginUser success
  * 9. loginUser failures
+ * 9b. seed users login with real passwords
  * 10. saveMessage success and duplicate id
  * 11. saveMessage foreign keys
  * 12. saveMessage content edges
@@ -51,7 +53,13 @@
 namespace {
 constexpr const char *kAuthFailed = "Invalid username or password";
 constexpr int kLobbyId = 1; // matches init.sql seed Lobby row
-constexpr const char *kSeedHash = "$argon2id$v=19$m=65536,t=2,p=1$<salt>$<hash>";
+// Seed passwords match real Argon2id hashes in init.sql (used by func tests too)
+constexpr const char *kSeedAdminUser = "admin";
+constexpr const char *kSeedAdminPass = "admin";
+constexpr const char *kSeedAdminEmail = "admin@example.com";
+constexpr const char *kSeedUserUser = "user";
+constexpr const char *kSeedUserPass = "user";
+constexpr const char *kSeedUserEmail = "user@example.com";
 
 std::string unique(std::string_view prefix) {
   static std::atomic<std::uint64_t> seq{0};
@@ -74,7 +82,7 @@ DatabaseManager &db() {
 
 User createUniqueUser(std::string_view password = "secret") {
   const std::string name = unique("user");
-  return db().createUser(name, password, name + "@example.com");
+  return db().createUser(name, Authentication::hashPassword(password), name + "@example.com");
 }
 
 User guest() { return User("", "", User::UserType::GUEST); }
@@ -95,35 +103,26 @@ TEST_CASE("DatabaseManager singleton identity", "[database_manager][singleton]")
 TEST_CASE("DatabaseManager seed users", "[database_manager][seed]") {
   DatabaseManager &database = db();
 
-  SECTION("omri exists as USER") {
-    REQUIRE(database.userExists("omri"));
-    const auto user = database.getUser("omri");
+  SECTION("user exists as USER") {
+    REQUIRE(database.userExists(kSeedUserUser));
+    const auto user = database.getUser(kSeedUserUser);
     REQUIRE(user.has_value());
-    REQUIRE(user->getUsername() == "omri");
-    REQUIRE(user->getEmail() == "omri@gmail.com");
-    REQUIRE(user->getUserType() == User::UserType::USER);
-  }
-
-  SECTION("spitzer exists as USER") {
-    REQUIRE(database.userExists("spitzer"));
-    const auto user = database.getUser("spitzer");
-    REQUIRE(user.has_value());
-    REQUIRE(user->getEmail() == "spitzer@gmail.com");
+    REQUIRE(user->getUsername() == kSeedUserUser);
+    REQUIRE(user->getEmail() == kSeedUserEmail);
     REQUIRE(user->getUserType() == User::UserType::USER);
   }
 
   SECTION("admin exists as ADMIN") {
-    REQUIRE(database.userExists("admin"));
-    const auto user = database.getUser("admin");
+    REQUIRE(database.userExists(kSeedAdminUser));
+    const auto user = database.getUser(kSeedAdminUser);
     REQUIRE(user.has_value());
-    REQUIRE(user->getEmail() == "admin@gmail.com");
+    REQUIRE(user->getEmail() == kSeedAdminEmail);
     REQUIRE(user->getUserType() == User::UserType::ADMIN);
   }
 
   SECTION("seed users are not online") {
-    REQUIRE_FALSE(database.isUserOnline("omri"));
-    REQUIRE_FALSE(database.isUserOnline("spitzer"));
-    REQUIRE_FALSE(database.isUserOnline("admin"));
+    REQUIRE_FALSE(database.isUserOnline(kSeedUserUser));
+    REQUIRE_FALSE(database.isUserOnline(kSeedAdminUser));
   }
 }
 
@@ -140,20 +139,20 @@ TEST_CASE("DatabaseManager getUser edges", "[database_manager][getUser][edge]") 
   }
 
   SECTION("case does not match seed") {
-    REQUIRE_FALSE(database.getUser("OMRI").has_value());
-    REQUIRE_FALSE(database.getUser("Omri").has_value());
+    REQUIRE_FALSE(database.getUser("ADMIN").has_value());
     REQUIRE_FALSE(database.getUser("Admin").has_value());
+    REQUIRE_FALSE(database.getUser("USER").has_value());
   }
 
   SECTION("surrounding whitespace is not trimmed") {
-    REQUIRE_FALSE(database.getUser(" omri ").has_value());
-    REQUIRE_FALSE(database.getUser("omri ").has_value());
+    REQUIRE_FALSE(database.getUser(" admin ").has_value());
+    REQUIRE_FALSE(database.getUser("admin ").has_value());
   }
 
   SECTION("sql metacharacters are bound, not injected") {
     REQUIRE_FALSE(database.getUser("' OR 1=1 --").has_value());
-    REQUIRE_FALSE(database.getUser("omri'; DROP TABLE users;--").has_value());
-    REQUIRE(database.userExists("omri"));
+    REQUIRE_FALSE(database.getUser("admin'; DROP TABLE users;--").has_value());
+    REQUIRE(database.userExists(kSeedAdminUser));
   }
 }
 
@@ -164,7 +163,7 @@ TEST_CASE("DatabaseManager userExists edges", "[database_manager][userExists][ed
   SECTION("false for unknown / empty") {
     REQUIRE_FALSE(database.userExists(unique("ghost")));
     REQUIRE_FALSE(database.userExists(""));
-    std::string withNul("omri");
+    std::string withNul(kSeedAdminUser);
     withNul.push_back('\0');
     withNul += "extra";
     REQUIRE_FALSE(database.userExists(withNul));
@@ -181,7 +180,7 @@ TEST_CASE("DatabaseManager userExists edges", "[database_manager][userExists][ed
 TEST_CASE("DatabaseManager createUser success", "[database_manager][createUser]") {
   DatabaseManager &database = db();
   const std::string name = unique("new");
-  const User created = database.createUser(name, "pw", name + "@mail.test");
+  const User created = database.createUser(name, Authentication::hashPassword("pw"), name + "@mail.test");
 
   REQUIRE(created.getUsername() == name);
   REQUIRE(created.getEmail() == name + "@mail.test");
@@ -198,13 +197,15 @@ TEST_CASE("DatabaseManager createUser constraints", "[database_manager][createUs
   DatabaseManager &database = db();
   const std::string name = unique("dup");
   const std::string email = name + "@mail.test";
-  database.createUser(name, "pw", email);
+  database.createUser(name, Authentication::hashPassword("pw"), email);
 
   SECTION("duplicate username") {
-    REQUIRE_THROWS_AS(database.createUser(name, "other", unique("e") + "@mail.test"),
+    REQUIRE_THROWS_AS(database.createUser(name, Authentication::hashPassword("other"),
+                                          unique("e") + "@mail.test"),
                       DatabaseManager::ConstraintError);
     try {
-      database.createUser(name, "other", unique("e") + "@mail.test");
+      database.createUser(name, Authentication::hashPassword("other"),
+                          unique("e") + "@mail.test");
       FAIL("expected ConstraintError");
     } catch (const DatabaseManager::ConstraintError &ex) {
       REQUIRE(std::string(ex.what()) == "User already exists");
@@ -212,10 +213,10 @@ TEST_CASE("DatabaseManager createUser constraints", "[database_manager][createUs
   }
 
   SECTION("duplicate email is also reported as already exists") {
-    REQUIRE_THROWS_AS(database.createUser(unique("other"), "pw", email),
+    REQUIRE_THROWS_AS(database.createUser(unique("other"), Authentication::hashPassword("pw"), email),
                       DatabaseManager::ConstraintError);
     try {
-      database.createUser(unique("other"), "pw", email);
+      database.createUser(unique("other"), Authentication::hashPassword("pw"), email);
       FAIL("expected ConstraintError");
     } catch (const std::runtime_error &ex) {
       REQUIRE(std::string(ex.what()) == "User already exists");
@@ -223,12 +224,14 @@ TEST_CASE("DatabaseManager createUser constraints", "[database_manager][createUs
   }
 
   SECTION("seed username is taken") {
-    REQUIRE_THROWS_AS(database.createUser("omri", "pw", unique("omri") + "@mail.test"),
+    REQUIRE_THROWS_AS(database.createUser(kSeedAdminUser, Authentication::hashPassword("pw"),
+                                          unique("admin") + "@mail.test"),
                       DatabaseManager::ConstraintError);
   }
 
   SECTION("seed email is taken") {
-    REQUIRE_THROWS_AS(database.createUser(unique("taken"), "pw", "admin@gmail.com"),
+    REQUIRE_THROWS_AS(database.createUser(unique("taken"), Authentication::hashPassword("pw"),
+                                          kSeedAdminEmail),
                       DatabaseManager::ConstraintError);
   }
 }
@@ -240,7 +243,7 @@ TEST_CASE("DatabaseManager createUser string edges", "[database_manager][createU
   SECTION("empty username is stored") {
     const std::string email = unique("empty") + "@mail.test";
     if (!database.userExists("")) {
-      const User created = database.createUser("", "pw", email);
+      const User created = database.createUser("", Authentication::hashPassword("pw"), email);
       REQUIRE(created.getUsername().empty());
       REQUIRE(database.userExists(""));
       const auto loaded = database.getUser("");
@@ -251,7 +254,7 @@ TEST_CASE("DatabaseManager createUser string edges", "[database_manager][createU
 
   SECTION("empty email is stored") {
     const std::string name = unique("noemail");
-    const User created = database.createUser(name, "pw", "");
+    const User created = database.createUser(name, Authentication::hashPassword("pw"), "");
     REQUIRE(created.getEmail().empty());
     REQUIRE(database.getUser(name)->getEmail().empty());
   }
@@ -263,7 +266,8 @@ TEST_CASE("DatabaseManager createUser string edges", "[database_manager][createU
 
   SECTION("unicode username and email") {
     const std::string name = unique("עֹמְרִי");
-    const User created = database.createUser(name, "סוד", name + "@דוגמה.com");
+    const User created =
+        database.createUser(name, Authentication::hashPassword("סוד"), name + "@דוגמה.com");
     const auto loaded = database.getUser(name);
     REQUIRE(loaded.has_value());
     REQUIRE(loaded->getUsername() == name);
@@ -272,21 +276,22 @@ TEST_CASE("DatabaseManager createUser string edges", "[database_manager][createU
 
   SECTION("whitespace is significant") {
     const std::string name = unique(" spaced ");
-    database.createUser(name, "pw", name + "@mail.test");
+    database.createUser(name, Authentication::hashPassword("pw"), name + "@mail.test");
     REQUIRE(database.userExists(name));
     REQUIRE_FALSE(database.userExists(name.substr(1)));
   }
 
   SECTION("quotes and separators") {
     const std::string name = unique("o'reilly,;\"\\");
-    const User created = database.createUser(name, "p'w", name + "@mail.test");
+    const User created =
+        database.createUser(name, Authentication::hashPassword("p'w"), name + "@mail.test");
     REQUIRE(database.getUser(name)->getUsername() == created.getUsername());
   }
 
   SECTION("long username and email") {
     const std::string name = unique("l") + std::string(4000, 'x');
     const std::string email = name + "@mail.test";
-    const User created = database.createUser(name, "pw", email);
+    const User created = database.createUser(name, Authentication::hashPassword("pw"), email);
     REQUIRE(database.getUser(name)->getEmail() == email);
     REQUIRE(created.getUsername().size() > 4000);
   }
@@ -297,7 +302,8 @@ TEST_CASE("DatabaseManager loginUser success", "[database_manager][login]") {
   DatabaseManager &database = db();
   const std::string name = unique("login");
   const std::string password = "correct horse";
-  const User created = database.createUser(name, password, name + "@mail.test");
+  const User created =
+      database.createUser(name, Authentication::hashPassword(password), name + "@mail.test");
 
   const auto result = database.loginUser(name, password);
   REQUIRE(std::holds_alternative<User>(result));
@@ -311,7 +317,7 @@ TEST_CASE("DatabaseManager loginUser success", "[database_manager][login]") {
 TEST_CASE("DatabaseManager loginUser failures", "[database_manager][login][edge]") {
   DatabaseManager &database = db();
   const std::string name = unique("badlogin");
-  database.createUser(name, "right", name + "@mail.test");
+  database.createUser(name, Authentication::hashPassword("right"), name + "@mail.test");
 
   auto expectAuthFailed = [](const std::variant<User, std::string> &result) {
     REQUIRE(std::holds_alternative<std::string>(result));
@@ -335,18 +341,32 @@ TEST_CASE("DatabaseManager loginUser failures", "[database_manager][login][edge]
   }
 
   SECTION("case mismatch") {
-    expectAuthFailed(database.loginUser("OMRI", "pw"));
+    expectAuthFailed(database.loginUser("ADMIN", kSeedAdminPass));
   }
 
-  SECTION("seed placeholder hash rejects a normal password") {
-    expectAuthFailed(database.loginUser("omri", "password"));
-    expectAuthFailed(database.loginUser("admin", "admin"));
+  SECTION("seed wrong password is rejected") {
+    expectAuthFailed(database.loginUser(kSeedAdminUser, "password"));
+    expectAuthFailed(database.loginUser(kSeedUserUser, "password"));
   }
+}
 
-  SECTION("seed placeholder hash accepts the stored string as plaintext fallback") {
-    const auto result = database.loginUser("omri", kSeedHash);
+// 9b. seed Argon2 hashes accept the documented passwords
+TEST_CASE("DatabaseManager seed users login with real passwords",
+          "[database_manager][login][seed]") {
+  DatabaseManager &database = db();
+
+  SECTION("admin / admin") {
+    const auto result = database.loginUser(kSeedAdminUser, kSeedAdminPass);
     REQUIRE(std::holds_alternative<User>(result));
-    REQUIRE(std::get<User>(result).getUsername() == "omri");
+    REQUIRE(std::get<User>(result).getUsername() == kSeedAdminUser);
+    REQUIRE(std::get<User>(result).getUserType() == User::UserType::ADMIN);
+  }
+
+  SECTION("user / user") {
+    const auto result = database.loginUser(kSeedUserUser, kSeedUserPass);
+    REQUIRE(std::holds_alternative<User>(result));
+    REQUIRE(std::get<User>(result).getUsername() == kSeedUserUser);
+    REQUIRE(std::get<User>(result).getUserType() == User::UserType::USER);
   }
 }
 
@@ -583,7 +603,8 @@ TEST_CASE("DatabaseManager membership edges", "[database_manager][membership][ed
   REQUIRE_NOTHROW(database.clearAllMembership(""));
 
   const std::string unicode = unique("חבר");
-  REQUIRE_NOTHROW(database.createUser(unicode, "secret", unicode + "@example.com"));
+  REQUIRE_NOTHROW(database.createUser(unicode, Authentication::hashPassword("secret"),
+                                      unicode + "@example.com"));
   REQUIRE_NOTHROW(database.setMembership(unicode, kLobbyId, "צומת"));
   REQUIRE_NOTHROW(database.clearMembership(unicode, kLobbyId));
 }
@@ -636,7 +657,8 @@ TEST_CASE("DatabaseManager typical register login logout flow", "[database_manag
   const std::string password = "flow-secret";
 
   REQUIRE_FALSE(database.userExists(name));
-  const User created = database.createUser(name, password, name + "@mail.test");
+  const User created =
+      database.createUser(name, Authentication::hashPassword(password), name + "@mail.test");
   REQUIRE(database.userExists(name));
 
   const auto login = database.loginUser(name, password);
@@ -702,7 +724,7 @@ TEST_CASE("DatabaseManager updateUser password and username", "[database_manager
   DatabaseManager &database = db();
   const std::string name = unique("upd");
   const std::string email = name + "@mail.test";
-  database.createUser(name, "oldpw", email);
+  database.createUser(name, Authentication::hashPassword("oldpw"), email);
 
   SECTION("password change keeps username") {
     const User updated = database.updateUser(name, name, "newpw", email);
@@ -728,7 +750,7 @@ TEST_CASE("DatabaseManager updateUser password and username", "[database_manager
 
   SECTION("taken username is rejected") {
     const std::string other = unique("other");
-    database.createUser(other, "pw", other + "@mail.test");
+    database.createUser(other, Authentication::hashPassword("pw"), other + "@mail.test");
     REQUIRE_THROWS_AS(database.updateUser(name, other, "", email),
                       DatabaseManager::ConstraintError);
   }
