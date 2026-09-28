@@ -59,6 +59,7 @@ add_library(client_lib
     src/client/packet_builder.cpp
     src/client/packet_handler.cpp
     src/client/client.cpp
+    src/client/endpoint_ring.cpp
     src/utils/health/client_health_adapter.cpp
 )
 target_include_directories(client_lib PUBLIC include)
@@ -250,6 +251,8 @@ target_link_libraries(authentication_test PRIVATE auth Catch2::Catch2WithMain)
 
 add_executable(client_state_test tests/client/client_state_test.cpp)
 target_link_libraries(client_state_test PRIVATE utils Catch2::Catch2WithMain)
+add_executable(endpoint_ring_test tests/client/endpoint_ring_test.cpp src/client/endpoint_ring.cpp)
+target_link_libraries(endpoint_ring_test PRIVATE utils Catch2::Catch2WithMain)
 add_executable(packet_builder_test tests/client/packet_builder_test.cpp
                src/client/packet_builder.cpp)
 target_link_libraries(packet_builder_test PRIVATE utils Catch2::Catch2WithMain)
@@ -320,6 +323,7 @@ catch_discover_tests(authentication_test)
 # ------------ Client tests ------------
 
 catch_discover_tests(client_state_test)
+catch_discover_tests(endpoint_ring_test)
 catch_discover_tests(packet_builder_test)
 catch_discover_tests(packet_handler_test)
 catch_discover_tests(network_test)

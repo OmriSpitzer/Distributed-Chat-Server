@@ -10,6 +10,7 @@
 #include "utils/logger/logger.h"
 #include "utils/models/packet.h"
 #include "utils/socket_io.h"
+#include <chrono>
 #include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -20,8 +21,11 @@
 // destructor
 Network::~Network() { disconnect(); }
 
-// connecting to the server
-bool Network::connect() {
+// connecting to config::SERVER_HOST:PORT
+bool Network::connect() { return connect(config::SERVER_HOST, config::PORT); }
+
+// connecting to a specific chat endpoint
+bool Network::connect(std::string_view host, std::uint16_t port) {
   // check if already connected
   if (connected) {
     Logger::logWarning("Network", "Already connected");
@@ -37,17 +41,18 @@ bool Network::connect() {
   winsockStarted = true;
 
   // connect to the server
-  SOCKET socketFd = socket_io::connectTo(config::SERVER_HOST, config::PORT);
+  SOCKET socketFd = socket_io::connectTo(host, port);
   if (socketFd == INVALID_SOCKET) {
-    Logger::logError("Network", "Failed to connect to " + config::SERVER_HOST + ":" +
-                                    std::to_string(config::PORT));
+    Logger::logError("Network", "Failed to connect to " + std::string(host) + ":" +
+                                    std::to_string(port));
     WSACleanup();
     winsockStarted = false;
     return false;
   }
 
-  // set the client socket
+  // set the client socket; stamp inbound so the first ping has a full timeout
   clientSocket = socketFd;
+  noteInbound();
   connected = true;
 
   // start the reader thread
@@ -92,6 +97,8 @@ void Network::disconnect() {
     winsockStarted = false;
   }
 
+  lastInboundMs.store(0, std::memory_order_relaxed);
+
   // log the disconnection
   if (wasConnected) {
     Logger::logInfo("Network", "Disconnected from server");
@@ -100,21 +107,25 @@ void Network::disconnect() {
 
 // sending a packet to the server
 bool Network::sendPacket(const Packet &packet) {
-  // check if connected and the client socket is valid
-  std::lock_guard<std::mutex> lock(mutex);
-  if (!connected || clientSocket == INVALID_SOCKET) {
-    Logger::logError("Network", "Not connected to the server");
-    return false;
+  SOCKET failedFd = INVALID_SOCKET;
+  {
+    // check if connected and the client socket is valid
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!connected || clientSocket == INVALID_SOCKET) {
+      Logger::logError("Network", "Not connected to the server");
+      return false;
+    }
+
+    // send the packet to the server
+    if (!socket_io::writePacket(clientSocket, packet)) {
+      failedFd = clientSocket;
+      clientSocket = INVALID_SOCKET;
+    }
   }
 
-  // send the packet to the server
-  if (!socket_io::writePacket(clientSocket, packet)) {
-    const SOCKET fd = clientSocket;
-    clientSocket = INVALID_SOCKET;
-    connected = false;
-    socket_io::close(fd);
-    incomingCv.notify_all();
-
+  if (failedFd != INVALID_SOCKET) {
+    socket_io::close(failedFd);
+    markLinkDown();
     Logger::logError("Network", "Failed to send packet to the server");
     return false;
   }
@@ -152,11 +163,11 @@ void Network::readerLoop() {
     // read the packet from the server
     std::optional<Packet> packet = socket_io::readPacket(fd);
     if (!packet) {
-      connected = false;
-      incomingCv.notify_all();
+      markLinkDown();
       Logger::logError("Network", "Failed to read packet from the server");
       break;
     }
+    noteInbound();
 
     // check if the packet is a heartbeat
     if (packet->type == Packet::PacketType::HEARTBEAT) {
@@ -204,8 +215,55 @@ void Network::readerLoop() {
 // check if the network is connected
 bool Network::isConnected() const { return connected; }
 
+// true when the socket is up and no packet has arrived within HEARTBEAT_TIMEOUT
+bool Network::heartbeatMissed() const {
+  if (!connected.load(std::memory_order_acquire)) {
+    return false;
+  }
+  const auto last = lastInboundMs.load(std::memory_order_relaxed);
+  if (last <= 0) {
+    return true;
+  }
+  const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                       .count();
+  return now - last > config::HEARTBEAT_TIMEOUT;
+}
+
+// stamp now as the last time the peer sent a packet
+void Network::noteInbound() {
+  const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                       .count();
+  lastInboundMs.store(now, std::memory_order_relaxed);
+}
+
+// mark the socket down and wake the failover loop once
+void Network::markLinkDown() {
+  const bool wasUp = connected.exchange(false);
+  incomingCv.notify_all();
+  if (!wasUp) {
+    return;
+  }
+
+  std::function<void()> handler;
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    handler = linkDownHandler;
+  }
+  if (handler) {
+    handler();
+  }
+}
+
 // set push handler for unsolicited packets
 void Network::setPushHandler(PushHandler handler) {
   std::lock_guard<std::mutex> lock(mutex);
   pushHandler = std::move(handler);
+}
+
+// fired once when the socket drops (peer close or failed send)
+void Network::setLinkDownHandler(std::function<void()> handler) {
+  std::lock_guard<std::mutex> lock(mutex);
+  linkDownHandler = std::move(handler);
 }

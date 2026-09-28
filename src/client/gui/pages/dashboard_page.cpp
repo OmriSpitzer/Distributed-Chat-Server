@@ -10,6 +10,7 @@
 #include "client/gui/components/button.h"
 #include "client/gui/components/header.h"
 #include "client/gui/components/pop_up_window.h"
+#include "utils/health/i_health_check.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
 #include <QComboBox>
@@ -199,11 +200,18 @@ void DashboardPage::refresh() {
   flushIncomingChat();
 
   ClientState &state = client()->getState();
-  const bool connected = client()->isAlive();
+  const HealthStatus link = client()->health().check().status;
+  const bool connected = link != HealthStatus::Down;
   const QString currentRoom = roomNameOf(state);
   const std::vector<Room> rooms = state.getRooms();
 
-  header()->subtitleLabel()->setText(connected ? "Connected" : "Disconnected");
+  QString subtitle = QStringLiteral("Disconnected");
+  if (link == HealthStatus::Up) {
+    subtitle = QStringLiteral("Connected");
+  } else if (link == HealthStatus::Degraded) {
+    subtitle = QStringLiteral("Degraded");
+  }
+  header()->subtitleLabel()->setText(subtitle);
   header()->setLoggedIn(state.isLoggedIn(), displayName());
   createRoomButton->setVisible(state.isLoggedIn());
   inviteButton->setVisible(state.isLoggedIn());

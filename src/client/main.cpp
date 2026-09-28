@@ -7,6 +7,8 @@
 #include "client/client.h"
 #include "config/config.h"
 #include <atomic>
+#include <chrono>
+#include <thread>
 #include <windows.h>
 
 // global variables for console control signals
@@ -34,7 +36,11 @@ int main(int argc, char *argv[]) {
 
   if (config::TEST_MODE) {
     // console mode (original)
-    while (client.isAlive() && !g_stop.load()) {
+    while (!g_stop.load() && client.isRunning()) {
+      if (!client.isAlive()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        continue;
+      }
       client.showDashboard();
     }
     client.stop();

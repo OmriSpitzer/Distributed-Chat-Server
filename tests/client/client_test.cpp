@@ -43,6 +43,8 @@
  * 8. login failure keeps connection
  * 9. register success round-trip
  * 10. login then logout
+ * 11. connect failure walks to the next endpoint
+ * 12. peer close walks to the next endpoint
  */
 
 namespace {
@@ -386,4 +388,109 @@ TEST_CASE("Client login then logout", "[client][logout]") {
 
   serverThread.join();
   REQUIRE(client.isAlive());
+}
+
+namespace {
+
+struct FailoverConfigGuard {
+  bool testMode = config::TEST_MODE;
+  std::vector<ServerPoint> neighbors = config::NEIGHBOR_SERVERS;
+
+  ~FailoverConfigGuard() {
+    config::TEST_MODE = testMode;
+    config::NEIGHBOR_SERVERS = std::move(neighbors);
+  }
+};
+
+} // namespace
+
+// 11. connect failure walks to the next endpoint
+TEST_CASE("Client fails over when the first endpoint refuses", "[client][failover][connect]") {
+  REQUIRE(winsock().ok);
+  ConfigGuard guard;
+  FailoverConfigGuard failoverGuard;
+
+  SOCKET closedListener = socket_io::listenTo(0);
+  REQUIRE(closedListener != INVALID_SOCKET);
+  sockaddr_in bound{};
+  int boundLen = sizeof(bound);
+  REQUIRE(getsockname(closedListener, reinterpret_cast<sockaddr *>(&bound), &boundLen) == 0);
+  const auto closedPort = ntohs(bound.sin_port);
+  socket_io::close(closedListener);
+
+  TestPeer backup;
+  REQUIRE(backup.listen());
+  const auto backupPort = config::PORT;
+
+  config::SERVER_HOST = "127.0.0.1";
+  config::PORT = closedPort;
+  config::NEIGHBOR_SERVERS = {ServerPoint{"127.0.0.1", backupPort}};
+  config::TEST_MODE = true;
+
+  std::thread acceptor([&backup] {
+    REQUIRE(backup.acceptOnce());
+    REQUIRE(socket_io::writePacket(backup.peer, connectWelcome()));
+  });
+
+  Client client;
+  const bool started = client.start();
+  if (!started && backup.listener != INVALID_SOCKET) {
+    socket_io::close(backup.listener);
+    backup.listener = INVALID_SOCKET;
+  }
+  acceptor.join();
+  REQUIRE(started);
+  REQUIRE(client.isAlive());
+  client.stop();
+  REQUIRE_FALSE(client.isAlive());
+  REQUIRE_FALSE(client.isRunning());
+}
+
+// 12. peer close walks to the next endpoint
+TEST_CASE("Client fails over when the peer closes", "[client][failover][close]") {
+  REQUIRE(winsock().ok);
+  ConfigGuard guard;
+  FailoverConfigGuard failoverGuard;
+
+  TestPeer primary;
+  TestPeer backup;
+  REQUIRE(primary.listen());
+  const auto primaryPort = config::PORT;
+  REQUIRE(backup.listen());
+  const auto backupPort = config::PORT;
+
+  config::SERVER_HOST = "127.0.0.1";
+  config::PORT = primaryPort;
+  config::NEIGHBOR_SERVERS = {ServerPoint{"127.0.0.1", backupPort}};
+  config::TEST_MODE = true;
+
+  std::thread primaryThread([&primary] {
+    REQUIRE(primary.acceptOnce());
+    REQUIRE(socket_io::writePacket(primary.peer, connectWelcome()));
+    socket_io::close(primary.peer);
+    primary.peer = INVALID_SOCKET;
+  });
+  std::thread backupThread([&backup] {
+    REQUIRE(backup.acceptOnce());
+    REQUIRE(socket_io::writePacket(backup.peer, connectWelcome()));
+  });
+
+  Client client;
+  const bool started = client.start();
+  if (!started) {
+    if (primary.listener != INVALID_SOCKET) {
+      socket_io::close(primary.listener);
+      primary.listener = INVALID_SOCKET;
+    }
+    if (backup.listener != INVALID_SOCKET) {
+      socket_io::close(backup.listener);
+      backup.listener = INVALID_SOCKET;
+    }
+  }
+  primaryThread.join();
+  backupThread.join();
+  REQUIRE(started);
+  REQUIRE(client.isAlive());
+  client.stop();
+  REQUIRE_FALSE(client.isAlive());
 }

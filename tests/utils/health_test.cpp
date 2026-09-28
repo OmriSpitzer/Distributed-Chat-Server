@@ -19,6 +19,9 @@
 #include "utils/health/i_health_check.h"
 #include "utils/health/server_health_adapter.h"
 #include "utils/logger/logger.h"
+#include "utils/models/room.h"
+#include "utils/models/user.h"
+#include "utils/socket_io.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
@@ -34,6 +37,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #ifdef ERROR
 #undef ERROR
 #endif
@@ -52,7 +56,10 @@
  * 11. ServerHealthAdapter Down when not started
  * 12. ServerHealthAdapter Up after start
  * 13. ClientHealthAdapter Down when not connected
- * 14. Monitor rollup with real Server adapters
+ * 14. ClientHealthAdapter Up on a live connection, Down after stop
+ * 15. Monitor rollup with real Server adapters
+ * 16. Client::health rolls up ClientHealthAdapter before connect
+ * 17. Live Client + Db rollup: client Down → overall Down, then Up
  */
 
 namespace {
@@ -119,6 +126,69 @@ DatabaseManager &dbForTests() {
     return &DatabaseManager::getInstance();
   }();
   return *instance;
+}
+
+struct ConfigGuard {
+  std::string host = config::SERVER_HOST;
+  std::uint16_t port = config::PORT;
+  bool testMode = config::TEST_MODE;
+  std::vector<ServerPoint> neighbors = config::NEIGHBOR_SERVERS;
+
+  ~ConfigGuard() {
+    config::SERVER_HOST = host;
+    config::PORT = port;
+    config::TEST_MODE = testMode;
+    config::NEIGHBOR_SERVERS = neighbors;
+  }
+};
+
+struct TestPeer {
+  SOCKET listener{INVALID_SOCKET};
+  SOCKET peer{INVALID_SOCKET};
+
+  TestPeer() = default;
+  TestPeer(const TestPeer &) = delete;
+  TestPeer &operator=(const TestPeer &) = delete;
+
+  ~TestPeer() {
+    if (peer != INVALID_SOCKET) {
+      socket_io::close(peer);
+    }
+    if (listener != INVALID_SOCKET) {
+      socket_io::close(listener);
+    }
+  }
+
+  bool listen() {
+    listener = socket_io::listenTo(0);
+    if (listener == INVALID_SOCKET) {
+      return false;
+    }
+    sockaddr_in bound{};
+    int boundLen = sizeof(bound);
+    if (getsockname(listener, reinterpret_cast<sockaddr *>(&bound), &boundLen) != 0) {
+      return false;
+    }
+    config::SERVER_HOST = "127.0.0.1";
+    config::PORT = ntohs(bound.sin_port);
+    config::NEIGHBOR_SERVERS.clear();
+    config::TEST_MODE = true;
+    return true;
+  }
+
+  bool acceptOnce() {
+    peer = socket_io::acceptFrom(listener);
+    return peer != INVALID_SOCKET;
+  }
+};
+
+Packet connectWelcome() {
+  const User anon = User::anonymousUser();
+  const std::string directory = Room::serializeList({
+      Room(1, "Lobby", Room::RoomType::LOBBY),
+      Room(2, "General", Room::RoomType::OTHER),
+  });
+  return Packet("server", anon.serialize(), Packet::PacketType::ROOM_LIST, "Lobby", directory, 0);
 }
 
 } // namespace
@@ -268,7 +338,37 @@ TEST_CASE("ClientHealthAdapter reports Down when not connected", "[health][adapt
   REQUIRE_FALSE(client.isAlive());
 }
 
-// 14. Monitor rollup with real Server adapters
+// 14. ClientHealthAdapter Up on a live socket, Down after stop
+TEST_CASE("ClientHealthAdapter reports Up when connected", "[health][adapter][client]") {
+  REQUIRE(winsock().ok);
+  ConfigGuard guard;
+  TestPeer server;
+  REQUIRE(server.listen());
+
+  Client client;
+  ClientHealthAdapter adapter(client);
+  REQUIRE(adapter.check().status == HealthStatus::Down);
+
+  std::thread acceptor([&server] {
+    REQUIRE(server.acceptOnce());
+    REQUIRE(socket_io::writePacket(server.peer, connectWelcome()));
+  });
+  REQUIRE(client.start());
+  acceptor.join();
+
+  const HealthReport up = adapter.check();
+  REQUIRE(up.name == "client");
+  REQUIRE(up.status == HealthStatus::Up);
+  REQUIRE(up.detail == "connected");
+  REQUIRE(client.isAlive());
+
+  client.stop();
+  REQUIRE(adapter.check().status == HealthStatus::Down);
+  REQUIRE(adapter.check().detail == "not connected");
+  REQUIRE_FALSE(client.isAlive());
+}
+
+// 15. Monitor rollup with real Server adapters
 TEST_CASE("HealthMonitor rollup with Server Heartbeat Db adapters",
           "[health][monitor][adapter][flow]") {
   REQUIRE(winsock().ok);
@@ -301,4 +401,46 @@ TEST_CASE("HealthMonitor rollup with Server Heartbeat Db adapters",
 
   heartbeat.stop();
   server.stop();
+}
+
+// 15. Client::health is what the dashboard subtitle reads
+TEST_CASE("Client health monitor reports Down before connect", "[health][monitor][client]") {
+  Client client;
+  client.health().add(std::make_unique<ClientHealthAdapter>(client));
+  const HealthReport report = client.health().check();
+  REQUIRE(report.status == HealthStatus::Down);
+  REQUIRE(report.detail.find("client:Down") != std::string::npos);
+  REQUIRE_FALSE(client.isAlive());
+}
+
+// 17. Live Client + Db: one Down child keeps the monitor Down until the client connects
+TEST_CASE("HealthMonitor rollup with live Client and Db adapters",
+          "[health][monitor][adapter][client]") {
+  REQUIRE(winsock().ok);
+  ConfigGuard guard;
+  TestPeer server;
+  REQUIRE(server.listen());
+
+  Client client;
+  HealthMonitor monitor;
+  monitor.add(std::make_unique<ClientHealthAdapter>(client));
+  monitor.add(std::make_unique<DbHealthAdapter>(dbForTests()));
+
+  HealthReport before = monitor.check();
+  REQUIRE(before.status == HealthStatus::Down);
+  REQUIRE(before.detail.find("client:Down") != std::string::npos);
+
+  std::thread acceptor([&server] {
+    REQUIRE(server.acceptOnce());
+    REQUIRE(socket_io::writePacket(server.peer, connectWelcome()));
+  });
+  REQUIRE(client.start());
+  acceptor.join();
+
+  HealthReport connected = monitor.check();
+  REQUIRE(connected.status == HealthStatus::Up);
+  REQUIRE(connected.detail.empty());
+
+  client.stop();
+  REQUIRE(monitor.check().status == HealthStatus::Down);
 }

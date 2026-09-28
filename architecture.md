@@ -182,6 +182,8 @@ flowchart TB
 
 `Network` is the only client class that talks to the server. Widgets and `ConsoleUI` never touch a socket; they call `Client` on the UI / main thread. `MESSAGE` pushes are queued under a mutex and drained on the Qt timer (not from the reader thread).
 
+The failover supervisor dials `EndpointRing`. `mergeFailoverList` builds that ring from the cached `SERVER_DIRECTORY` and the static seed (`--host`/`--port`, then `--servers`). Endpoints the last directory reported as up come first; seed addresses the directory did not list stay after them. The connected endpoint stays at the front so a directory push does not drop a live socket. The next hop tries the other directory-up endpoints before the leftover seed.
+
 ---
 
 ## Across the wire

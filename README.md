@@ -28,6 +28,7 @@ Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` f
 - **Rooms** — public / private rooms, join / leave (back to Lobby), create, invite to private rooms (`allow_list`)
 - **Messages** — persist for registered users, live broadcast (including guests), rumor to peer nodes, history load
 - **Heartbeat** — server pings; client auto-replies `pong`; stale sockets are closed
+- **Client failover** — `--host`/`--port` and `--servers` merge with `SERVER_DIRECTORY`; endpoints the last directory reported as up are tried first
 - **Gossip** — `HELLO`, `EVENT`, `DIGEST`, and `PULL` with periodic anti-entropy
 - **Qt GUI** — client chat dashboard and server Ports / Users / Rooms / Log panels (console via `--test`)
 
@@ -75,6 +76,7 @@ Gossip event bodies use five length-prefixed fields (`type`, `eventId`, `usernam
 | `ROOM_CREATE` | Create room (`room` = name, `message` = optional privacy) |
 | `ROOM_INVITE` | Allow-list a user for a private room |
 | `ROOM_LIST` | Server push of full directory (`responseCode == 0`, body in `message`) |
+| `SERVER_DIRECTORY` | Push of live chat `host:port` endpoints (`responseCode == 0`, body in `message`) |
 | `MESSAGE` | Chat send (response) and room push (`responseCode == 0`) |
 | `LOAD_MESSAGE_HISTORY` | History for the current room |
 | `HEARTBEAT` | Server `ping` / client `pong` |

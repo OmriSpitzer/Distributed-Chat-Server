@@ -6,17 +6,21 @@
 
 #pragma once
 #include "client/client_state.h"
+#include "client/endpoint_ring.h"
 #include "client/network.h"
 #include "client/packet_handler.h"
-#include "utils/health/client_health_adapter.h"
+#include "utils/health/health_monitor.h"
 #include "utils/models/packet.h"
+#include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
-#include <memory>
 #include <mutex>
 #include <optional>
+#include <random>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 
@@ -28,14 +32,23 @@ struct ChatLine {
 
 class Client {
 public:
+  // joins the failover thread
+  ~Client();
+
   // starting the client
   bool start();
 
   // stopping the client
   void stop();
 
-  // check if the client is alive
+  // check if the client is alive (socket up and heartbeat fresh)
   bool isAlive() const;
+
+  // rolled-up client health (link adapter registered in start)
+  HealthMonitor &health();
+
+  // true while the failover supervisor is running
+  bool isRunning() const;
 
   // showing the dashboard (console)
   void showDashboard();
@@ -102,10 +115,34 @@ private:
 
   std::mutex chatMutex;              // guards pendingChat
   std::vector<ChatLine> pendingChat; // queued chat messages
-  std::unique_ptr<ClientHealthAdapter> healthAdapter; // set after connect in start()
+
+  EndpointRing ring;                          // round-robin failover list
+  HealthMonitor healthMonitor;                // rolls up the client adapter
+  bool healthWired{false};                    // adapter registered once
+  std::thread supervisor;                     // dials and watches the link
+  std::atomic<bool> stopRequested{false};     // stop() asked the supervisor to exit
+  std::atomic<bool> supervisorRunning{false}; // supervisor thread is inside its loop
+  std::mutex waitMutex;                       // guards the failover wait
+  std::condition_variable waitCv;             // wakes sleep on stop or link down
+  std::mt19937 rng{std::random_device{}()};   // jitter source
 
   // waiting for a packet of a specific type
   std::optional<Packet> waitFor(Packet::PacketType expected);
+
+  // rebuild the ring: directory-up endpoints, then the static seed
+  void rebuildEndpoints();
+
+  // dial the ring until stop or the attempt budget is spent
+  void supervisorLoop();
+
+  // socket up, heartbeat fresh, and HealthMonitor not Down
+  bool linkHealthy();
+
+  // advance the ring, sleep with backoff + jitter; false when the budget or stop ends the loop
+  bool failAndWait(int &attempt);
+
+  // sleep that returns false when stop() was requested
+  bool sleepFor(std::chrono::milliseconds delay);
 
   // cache room directory from login reply or ROOM_LIST push
   void applyRoomDirectory(const std::string &encoded);

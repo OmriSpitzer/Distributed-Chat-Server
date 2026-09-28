@@ -171,10 +171,10 @@ Shared `IHealthCheck` (Adapter target) and `HealthMonitor` (Composite). Same mon
 - [x] Define `IHealthCheck` → `HealthReport` (`name`, `Up` / `Degraded` / `Down`, optional detail).
 - [x] `HealthMonitor` holds `IHealthCheck` children, exposes `checkAll()` / overall status (Composite; may itself implement `IHealthCheck`).
 - [x] **Server adapters:** `DatabaseHealthAdapter`, `HeartbeatHealthAdapter`, `ServerHealthAdapter` (`isAlive` / listening) — register in `Server::start`.
-- [ ] **Client adapters:** `ClientHealthAdapter` (`Network` connected) — register in `Client::start`.
+- [x] **Client adapters:** `ClientHealthAdapter` (`Network` connected) — register in `Client::start`.
 - [x] Do not register DB / Heartbeat adapters on the client (those objects do not live there).
-- [ ] Wire failover (§3) and GUI status to `HealthMonitor`, not ad-hoc `isAlive()` only.
-- [ ] Unit-test each adapter with fakes; test monitor rollup (one child Down → overall Down / Degraded).
+- [x] Wire failover (§3) and GUI status to `HealthMonitor`, not ad-hoc `isAlive()` only.
+- [x] Unit-test each adapter against live objects; test monitor rollup (one child Down → overall Down / Degraded).
 
 
 
@@ -206,7 +206,7 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 
 **Design:** Topology for client failover lives with the servers (they already gossip). Clients stay dumb: bootstrap from a seed, cache a directory, reconnect when the current node dies, re-auth. Dead nodes cannot hand clients off; peers do not dial clients.
 
-`Network::connect` still uses a single `config::SERVER_HOST` / `PORT` today. Config seed list exists; no runtime directory, no auto-relogin after hop.
+`Network::connect(host, port)` dials one endpoint. The client supervisor walks one failover list: endpoints the last `SERVER_DIRECTORY` reported as up, then the static seed (`--host`/`--port`, then `--servers`) that were not in that directory, with backoff and jitter. The connected endpoint stays at the front until the link fails. Re-`LOGIN` after a hop is still open.
 
 ### Ownership
 
@@ -222,7 +222,6 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 ### Bootstrap (client / ops)
 
 - [x] Config: `--servers host:port,host:port` (client listen ports, not gossip `--peers`). Keep `--host`/`--port` as single-endpoint shorthand.
-- [ ] Always keep a static seed (CLI / scripts / DNS) — directory can go stale if the last node dies before a push; do not hardcode only localhost demos.
 
 
 
@@ -230,18 +229,17 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 
 - [x] Each node tracks live **client** endpoints of cluster members (from gossip HELLO / peer health — not raw `--peers` gossip ports).
 - [x] Push (or reply to) a lightweight **directory** packet of `host:port` chat endpoints to connected clients (on connect, on membership change, and/or periodically).
-- [ ] Directory is **hints**, not trust: clients must still LOGIN/auth on the next node.
 - [x] Refresh after login so the client’s cache matches who the new node believes is up.
 
 
 
 ### Client — cache and reconnect
 
-- [ ] Merge seed + server directory into a failover list; prefer endpoints the last directory reported as up.
-- [ ] On connect failure, peer close, heartbeat miss / `isAlive() == false`, or failed `HealthMonitor` / Client adapter: try the next endpoint (round-robin or priority) with backoff + jitter.
+- [x] Merge seed + server directory into a failover list; prefer endpoints the last directory reported as up.
+- [x] On connect failure, peer close, heartbeat miss / `isAlive() == false`, or failed `HealthMonitor` / Client adapter: try the next endpoint (round-robin or priority) with backoff + jitter.
 - [ ] After hop: restore session — re-`LOGIN` (or guest reconnect), re-`ROOM_JOIN` current room, drain/clear stale chat queue; surface “reconnecting…” in console + Qt.
 - [ ] Cap reconnect storms; do not retry forever without UI cancel.
-- [ ] Wire reconnect triggers to `HealthMonitor` (pairs with §1), not ad-hoc checks only.
+- [x] Wire reconnect triggers to `HealthMonitor` (pairs with §1), not ad-hoc checks only.
 
 
 

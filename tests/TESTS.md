@@ -2,7 +2,7 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **26** executables, **344** `TEST_CASE`s.
+Totals: **29** executables, **386** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
@@ -32,6 +32,7 @@ ctest --test-dir build --output-on-failure
 | `serializer_test` | `tests/utils/serializer_test.cpp` | 8 |
 | `socket_io_test` | `tests/utils/socket_io_test.cpp` | 10 |
 | `gossip_payload_test` | `tests/utils/gossip_payload_test.cpp` | 11 |
+| `health_test` | `tests/utils/health_test.cpp` | 15 |
 
 ### User (`[user]`)
 
@@ -173,6 +174,24 @@ ctest --test-dir build --output-on-failure
 - gossip_payload rejects legacy pipe format
 - gossip_payload double round-trip stable
 
+### Health (`[health]`)
+
+- healthStatusToString maps each status
+- HealthReport statusToString uses status field
+- HealthMonitor empty check is Up
+- HealthMonitor all Up stays Up
+- HealthMonitor one Down yields overall Down
+- HealthMonitor Degraded without Down
+- HealthMonitor Down wins over Degraded
+- DbHealthAdapter reports Up when ping succeeds
+- HeartbeatHealthAdapter tracks isRunning
+- ServerHealthAdapter tracks isAlive
+- ClientHealthAdapter reports Down when not connected
+- ClientHealthAdapter reports Up when connected
+- HealthMonitor rollup with Server Heartbeat Db adapters
+- Client health monitor reports Down before connect
+- HealthMonitor rollup with live Client and Db adapters
+
 ---
 
 ## Auth — Argon2id
@@ -205,6 +224,7 @@ ctest --test-dir build --output-on-failure
 | Executable | File | Cases |
 |---|---|---|
 | `client_state_test` | `tests/client/client_state_test.cpp` | 10 |
+| `endpoint_ring_test` | `tests/client/endpoint_ring_test.cpp` | 9 |
 | `packet_builder_test` | `tests/client/packet_builder_test.cpp` | 21 |
 | `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 7 |
 | `network_test` | `tests/client/network_test.cpp` | 11 |
@@ -223,6 +243,18 @@ ctest --test-dir build --output-on-failure
 - ClientState clear is idempotent
 - ClientState anonymous and empty-field users
 - ClientState Lobby room assignment
+
+### EndpointRing (`[endpoint_ring]` / `[failover]`)
+
+- EndpointRing walks the list and wraps
+- EndpointRing replace keeps the cursor host
+- EndpointRing replace drops a missing cursor
+- Backoff ceiling doubles and caps
+- Full jitter stays within the ceiling
+- Failover list prefers directory endpoints
+- Failover list keeps the connected endpoint first
+- Failover list keeps the seed when the directory is empty
+- Failover list ignores directory entries that are not up
 
 ### PacketBuilder (`[packet_builder]`)
 

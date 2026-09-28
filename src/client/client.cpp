@@ -10,13 +10,16 @@
 #include "client/gui/pages/main_page.h"
 #include "client/packet_builder.h"
 #include "client/packet_handler.h"
+#include "config/config.h"
 #include "utils/RESPONSE_CODES.h"
+#include "utils/health/client_health_adapter.h"
 #include "utils/logger/consoleLogger.h"
 #include "utils/logger/logger.h"
 #include "utils/models/client_endpoint.h"
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -113,11 +116,104 @@ void Client::applyServerDirectoryPush(const Packet &packet) {
 
   const std::size_t count = next.size();
   state.setServerEndpoints(std::move(next));
+  rebuildEndpoints();
   Logger::logInfo("Client " + id, "Server directory updated (" + std::to_string(count) + ")");
+}
+
+// joins the failover thread
+Client::~Client() { stop(); }
+
+// rebuild the ring: directory-up endpoints, then the static seed
+void Client::rebuildEndpoints() {
+  std::vector<ServerPoint> seed;
+  seed.push_back(ServerPoint{config::SERVER_HOST, config::PORT});
+  for (const auto &neighbor : config::NEIGHBOR_SERVERS) {
+    seed.push_back(neighbor);
+  }
+  const ServerPoint connected = ring.current();
+  ring.replace(mergeFailoverList(connected, seed, state.getServerEndpoints()));
+}
+
+// sleep that returns false when stop() was requested
+bool Client::sleepFor(std::chrono::milliseconds delay) {
+  std::unique_lock<std::mutex> lock(waitMutex);
+  return !waitCv.wait_for(lock, delay, [this] { return stopRequested.load(); });
+}
+
+// advance the ring, sleep with backoff + jitter; false when the budget or stop ends the loop
+bool Client::failAndWait(int &attempt) {
+  ring.advance();
+  ++attempt;
+  const int laps = config::TEST_MODE ? 1 : 4;
+  const int limit = std::max(1, static_cast<int>(ring.size())) * laps;
+  if (attempt >= limit || stopRequested.load()) {
+    Logger::logError("Client " + id, "Stopped failing over after " + std::to_string(attempt) +
+                                         " attempts");
+    return false;
+  }
+
+  const int delayMs = fullJitterDelayMs(attempt - 1, rng);
+  Logger::logInfo("Client " + id, "Next endpoint in " + std::to_string(delayMs) + " ms");
+  return sleepFor(std::chrono::milliseconds(delayMs));
+}
+
+// socket up, heartbeat fresh, and HealthMonitor not Down
+bool Client::linkHealthy() { return healthMonitor.check().status == HealthStatus::Up; }
+
+// dial the ring until stop or the attempt budget is spent
+void Client::supervisorLoop() {
+  int attempt = 0;
+  while (!stopRequested.load()) {
+    const ServerPoint endpoint = ring.current();
+    if (endpoint.port == 0) {
+      Logger::logError("Client " + id, "No failover endpoints");
+      break;
+    }
+
+    Logger::logInfo("Client " + id, "Connecting to " + endpoint.host + ":" +
+                                        std::to_string(endpoint.port));
+    if (!network.connect(endpoint.host, endpoint.port)) {
+      if (!failAndWait(attempt)) {
+        break;
+      }
+      continue;
+    }
+
+    waitCv.notify_all();
+    attempt = 0;
+
+    while (!stopRequested.load() && linkHealthy()) {
+      if (!sleepFor(std::chrono::seconds(1))) {
+        break;
+      }
+    }
+    if (stopRequested.load()) {
+      break;
+    }
+
+    std::string reason = "health check failed";
+    if (network.heartbeatMissed()) {
+      reason = "heartbeat missed";
+    } else if (!network.isConnected()) {
+      reason = "peer closed";
+    }
+    Logger::logWarning("Client " + id, reason + ", trying next endpoint");
+    network.disconnect();
+    if (!failAndWait(attempt)) {
+      break;
+    }
+  }
+
+  supervisorRunning = false;
+  waitCv.notify_all();
 }
 
 // start the client
 bool Client::start() {
+  if (supervisorRunning.load() || supervisor.joinable()) {
+    return false;
+  }
+
   static ConsoleLogger consoleLogger;
   Logger::getInstance().addLogger(&consoleLogger);
 
@@ -138,9 +234,25 @@ bool Client::start() {
     }
   });
 
-  // connect to the server
-  if (!network.connect()) {
+  rebuildEndpoints();
+  if (!healthWired) {
+    healthMonitor.add(std::make_unique<ClientHealthAdapter>(*this));
+    healthWired = true;
+  }
+  stopRequested = false;
+  supervisorRunning = true;
+  network.setLinkDownHandler([this] { waitCv.notify_all(); });
+  supervisor = std::thread([this] { supervisorLoop(); });
+
+  {
+    std::unique_lock<std::mutex> lock(waitMutex);
+    waitCv.wait(lock, [this] {
+      return network.isConnected() || !supervisorRunning.load() || stopRequested.load();
+    });
+  }
+  if (!network.isConnected()) {
     Logger::logError("Client " + id, "Failed to connect to the server");
+    stop();
     return false;
   }
 
@@ -168,8 +280,6 @@ bool Client::start() {
     state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
   }
 
-  healthAdapter = std::make_unique<ClientHealthAdapter>(*this);
-
   return true;
 }
 
@@ -194,10 +304,27 @@ std::vector<ChatLine> Client::takePendingChatMessages() {
 }
 
 // stop the client
-void Client::stop() { network.disconnect(); }
+void Client::stop() {
+  {
+    std::lock_guard<std::mutex> lock(waitMutex);
+    stopRequested = true;
+  }
+  waitCv.notify_all();
+  if (supervisor.joinable()) {
+    supervisor.join();
+  }
+  network.disconnect();
+  supervisorRunning = false;
+}
 
 // check if the client is alive
-bool Client::isAlive() const { return network.isConnected(); }
+bool Client::isAlive() const { return network.isConnected() && !network.heartbeatMissed(); }
+
+// rolled-up client health
+HealthMonitor &Client::health() { return healthMonitor; }
+
+// true while the failover supervisor is running
+bool Client::isRunning() const { return supervisorRunning.load(); }
 
 // join a room by name (requires login). Empty = success; otherwise error text.
 std::string Client::joinRoom(std::string_view roomName) {
