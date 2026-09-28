@@ -255,7 +255,8 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 Desktop Qt/console stay primary for chat; website is admin + light client / status, not a second gossip peer.
 
 - [ ] Thin **gateway** (separate process or sidecar): REST and/or WebSocket for domain ops (login, rooms list, history read, optional send).
-- [ ] Do **not** put HTTP inside `server_lib` packet path; gateway talks TCP/`Packet` to a chosen node.
+- [ ] Do **not** put REST inside `PacketProcessor`; it still sees only `Packet`. A gateway, when used, talks TCP/`Packet` to a chosen node.
+- [ ] **Also** a WebSocket listener on `chat_server` (`--ws-port`): HTTP upgrade in `socket_io` / `ConnectionManager` only. Each binary frame payload is one existing length-prefixed `Packet`. Qt clients stay on `--port`. Gossip stays on `--peer-port`. `wss` terminates at the reverse proxy.
 - [ ] Public pages: cluster status (nodes up/down), room directory (public only), optional read-only message feed.
 - [ ] Auth pages: register / login against chat cluster (via gateway); session cookie/JWT for website only — chat nodes keep Argon2id + binary sessions.
 - [ ] Admin UI: kick/invite/delete room (ADMIN), view online users across nodes (aggregated from gateway polls or events).
@@ -369,6 +370,7 @@ Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-
 ## 9. Transport & API surface (website)
 
 - [ ] WebSocket and/or REST gateway implementing website ops (§4).
+- [ ] Optional `--ws-port` on `chat_server` (§4): binary frames carry the same `Packet` bytes, so a browser can skip a separate gateway.
 - [ ] OpenAPI (REST) or schema doc for gateway; map HTTP errors to existing `200`/`400`/`404`/`500` meanings.
 - [ ] Rate limits on gateway register/login; same Argon2id verification path via cluster, not a second hash scheme.
 - [ ] “RESTfulness on APIs” = gateway resources (`/rooms`, `/rooms/{id}/messages`), not rewriting binary `Packet` into REST inside each node.
@@ -377,7 +379,7 @@ Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-
 
 ## 10. Docs & ops
 
-- [ ] Update README architecture diagram: clients → multi-server failover; website → gateway → node; AWS RDS for website only.
+- [ ] Update README architecture diagram: clients → multi-server failover; website → gateway → node, or browser → `--ws-port`; AWS RDS for website only.
 - [ ] Runbook: node crash, client failover, RDS failover, gossip partition.
 - [ ] Sync `tests/TESTS.md` checkboxes when §7 cases land; fix doc typo link `FUTURE_WORKs.md` → `FUTURE_WORK.md`.
 - [ ] Version badge / changelog note for 3.0.0 when shipping.
