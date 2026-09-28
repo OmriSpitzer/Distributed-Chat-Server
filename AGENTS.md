@@ -54,8 +54,7 @@ Every behavior change needs tests.
 - Build and run the full suite:
 
 ```powershell
-.\scripts\build.ps1
-ctest --test-dir build --output-on-failure
+.\scripts\run_test.ps1
 ```
 
 - For cluster / gossip changes, also smoke test manually with `.\scripts\run_cluster.ps1` (or `-Test` for console UIs).

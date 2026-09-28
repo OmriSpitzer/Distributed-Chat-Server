@@ -14,6 +14,7 @@
 #include "utils/models/user.h"
 #include "utils/socket_io.h"
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <optional>
@@ -45,6 +46,7 @@
  * 10. login then logout
  * 11. connect failure walks to the next endpoint
  * 12. peer close walks to the next endpoint
+ * 13. hop reports reconnecting and does not re-login
  */
 
 namespace {
@@ -441,6 +443,8 @@ TEST_CASE("Client fails over when the first endpoint refuses", "[client][failove
   acceptor.join();
   REQUIRE(started);
   REQUIRE(client.isAlive());
+  REQUIRE_FALSE(client.isReconnecting());
+  REQUIRE(client.reconnectCount() == 0);
   client.stop();
   REQUIRE_FALSE(client.isAlive());
   REQUIRE_FALSE(client.isRunning());
@@ -493,4 +497,86 @@ TEST_CASE("Client fails over when the peer closes", "[client][failover][close]")
   REQUIRE(client.isAlive());
   client.stop();
   REQUIRE_FALSE(client.isAlive());
+}
+
+// 13. hop reports reconnecting and does not re-login
+TEST_CASE("Client reports reconnecting on hop without re-login", "[client][failover][reconnect]") {
+  REQUIRE(winsock().ok);
+  ConfigGuard guard;
+  FailoverConfigGuard failoverGuard;
+
+  TestPeer primary;
+  TestPeer backup;
+  REQUIRE(primary.listen());
+  const auto primaryPort = config::PORT;
+  REQUIRE(backup.listen());
+  const auto backupPort = config::PORT;
+
+  config::SERVER_HOST = "127.0.0.1";
+  config::PORT = primaryPort;
+  config::NEIGHBOR_SERVERS = {ServerPoint{"127.0.0.1", backupPort}};
+  config::TEST_MODE = true;
+
+  std::atomic<bool> drop{false};
+  std::thread primaryThread([&primary, &drop] {
+    REQUIRE(primary.acceptOnce());
+    REQUIRE(socket_io::writePacket(primary.peer, connectWelcome()));
+    while (!drop.load()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    socket_io::close(primary.peer);
+    primary.peer = INVALID_SOCKET;
+  });
+  std::thread backupThread([&backup] {
+    REQUIRE(backup.acceptOnce());
+    REQUIRE(socket_io::writePacket(backup.peer, connectWelcome()));
+  });
+
+  Client client;
+  const bool started = client.start();
+  if (!started) {
+    drop = true;
+    if (primary.listener != INVALID_SOCKET) {
+      socket_io::close(primary.listener);
+      primary.listener = INVALID_SOCKET;
+    }
+    if (backup.listener != INVALID_SOCKET) {
+      socket_io::close(backup.listener);
+      backup.listener = INVALID_SOCKET;
+    }
+  }
+  REQUIRE(started);
+  REQUIRE(client.isAlive());
+  REQUIRE_FALSE(client.isReconnecting());
+  REQUIRE(client.reconnectCount() == 0);
+
+  IoRedirect io("");
+  drop = true;
+
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+  while (std::chrono::steady_clock::now() < deadline && client.reconnectCount() == 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  REQUIRE(client.reconnectCount() == 1);
+
+  while (std::chrono::steady_clock::now() < deadline &&
+         (!client.isAlive() || client.isReconnecting())) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  primaryThread.join();
+  backupThread.join();
+
+  REQUIRE(client.isAlive());
+  REQUIRE_FALSE(client.isReconnecting());
+  REQUIRE(io.out.str().find("reconnecting...") != std::string::npos);
+
+  // hop dials only; it does not send LOGIN or ROOM_JOIN
+  const DWORD timeoutMs = 300;
+  REQUIRE(setsockopt(backup.peer, SOL_SOCKET, SO_RCVTIMEO,
+                     reinterpret_cast<const char *>(&timeoutMs), sizeof(timeoutMs)) == 0);
+  REQUIRE_FALSE(socket_io::readPacket(backup.peer).has_value());
+
+  client.stop();
+  REQUIRE_FALSE(client.isReconnecting());
 }

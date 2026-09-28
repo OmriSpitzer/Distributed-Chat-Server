@@ -206,7 +206,9 @@ void DashboardPage::refresh() {
   const std::vector<Room> rooms = state.getRooms();
 
   QString subtitle = QStringLiteral("Disconnected");
-  if (link == HealthStatus::Up) {
+  if (client()->isReconnecting()) {
+    subtitle = QStringLiteral("reconnecting...");
+  } else if (link == HealthStatus::Up) {
     subtitle = QStringLiteral("Connected");
   } else if (link == HealthStatus::Degraded) {
     subtitle = QStringLiteral("Degraded");
@@ -234,8 +236,13 @@ void DashboardPage::refresh() {
     nextRows.push_back({name, roomListLabel(room, currentRoom)});
   }
   if (nextRows.empty()) {
-    nextRows.push_back({QString(), connected ? QStringLiteral("(waiting for rooms…)")
-                                             : QStringLiteral("(not connected)")});
+    QString placeholder = QStringLiteral("(not connected)");
+    if (client()->isReconnecting()) {
+      placeholder = QStringLiteral("(reconnecting...)");
+    } else if (connected) {
+      placeholder = QStringLiteral("(waiting for rooms…)");
+    }
+    nextRows.push_back({QString(), placeholder});
   }
 
   bool roomsUnchanged = roomsList->count() == static_cast<int>(nextRows.size());

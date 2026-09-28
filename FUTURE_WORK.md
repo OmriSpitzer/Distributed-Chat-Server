@@ -111,7 +111,7 @@ Highest-value gaps:
 ## 9. Docs & cleanup
 
 - [x] Layered architecture documented in [architecture.md](architecture.md); schema in [database.md](database.md); README points at both.
-- [x] PowerShell helpers under `scripts/` (`build`, `run_server`, `run_client`, `run`, `run_cluster`).
+- [x] PowerShell helpers under `scripts/` (`build`, `run_server`, `run_client`, `run`, `run_cluster`, `run_test`).
 - [x] README “not in this tree” list synced with shipped features (profile, rooms, TCP helpers, DB enums, allow_list).
 - [x] Decide product scope for later: WebSocket / shared remote DB.
 
@@ -237,7 +237,7 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 
 - [x] Merge seed + server directory into a failover list; prefer endpoints the last directory reported as up.
 - [x] On connect failure, peer close, heartbeat miss / `isAlive() == false`, or failed `HealthMonitor` / Client adapter: try the next endpoint (round-robin or priority) with backoff + jitter.
-- [ ] After hop: restore session — re-`LOGIN` (or guest reconnect), re-`ROOM_JOIN` current room, drain/clear stale chat queue; surface “reconnecting…” in console + Qt.
+- [x] Surface “reconnecting...” in the console and the Qt header while the supervisor dials the next endpoint. No re-login or re-join yet.
 - [ ] Cap reconnect storms; do not retry forever without UI cancel.
 - [x] Wire reconnect triggers to `HealthMonitor` (pairs with §1), not ad-hoc checks only.
 

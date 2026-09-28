@@ -91,6 +91,7 @@ void ConnectionManager::stopListening() {
   // mark stopped; wake accept + all blocked client reads
   if (!listening.exchange(false)) {
     Logger::logWarning("ConnectionManager", "Not listening");
+    joinClientThreads();
     return;
   }
 
@@ -112,6 +113,9 @@ void ConnectionManager::stopListening() {
   for (SOCKET fd : clientSockets) {
     closeClient(fd);
   }
+
+  // handlers exit once their sockets are closed
+  joinClientThreads();
 }
 
 // get listening socket
@@ -176,8 +180,38 @@ void ConnectionManager::acceptLoop() {
       pushServerDirectory(gossip_->buildServerDirectory(), fd);
     }
 
-    // handle the client in a new thread
-    std::thread([this, fd] { handleClient(fd); }).detach();
+    // handle the client on a joined thread (stop waits for it before the manager dies)
+    spawnClientHandler(fd);
+  }
+}
+
+// track a handleClient thread, or close the socket if stop already won
+void ConnectionManager::spawnClientHandler(SOCKET fd) {
+  bool spawn = false;
+  {
+    std::lock_guard<std::mutex> lock(clientThreadsMutex);
+    if (listening.load()) {
+      clientThreads.emplace_back([this, fd] { handleClient(fd); });
+      spawn = true;
+    }
+  }
+  if (!spawn) {
+    closeClient(fd);
+    removeSession(fd);
+  }
+}
+
+// join handleClient threads (safe to call more than once)
+void ConnectionManager::joinClientThreads() {
+  std::vector<std::thread> toJoin;
+  {
+    std::lock_guard<std::mutex> lock(clientThreadsMutex);
+    toJoin.swap(clientThreads);
+  }
+  for (auto &thread : toJoin) {
+    if (thread.joinable()) {
+      thread.join();
+    }
   }
 }
 

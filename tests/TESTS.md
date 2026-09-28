@@ -2,7 +2,7 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **29** executables, **386** `TEST_CASE`s.
+Totals: **29** executables, **387** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
@@ -13,6 +13,8 @@ Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty
 Manual multi-node smoke (not Catch2): `.\scripts\run_cluster.ps1` — 2 servers + 2 clients.
 
 ```powershell
+.\scripts\run_test.ps1
+# or, after a build:
 ctest --test-dir build --output-on-failure
 ```
 
@@ -229,7 +231,7 @@ ctest --test-dir build --output-on-failure
 | `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 7 |
 | `network_test` | `tests/client/network_test.cpp` | 11 |
 | `console_ui_test` | `tests/client/console_ui_test.cpp` | 18 |
-| `client_test` | `tests/client/client_test.cpp` | 10 |
+| `client_test` | `tests/client/client_test.cpp` | 13 |
 
 ### ClientState (`[client_state]`)
 
@@ -344,6 +346,9 @@ ctest --test-dir build --output-on-failure
 - Client login failure keeps connection
 - Client register success round-trip
 - Client login then logout
+- Client fails over when the first endpoint refuses
+- Client fails over when the peer closes
+- Client reports reconnecting on hop without re-login
 
 ---
 

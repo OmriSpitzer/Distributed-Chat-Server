@@ -8,6 +8,7 @@
 #include "config/config.h"
 #include <atomic>
 #include <chrono>
+#include <iostream>
 #include <thread>
 #include <windows.h>
 
@@ -37,6 +38,13 @@ int main(int argc, char *argv[]) {
   if (config::TEST_MODE) {
     // console mode (original)
     while (!g_stop.load() && client.isRunning()) {
+      if (client.isReconnecting()) {
+        std::cout << "reconnecting...\n" << std::flush;
+        while (!g_stop.load() && client.isRunning() && client.isReconnecting()) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        continue;
+      }
       if (!client.isAlive()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         continue;

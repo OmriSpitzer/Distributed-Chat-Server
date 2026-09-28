@@ -50,6 +50,12 @@ public:
   // true while the failover supervisor is running
   bool isRunning() const;
 
+  // true from a live-link drop until the next dial succeeds
+  bool isReconnecting() const;
+
+  // how many times a live link has dropped since start
+  int reconnectCount() const;
+
   // showing the dashboard (console)
   void showDashboard();
 
@@ -122,6 +128,8 @@ private:
   std::thread supervisor;                     // dials and watches the link
   std::atomic<bool> stopRequested{false};     // stop() asked the supervisor to exit
   std::atomic<bool> supervisorRunning{false}; // supervisor thread is inside its loop
+  std::atomic<bool> reconnecting{false};      // supervisor is dialing after a live link dropped
+  std::atomic<int> reconnects{0};             // live-link drops since start
   std::mutex waitMutex;                       // guards the failover wait
   std::condition_variable waitCv;             // wakes sleep on stop or link down
   std::mt19937 rng{std::random_device{}()};   // jitter source
@@ -137,6 +145,9 @@ private:
 
   // socket up, heartbeat fresh, and HealthMonitor not Down
   bool linkHealthy();
+
+  // mark a hop and log "reconnecting..." once per drop
+  void markReconnecting();
 
   // advance the ring, sleep with backoff + jitter; false when the budget or stop ends the loop
   bool failAndWait(int &attempt);

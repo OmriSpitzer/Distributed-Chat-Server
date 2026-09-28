@@ -160,9 +160,20 @@ bool Client::failAndWait(int &attempt) {
 // socket up, heartbeat fresh, and HealthMonitor not Down
 bool Client::linkHealthy() { return healthMonitor.check().status == HealthStatus::Up; }
 
+// mark a hop and log "reconnecting..." once per drop
+void Client::markReconnecting() {
+  bool expected = false;
+  if (!reconnecting.compare_exchange_strong(expected, true)) {
+    return;
+  }
+  reconnects.fetch_add(1);
+  Logger::logInfo("Client " + id, "reconnecting...");
+}
+
 // dial the ring until stop or the attempt budget is spent
 void Client::supervisorLoop() {
   int attempt = 0;
+  bool hadLink = false;
   while (!stopRequested.load()) {
     const ServerPoint endpoint = ring.current();
     if (endpoint.port == 0) {
@@ -173,12 +184,17 @@ void Client::supervisorLoop() {
     Logger::logInfo("Client " + id, "Connecting to " + endpoint.host + ":" +
                                         std::to_string(endpoint.port));
     if (!network.connect(endpoint.host, endpoint.port)) {
+      if (hadLink) {
+        markReconnecting();
+      }
       if (!failAndWait(attempt)) {
         break;
       }
       continue;
     }
 
+    hadLink = true;
+    reconnecting.store(false);
     waitCv.notify_all();
     attempt = 0;
 
@@ -197,6 +213,7 @@ void Client::supervisorLoop() {
     } else if (!network.isConnected()) {
       reason = "peer closed";
     }
+    markReconnecting();
     Logger::logWarning("Client " + id, reason + ", trying next endpoint");
     network.disconnect();
     if (!failAndWait(attempt)) {
@@ -204,6 +221,7 @@ void Client::supervisorLoop() {
     }
   }
 
+  reconnecting.store(false);
   supervisorRunning = false;
   waitCv.notify_all();
 }
@@ -325,6 +343,12 @@ HealthMonitor &Client::health() { return healthMonitor; }
 
 // true while the failover supervisor is running
 bool Client::isRunning() const { return supervisorRunning.load(); }
+
+// true from a live-link drop until the next dial succeeds
+bool Client::isReconnecting() const { return reconnecting.load(); }
+
+// how many times a live link has dropped since start
+int Client::reconnectCount() const { return reconnects.load(); }
 
 // join a room by name (requires login). Empty = success; otherwise error text.
 std::string Client::joinRoom(std::string_view roomName) {

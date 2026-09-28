@@ -10,7 +10,9 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 #include <winsock2.h>
 #ifdef ERROR
 #undef ERROR
@@ -54,6 +56,9 @@ public:
   // close a client socket so its read loop exits
   void closeClient(SOCKET socket);
 
+  // join handleClient threads (safe to call more than once)
+  void joinClientThreads();
+
   // inject the gossip manager owned by Server (null when stopped)
   void setGossip(GossipManager *gossip);
 
@@ -73,9 +78,14 @@ private:
   SOCKET listeningSocket;                                              // listening socket
   std::atomic<bool> listening{false};                                  // is the server listening
   mutable std::mutex sessionsMutex;                                    // sessions mutex
+  std::vector<std::thread> clientThreads;                              // handleClient threads
+  std::mutex clientThreadsMutex;                                       // clientThreads mutex
 
   // handle the client
   void handleClient(SOCKET clientSocket);
+
+  // track a handleClient thread, or close the socket if stop already won
+  void spawnClientHandler(SOCKET fd);
 
   // add new session
   void addSession(SOCKET socket, std::shared_ptr<ClientSession> session);

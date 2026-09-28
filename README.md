@@ -28,7 +28,7 @@ Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` f
 - **Rooms** — public / private rooms, join / leave (back to Lobby), create, invite to private rooms (`allow_list`)
 - **Messages** — persist for registered users, live broadcast (including guests), rumor to peer nodes, history load
 - **Heartbeat** — server pings; client auto-replies `pong`; stale sockets are closed
-- **Client failover** — `--host`/`--port` and `--servers` merge with `SERVER_DIRECTORY`; endpoints the last directory reported as up are tried first
+- **Client failover** — `--host`/`--port` and `--servers` merge with `SERVER_DIRECTORY`; endpoints the last directory reported as up are tried first; console and Qt show `reconnecting...` during a hop
 - **Gossip** — `HELLO`, `EVENT`, `DIGEST`, and `PULL` with periodic anti-entropy
 - **Qt GUI** — client chat dashboard and server Ports / Users / Rooms / Log panels (console via `--test`)
 
@@ -139,6 +139,7 @@ Manual equivalent:
 | `scripts/run_client.ps1` | Run one client in the current terminal |
 | `scripts/run.ps1` | Start one server in a new window (used by the cluster script) |
 | `scripts/run_cluster.ps1` | Build + 2-node cluster + 2 clients |
+| `scripts/run_test.ps1` | Build the Catch2 suite and run it with CTest |
 
 Legacy helpers `src/server.ps1` and `src/client.ps1` still build-and-run a single binary; prefer `scripts/`.
 
@@ -167,7 +168,7 @@ Distributed-Chat-Server/
 ├── architecture.md         Class and sequence diagrams
 ├── database.md             SQLite schema, queries, write paths
 ├── STEPS.md                Backlog
-├── scripts/                build / run / cluster PowerShell helpers
+├── scripts/                build / run / cluster / test PowerShell helpers
 ├── include/                Public headers
 │   ├── auth/               Argon2id wrapper
 │   ├── client/             Network, packets, state, Qt dashboard
@@ -197,7 +198,9 @@ Headers live in `include/`; implementations live in `src/`. CMake adds `include/
 | `*_test` | Catch2 binaries (discovered by CTest) |
 
 ```powershell
-ctest --test-dir build --output-on-failure
+.\scripts\run_test.ps1
+# one case:
+.\scripts\run_test.ps1 -R "Client login"
 ```
 
 See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**24** executables, **339** `TEST_CASE`s).

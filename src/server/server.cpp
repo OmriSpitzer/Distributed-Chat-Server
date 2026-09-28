@@ -106,6 +106,8 @@ void Server::stop() {
   if (acceptThread.joinable()) {
     acceptThread.join();
   }
+  // acceptLoop can spawn one more handler while it is unwinding
+  connectionManager.joinClientThreads();
   threadPool.shutdown();
 
   // clean up winsock
