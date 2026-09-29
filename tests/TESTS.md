@@ -2,7 +2,7 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **30** executables, **392** `TEST_CASE`s.
+Totals: **31** executables, **401** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
@@ -227,11 +227,11 @@ ctest --test-dir build --output-on-failure
 |---|---|---|
 | `client_state_test` | `tests/client/client_state_test.cpp` | 10 |
 | `endpoint_ring_test` | `tests/client/endpoint_ring_test.cpp` | 9 |
-| `packet_builder_test` | `tests/client/packet_builder_test.cpp` | 21 |
+| `packet_builder_test` | `tests/client/packet_builder_test.cpp` | 23 |
 | `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 7 |
 | `network_test` | `tests/client/network_test.cpp` | 11 |
 | `console_ui_test` | `tests/client/console_ui_test.cpp` | 18 |
-| `client_test` | `tests/client/client_test.cpp` | 13 |
+| `client_test` | `tests/client/client_test.cpp` | 14 |
 
 ### ClientState (`[client_state]`)
 
@@ -285,6 +285,8 @@ ctest --test-dir build --output-on-failure
 - PacketBuilder buildLoadMessageHistory rejects empty arguments
 - PacketBuilder sets defaults and timestamp
 - PacketBuilder accepts whitespace-only arguments
+- PacketBuilder buildReconnect maps fields
+- PacketBuilder buildReconnect rejects empty arguments
 
 ### PacketHandler (`[packet_handler]`)
 
@@ -349,6 +351,7 @@ ctest --test-dir build --output-on-failure
 - Client fails over when the first endpoint refuses
 - Client fails over when the peer closes
 - Client reports reconnecting on hop without re-login
+- Client sends RECONNECT on hop when logged in
 
 ---
 
@@ -357,12 +360,12 @@ ctest --test-dir build --output-on-failure
 | Executable | File | Cases |
 |---|---|---|
 | `client_session_test` | `tests/server/client_session_test.cpp` | 11 |
-| `database_manager_test` | `tests/server/database_manager_test.cpp` | 20 |
+| `database_manager_test` | `tests/server/database_manager_test.cpp` | 22 |
 | `heartbeat_test` | `tests/server/heartbeat_test.cpp` | 19 |
 | `room_manager_test` | `tests/server/room_manager_test.cpp` | 18 |
-| `packet_processor_test` | `tests/server/packet_processor_test.cpp` | 18 |
+| `packet_processor_test` | `tests/server/packet_processor_test.cpp` | 20 |
 | `connection_manager_test` | `tests/server/connection_manager_test.cpp` | 19 |
-| `gossip_manager_test` | `tests/server/gossip_manager_test.cpp` | 23 |
+| `gossip_manager_test` | `tests/server/gossip_manager_test.cpp` | 24 |
 | `server_test` | `tests/server/server_test.cpp` | 13 |
 
 ### ClientSession (`[client_session]`)
@@ -402,6 +405,8 @@ ctest --test-dir build --output-on-failure
 - DatabaseManager typical register login logout flow
 - DatabaseManager createRoom assigns id and round-trips
 - DatabaseManager updateUser password and username
+- DatabaseManager claims presence when the recorded node is down
+- DatabaseManager clearNodePresence drops one node
 
 ### Heartbeat (`[heartbeat]`)
 
@@ -467,6 +472,8 @@ ctest --test-dir build --output-on-failure
 - PacketProcessor LOAD_MESSAGE_HISTORY
 - PacketProcessor typical register message logout flow
 - PacketProcessor ADMIN privilege checks
+- PacketProcessor reconnect adopts a down node
+- PacketProcessor reconnect rejects a live local session
 
 ### ConnectionManager (`[connection_manager]`)
 
@@ -519,6 +526,7 @@ ctest --test-dir build --output-on-failure
 - GossipManager typical LOGIN MESSAGE LOGOUT flow
 - GossipManager tracks live client endpoints from HELLO
 - GossipManager pushes SERVER_DIRECTORY to chat clients on peer change
+- GossipManager rumor RECONNECT moves presence and membership
 
 ### Server (`[server]`)
 
@@ -564,6 +572,7 @@ Live `Server` + `Client` (same libraries as `chat_server` / `chat_client`), not 
 |---|---|---|
 | `two_client_message_push_test` | `tests/func/two_client_message_push_test.cpp` | 1 |
 | `session_rules_test` | `tests/func/session_rules_test.cpp` | 4 |
+| `failover_e2e_test` | `tests/func/failover_e2e_test.cpp` | 1 |
 
 ### Two-client MESSAGE push (`[func][e2e][message]`)
 
@@ -575,6 +584,10 @@ Live `Server` + `Client` (same libraries as `chat_server` / `chat_client`), not 
 - E2E join unknown room returns error
 - E2E logout then login again
 - E2E double login rejected
+
+### Failover (`[func][e2e][failover]`)
+
+- E2E kill node A logged-in client fails over to B
 
 ---
 
@@ -588,7 +601,8 @@ Product behaviors that exist (or are TODOs) without a dedicated Catch2 case. Hig
 - [x] Cannot leave Lobby; leave General → Lobby; join unknown room error + state unchanged; logout/login; double-login rejected (`session_rules_test`).
 - Client join-room / leave-room / send-message full UI round-trips against a live server.
 - Disconnect / Ctrl+C while logged in: server clears `online_users` and rumors LOGOUT.
-- Client reconnect after server restart; session is anonymous until login again.
+- [x] Kill node A while a logged-in client is in a room: cached `SERVER_DIRECTORY`, land on node B, same user and room, MESSAGE again (`failover_e2e_test`).
+- Client reconnect after a single-node restart resumes the in-memory user (unit: mocked peer sends `RECONNECT`). A restarted node clears its own presence row, so that path is still open.
 - Invite to private room + join allow-list path across a live client.
 
 ### Cluster / gossip (two live processes)

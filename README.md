@@ -29,7 +29,7 @@ Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` f
 - **Rooms** — public / private rooms, join / leave (back to Lobby), create, invite to private rooms (`allow_list`)
 - **Messages** — persist for registered users, live broadcast (including guests), rumor to peer nodes, history load
 - **Heartbeat** — server pings; client auto-replies `pong`; stale sockets are closed
-- **Client failover** — `--host`/`--port` and `--servers` merge with `SERVER_DIRECTORY`; endpoints the last directory reported as up are tried first; console and Qt show `reconnecting...` during a hop
+- **Client failover** — `--host`/`--port` and `--servers` merge with `SERVER_DIRECTORY`; endpoints the last directory reported as up are tried first; console and Qt show `reconnecting...` during a hop; a logged-in client sends `RECONNECT` so the new node takes presence and membership
 - **Gossip** — `HELLO`, `EVENT`, `DIGEST`, and `PULL` with periodic anti-entropy
 - **Qt GUI** — client chat dashboard and server Ports / Users / Rooms / Log panels (console via `--test`)
 
@@ -73,6 +73,7 @@ Gossip event bodies use five length-prefixed fields (`type`, `eventId`, `usernam
 | Type | Role |
 |------|------|
 | `LOGIN` / `REGISTER` / `LOGOUT` | Session lifecycle; login/register success puts room directory in `room` |
+| `RECONNECT` | Resume a logged-in session on a new socket (`sender` = username, `room` = current room). Success puts the room directory in `room` and moves `online_users` / `membership` to this `node_id` when that `node_id` is not a live peer |
 | `ROOM_JOIN` / `ROOM_LEAVE` | Membership (`LEAVE` returns to Lobby) |
 | `ROOM_CREATE` | Create room (`room` = name, `message` = optional privacy) |
 | `ROOM_INVITE` | Allow-list a user for a private room |

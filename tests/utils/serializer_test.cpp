@@ -128,6 +128,10 @@ TEST_CASE("Serializer round-trip all packet types", "[serializer][roundtrip]") {
     requireRoundTrip(makePacket(Packet::PacketType::SERVER_DIRECTORY, "server", "*", "",
                                 "endpoint(node-a|127.0.0.1|5555)", 1, 0));
   }
+  SECTION("RECONNECT") {
+    requireRoundTrip(
+        makePacket(Packet::PacketType::RECONNECT, "alice", "server", "General", ""));
+  }
 }
 
 // 2. empty and whitespace fields
@@ -254,11 +258,11 @@ TEST_CASE("Serializer serialize rejects invalid type", "[serializer][serialize][
     REQUIRE(Serializer::serialize(packet).empty());
   }
 
-  // first unused enum value after SERVER_DIRECTORY
-  SECTION("first unused enum value after SERVER_DIRECTORY") {
+  // first unused enum value after RECONNECT
+  SECTION("first unused enum value after RECONNECT") {
     Packet packet = makePacket(Packet::PacketType::MESSAGE);
     packet.type = static_cast<Packet::PacketType>(
-        static_cast<int>(Packet::PacketType::SERVER_DIRECTORY) + 1);
+        static_cast<int>(Packet::PacketType::RECONNECT) + 1);
     REQUIRE(Serializer::serialize(packet).empty());
   }
 }

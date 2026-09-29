@@ -48,6 +48,74 @@ std::optional<Packet> Client::waitFor(Packet::PacketType expected) {
   }
 }
 
+// wait for a packet, or give up when the timeout elapses
+std::optional<Packet> Client::waitFor(Packet::PacketType expected,
+                                      std::chrono::milliseconds timeout) {
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (std::chrono::steady_clock::now() < deadline) {
+    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+        deadline - std::chrono::steady_clock::now());
+    auto response = network.receivePacketFor(remaining);
+    if (!response) {
+      return std::nullopt;
+    }
+    if (response->type == expected) {
+      return response;
+    }
+  }
+  return std::nullopt;
+}
+
+// send RECONNECT for the user still held in memory
+void Client::resumeSession() {
+  resumePending.store(false);
+
+  if (!state.isLoggedIn() || !state.user) {
+    return;
+  }
+  const std::string username = state.user->getUsername();
+  const std::string room = state.currentRoom ? state.currentRoom->getName() : std::string("Lobby");
+
+  Packet packet;
+  try {
+    packet = PacketBuilder::buildReconnect(username, room);
+  } catch (const std::invalid_argument &e) {
+    Logger::logError("Client " + id, std::string("Reconnect failed: ") + e.what());
+    return;
+  }
+
+  // the landing node can still see the old peer socket for a moment after that process dies
+  constexpr int kAttempts = 5;
+  for (int attempt = 0; attempt < kAttempts && !stopRequested.load(); ++attempt) {
+    if (attempt > 0) {
+      if (!sleepFor(std::chrono::milliseconds(250))) {
+        return;
+      }
+      if (!state.isLoggedIn() || !network.isConnected()) {
+        return;
+      }
+    }
+
+    if (!network.sendPacket(packet)) {
+      Logger::logError("Client " + id, "Reconnect failed: Failed to send reconnect request.");
+      return;
+    }
+
+    auto response = waitFor(Packet::PacketType::RECONNECT, std::chrono::seconds(3));
+    if (response && response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+      if (!response->room.empty()) {
+        applyRoomDirectory(response->room);
+      }
+      Logger::logInfo("Client " + id, "Reconnected as " + username);
+      return;
+    }
+
+    const std::string error = !response || response->message.empty() ? std::string("no reply")
+                                                                     : response->message;
+    Logger::logWarning("Client " + id, "Reconnect failed: " + error);
+  }
+}
+
 // apply a room directory payload (login uses room field; pushes use message)
 void Client::applyRoomDirectory(const std::string &encoded) {
   try {
@@ -68,7 +136,22 @@ void Client::applyRoomListPush(const Packet &packet) {
     applyRoomDirectory(packet.room);
   }
 
-  if (!packet.room.empty() && packet.room.rfind("room(", 0) != 0) {
+  const std::string &userPayload =
+      (packet.receiver.rfind("user(", 0) == 0) ? packet.receiver : packet.sender;
+  std::optional<User> incomingUser;
+  if (userPayload.rfind("user(", 0) == 0) {
+    try {
+      incomingUser = User::deserialize(userPayload);
+    } catch (const std::exception &e) {
+      Logger::logWarning("Client " + id, std::string("Bad connect user: ") + e.what());
+    }
+  }
+
+  // the new socket's anonymous Lobby welcome must not clear a session being resumed
+  const bool keepSession = state.isLoggedIn() && incomingUser &&
+                           incomingUser->getUserType() == User::UserType::GUEST;
+
+  if (!keepSession && !packet.room.empty() && packet.room.rfind("room(", 0) != 0) {
     if (packet.room == "Lobby") {
       state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
     } else {
@@ -76,14 +159,8 @@ void Client::applyRoomListPush(const Packet &packet) {
     }
   }
 
-  const std::string &userPayload =
-      (packet.receiver.rfind("user(", 0) == 0) ? packet.receiver : packet.sender;
-  if (userPayload.rfind("user(", 0) == 0) {
-    try {
-      state.user = User::deserialize(userPayload);
-    } catch (const std::exception &e) {
-      Logger::logWarning("Client " + id, std::string("Bad connect user: ") + e.what());
-    }
+  if (!keepSession && incomingUser) {
+    state.user = std::move(*incomingUser);
   }
 
   if (!state.getRooms().empty()) {
@@ -167,6 +244,9 @@ void Client::markReconnecting() {
     return;
   }
   reconnects.fetch_add(1);
+  if (state.isLoggedIn()) {
+    resumePending.store(true);
+  }
   Logger::logInfo("Client " + id, "reconnecting...");
 }
 
@@ -197,6 +277,9 @@ void Client::supervisorLoop() {
     reconnecting.store(false);
     waitCv.notify_all();
     attempt = 0;
+    if (resumePending.load()) {
+      resumeSession();
+    }
 
     while (!stopRequested.load() && linkHealthy()) {
       if (!sleepFor(std::chrono::seconds(1))) {
@@ -621,6 +704,7 @@ std::string Client::logout() {
   state.setRooms(std::move(rooms));
   state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
   state.user = User::anonymousUser();
+  resumePending.store(false);
   clearPendingChatMessages();
   Logger::logInfo("Client " + id, "Logged out");
   return {};

@@ -20,6 +20,7 @@ export const PacketType = {
   ROOM_DELETE: 17,
   ROOM_KICK: 18,
   SERVER_DIRECTORY: 19,
+  RECONNECT: 20,
 };
 
 function appendU32(bytes, value) {

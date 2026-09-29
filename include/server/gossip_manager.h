@@ -44,6 +44,9 @@ public:
   // rumor a packet
   void rumor(const Packet &packet);
 
+  // true when nodeId has a connected gossip socket
+  bool isNodeLive(const std::string &nodeId) const;
+
   // live client-facing endpoints of cluster members (self + HELLO-advertised peers)
   std::unordered_map<std::string, ClientEndpoint> getClientPeers() const;
 

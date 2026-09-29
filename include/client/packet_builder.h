@@ -14,6 +14,9 @@ public:
   // build a login packet
   static Packet buildLogin(std::string_view username, std::string_view password);
 
+  // build a reconnect packet (resume the in-memory user on a new socket)
+  static Packet buildReconnect(std::string_view username, std::string_view room);
+
   // build a logout packet
   static Packet buildLogout(const User &user);
 

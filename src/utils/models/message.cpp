@@ -19,7 +19,7 @@ namespace {
 // local counter
 std::atomic<uint64_t> next_message_id{0};
 
-// boot id
+// distinguishes message ids from this process
 const std::string boot_id =
     std::to_string(static_cast<uint64_t>(std::time(nullptr)) * 1000003ull + std::random_device{}());
 

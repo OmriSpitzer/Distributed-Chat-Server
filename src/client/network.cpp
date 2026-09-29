@@ -148,6 +148,21 @@ std::optional<Packet> Network::receivePacket() {
   return packet;
 }
 
+// wait up to timeout for a queued packet
+std::optional<Packet> Network::receivePacketFor(std::chrono::milliseconds timeout) {
+  std::unique_lock<std::mutex> lock(mutex);
+  if (!incomingCv.wait_for(lock, timeout, [this] { return !incoming.empty() || !connected; })) {
+    return std::nullopt;
+  }
+  if (incoming.empty()) {
+    return std::nullopt;
+  }
+
+  Packet packet = incoming.front();
+  incoming.pop();
+  return packet;
+}
+
 // read loop: pong heartbeats, queue everything else
 void Network::readerLoop() {
   while (connected) {

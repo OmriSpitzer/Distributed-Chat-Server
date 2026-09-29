@@ -7,6 +7,7 @@
 #pragma once
 #include "utils/models/packet.h"
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -48,6 +49,9 @@ public:
 
   // receiving a packet from the server
   std::optional<Packet> receivePacket();
+
+  // wait up to timeout for a queued packet; nullopt on timeout or disconnect
+  std::optional<Packet> receivePacketFor(std::chrono::milliseconds timeout);
 
   // check if the network is connected
   bool isConnected() const;

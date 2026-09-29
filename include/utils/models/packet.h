@@ -33,6 +33,7 @@ public:
     ROOM_DELETE,
     ROOM_KICK,
     SERVER_DIRECTORY,
+    RECONNECT,
   };
 
   // constructors

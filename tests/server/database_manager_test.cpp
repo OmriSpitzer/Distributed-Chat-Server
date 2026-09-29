@@ -759,3 +759,48 @@ TEST_CASE("DatabaseManager updateUser password and username", "[database_manager
     REQUIRE_THROWS_AS(database.updateUser(name, name, "pw", "wrong@mail.test"), std::runtime_error);
   }
 }
+
+// 21. claim presence from a node id that is not live
+TEST_CASE("DatabaseManager claims presence when the recorded node is down",
+          "[database_manager][online][reconnect]") {
+  DatabaseManager &database = db();
+  const std::string name = unique("claim");
+
+  REQUIRE_FALSE(database.canClaimPresence(name, true));
+
+  database.setOnline(name, "node-a");
+  REQUIRE_FALSE(database.canClaimPresence(name, true));
+  REQUIRE(database.canClaimPresence(name, false));
+
+  database.setOnline(name, config::NODE_ID);
+  REQUIRE_FALSE(database.canClaimPresence(name, true));
+  REQUIRE(database.canClaimPresence(name, false));
+
+  database.clearOnline(name);
+  REQUIRE_FALSE(database.canClaimPresence(name, false));
+}
+
+// 22. clear presence rows for one node id
+TEST_CASE("DatabaseManager clearNodePresence drops one node",
+          "[database_manager][online][reconnect]") {
+  DatabaseManager &database = db();
+  const std::string here = unique("here");
+  const std::string there = unique("there");
+  database.createUser(here, Authentication::hashPassword("pw"), here + "@mail.test");
+
+  database.setOnline(here, "node-a");
+  database.setOnline(there, "node-b");
+  database.setMembership(here, 1, "node-a");
+
+  database.clearNodePresence("node-a");
+  REQUIRE_FALSE(database.isUserOnline(here));
+  REQUIRE(database.isUserOnline(there));
+
+  database.moveMembership(here, "node-b");
+  const auto node = database.membershipNode(here, 1);
+  REQUIRE(node.has_value());
+  REQUIRE(*node == "node-b");
+
+  database.clearOnline(there);
+  database.clearAllMembership(here);
+}

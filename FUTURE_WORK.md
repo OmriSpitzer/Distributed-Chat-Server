@@ -6,147 +6,6 @@ Backlog for the distributed chat system. Priority is approximate; items marked *
 
 ---
 
-# ------------------------------ VERSION 2.0 ------------------------------
-
-## 1. Persistence — one mapper, not the whole domain **(goal)**
-
-`DatabaseManager` should be the **only place that turns SQL rows into domain objects**. It does **not** own the domain: `PacketProcessor` and other app code may still build `User` / `Message` / `Room` from validated input (login fields, gossip payloads, etc.).
-
-- [x] Keep all row → object mapping inside `DatabaseManager` (`User`, `Room`, `Message`, presence/membership helpers). No raw column parsing in gossip apply, processors, or managers.
-- [x] Add missing load/save APIs that return objects: `getRoom` / `listRooms` / `createRoom` / `deleteRoom` (or equivalent).
-- [x] Room `id` is SQLite `INTEGER PRIMARY KEY AUTOINCREMENT` — assigned on insert (`sqlite3_last_insert_rowid`), not by the `Room` constructor. Constructor takes an explicit `int id` (from DB or seed). Messages/membership FKs use `room_id`.
-- [x] Application code may construct objects from validated input; persistence only maps and stores them.
-- [x] Keep password hashing inside create/login; never put hash/plaintext on objects meant for UI/wire.
-
----
-
-
-
-## 2. Schema — constrained enums in the DB **(goal)**
-
-C++ already has `User::UserType`, `Room::RoomType`, `Room::Privacy`, `Packet::PacketType`. SQLite still stores free `TEXT` (`user_type`, `type`, `privacy`).
-
-Prefer `TEXT` **+** `CHECK` against the known set (readable, stays stable if C++ enum order changes). `INTEGER` mapped to enums is also fine if you prefer it — pick one and stick to it.
-
-- [x] Constrain enum-like columns (`CHECK` on TEXT, or INTEGER + mapped helpers).
-- [x] Migrate `init.sql` seed data and all queries to the chosen representation.
-- [x] Private-room `allow_list` table + join / invite / gossip ACL paths.
-
----
-
-
-
-## 3. TCP layer — clearer transport **(goal)**
-
-Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / cast `SOCKET`, split across `ConnectionManager`, `Network`, and gossip.
-
-- [x] Introduce a small, explicit TCP API (listen / accept / connect / read-frame / write-frame / close) with one socket type end-to-end — no `int` ↔ `SOCKET` casts at call sites.
-- [x] Keep packet framing (`[u32 BE size][payload]`) only in that layer; higher layers deal only in `Packet`.
-- [x] Align client `Network` and server `ConnectionManager` on the same helpers.
-
----
-
-
-
-## 4. Client product gaps
-
-- [x] **Update profile** — dashboard / console (`UPDATE_USER` via `PacketBuilder` / `ConsoleUI::showUpdateProfile`).
-- [x] **Room directory** — console should list available rooms before join (`ConsoleUI::showJoinRoom`).
-- [x] **Validate room exists** before sending `ROOM_JOIN` (or surface clear `404` from server).
-- [x] **Message history** — server has `loadHistory`; client requests via `LOAD_MESSAGE_HISTORY`.
-- [x] **Pushed messages in UI** — console and Qt dashboard drain queued room pushes.
-
----
-
-
-
-## 5. Rooms & authorization
-
-- [x] Wire protocol for `createRoom` (`ROOM_CREATE` + `ROOM_LIST` push) and `deleteRoom` (`ROOM_DELETE`, ADMIN).
-- [x] Enforce **PRIVATE** vs **PUBLIC** via `allow_list` on join / invite.
-- [x] Guests may join public rooms (in-memory); private rooms require authenticated allow-list membership.
-- [x] Enforce **ADMIN** privilege checks (seed has `ADMIN`):
-  - Invite or kick a user from **any** room (not only the creator).
-  - Create or delete rooms, including **PRIVATE** — never Lobby or General.
-  - Join **PRIVATE** rooms (bypass `allow_list`).
-- [x] Unique **email** constraint coverage and clear client errors (username uniqueness is stronger today).
-
----
-
-
-
-## 6. Server runtime & architecture
-
-- [x] `ThreadPool` removed. Accept, WebSocket accept, heartbeat, gossip, and each client session use dedicated threads.
-- [x] Singletons (`DatabaseManager`, `RoomManager`) are acceptable for this small node. Prefer DI (owned by `Server`) only if tests need it — not a must.
-- [x] Cap / rotate gossip event log: verify ops story when `MAX_EVENT_LOG` drops old ids.
-
----
-
-
-
-## 7. Security & correctness
-
-- [x] **USER_CREATED gossip** rumors Argon2id hash only (not plaintext) for peer register.
-- [x] Replace placeholder Argon2 hashes in `init.sql` seed users with real hashes (`admin`/`user`).
-- [x] Reject oversized / malformed frames without tearing down the process (robustness).
-
----
-
-
-
-## 8. Testing (from `tests/TESTS.md`)
-
-Highest-value gaps:
-
-- [x] E2E: two clients, same room, MESSAGE push received (live `Server` + `Client` in `tests/func/`).
-- [x] E2E: join / leave Lobby rules, unknown room `404`, logout/login, double-login rejected.
-- [x] Cluster unit coverage: LOGIN / USER_CREATED / ROOM_JOIN / MESSAGE / ROOM_CREATED+ACL / anti-entropy DIGEST-PULL (`gossip_manager_test`).
-- [x] Heartbeat: live pong keeps session; silent client timed out and presence cleared.
-
----
-
-
-
-## 9. Docs & cleanup
-
-- [x] Layered architecture documented in [architecture.md](architecture.md); schema in [database.md](database.md); README points at both.
-- [x] PowerShell helpers under `scripts/` (`build`, `run_server`, `run_client`, `run`, `run_cluster`, `run_test`).
-- [x] README “not in this tree” list synced with shipped features (profile, rooms, TCP helpers, DB enums, allow_list).
-- [x] Decide product scope for later: WebSocket / shared remote DB.
-
----
-
-
-
-## 10. Visual GUI — server & client
-
-Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-only widgets; no Qt inside `server_lib` domain/transport beyond a `Server*` / singleton read from the GUI thread.
-
-### Server GUI
-
-- [x] Qt build wire-up (`find_package(Qt6 Widgets)`, AUTOMOC, `chat_server` sources).
-- [x] `MainPage` / `MainWindow` shell + abstract `Panel` base.
-- [x] **Ports** panel — `config::` node / ports / peers / db.
-- [x] **Users** panel — timer refresh from `Server::connections().getSessions()`.
-- [x] **Rooms** panel — timer refresh from `RoomManager::listRooms()`.
-- [x] **Log** panel — timer refresh from `Logger`.
-- [x] Console ↔ GUI choice in `main` (real flag/prompt; not `if (true)`).
-
-
-
-### Client GUI
-
-- [x] Qt client dashboard (`DashboardPage` / `MainPage`) beside console `ConsoleUI` (`--test`).
-- [x] Screens: home/login/register, dashboard, join/create/delete room, messaging, profile, invite/kick, history.
-- [x] Reuse `Client` / `PacketBuilder` / `PacketHandler` / `Network` — GUI is presentation only.
-- [x] Show **pushed messages** live (pairs with §4 console push presentation).
-- [x] GUI-thread rules: no widget updates from reader/network threads without queued signals.
-
----
-
-
-
 # ------------------------------ VERSION 3.0 ------------------------------
 
 
@@ -183,9 +42,9 @@ Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLog
 
 ## 3. Client failover — servers publish neighbors; clients reconnect **(goal)**
 
-**Design:** Topology for client failover lives with the servers (they already gossip). Clients stay dumb: bootstrap from a seed, cache a directory, reconnect when the current node dies. Dead nodes cannot hand clients off; peers do not dial clients. A user who was already logged in stays logged in: the UI does not return to anonymous and does not ask for the password again. After the new socket is up, the client sends `LOGIN` and `ROOM_JOIN` from the in-memory session (username, password already held for this process, current room).
+**Design:** Topology for client failover lives with the servers (they already gossip). Clients stay dumb: bootstrap from a seed, cache a directory, reconnect when the current node dies. Dead nodes cannot hand clients off; peers do not dial clients. A user who was already logged in stays logged in: the UI does not return to anonymous and does not ask for the password again. After the new socket is up, the client sends `RECONNECT` (username and current room already held for this process). The password is not stored.
 
-`Network::connect(host, port)` dials one endpoint. The client supervisor walks one failover list: endpoints the last `SERVER_DIRECTORY` reported as up, then the static seed (`--host`/`--port`, then `--servers`) that were not in that directory, with backoff and jitter. The connected endpoint stays at the front until the link fails. On boot this node should clear its own `online_users`. On the node the client lands on, a resume `LOGIN` takes the existing row when the recorded `node_id` is a process that has died (its `HELLO` boot id changed): `online_users` becomes `username → this node`, then that move is rumored. The row is not deleted first, so a third node cannot slip in a second login. A node that is still up (same boot id) still rejects the login as “user already logged in.”
+`Network::connect(host, port)` dials one endpoint. The client supervisor walks one failover list: endpoints the last `SERVER_DIRECTORY` reported as up, then the static seed (`--host`/`--port`, then `--servers`) that were not in that directory, with backoff and jitter. The connected endpoint stays at the front until the link fails. On boot this node clears `online_users` rows whose `node_id` is itself. On the node the client lands on, `RECONNECT` looks the user up by username and takes the existing presence row when that `node_id` is not a live peer: `online_users.node_id` and every `membership.node_id` for the user become this node, and that move is rumored as `RECONNECT`. The row is not deleted first, so a third node cannot slip in a second login. A `node_id` that is still a live peer rejects `RECONNECT` as “user already logged in.” A guest with no account stays a guest.
 
 ### Ownership
 
@@ -209,7 +68,7 @@ Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLog
 - [x] Each node tracks live **client** endpoints of cluster members (from gossip HELLO / peer health — not raw `--peers` gossip ports).
 - [x] Push (or reply to) a lightweight **directory** packet of `host:port` chat endpoints to connected clients (on connect, on membership change, and/or periodically).
 - [x] Refresh after login so the client’s cache matches who the new node believes is up.
-- [ ] On resume `LOGIN`, if `online_users.node_id` is a node whose boot id changed, set that row to this node and rumor the move. Persist the last boot id seen per node. Same boot id means that node is still up: reject the login. Do not take a row from a bare reconnect with no `LOGIN`.
+- [x] On `RECONNECT`, if `online_users.node_id` is not a live peer, set that row and the user's `membership.node_id` values to this node and rumor the move. A live peer with that `node_id` rejects the resume. Do not take a row from a bare TCP reconnect with no `RECONNECT`.
 
 
 
@@ -217,16 +76,16 @@ Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLog
 
 - [x] Merge seed + server directory into a failover list; prefer endpoints the last directory reported as up.
 - [x] On connect failure, peer close, heartbeat miss / `isAlive() == false`, or failed `HealthMonitor` / Client adapter: try the next endpoint (round-robin or priority) with backoff + jitter.
-- [x] Surface “reconnecting...” in the console and the Qt header while the supervisor dials the next endpoint. Session resume is not wired yet.
+- [x] Surface “reconnecting...” in the console and the Qt header while the supervisor dials the next endpoint.
 - [x] Cap reconnect storms; do not retry forever without UI cancel.
-- [ ] When the new socket is up and the process still holds a logged-in user, send `LOGIN` then `ROOM_JOIN` for the room they were in. Keep the same user and room on screen. Do not ask for the password again. A guest with no account stays a guest.
+- [x] When the new socket is up and the process still holds a logged-in user, send `RECONNECT` for the room they were in. Keep the same user and room on screen. Do not ask for the password again. A guest with no account stays a guest.
 - [x] Wire reconnect triggers to `HealthMonitor` (pairs with §1), not ad-hoc checks only.
 
 
 
 ### Verify
 
-- [ ] E2E: kill node A while a logged-in client is in a room; client uses the cached directory, lands on node B, still shows the same user and room (no login prompt), and receives MESSAGE again (pairs with §7).
+- [x] E2E: kill node A while a logged-in client is in a room; client uses the cached directory, lands on node B, still shows the same user and room (no login prompt), and receives MESSAGE again (pairs with §7).
 
 
 
@@ -278,8 +137,8 @@ Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, and
 - [ ] `PacketHandler` for every RPC type, not only LOGIN/REGISTER/UPDATE_USER.
 - [ ] `IHealthCheck` adapters + `HealthMonitor` rollup (§1).
 - [ ] `allow_list` CRUD edges as dedicated `DatabaseManager` cases.
-- [ ] Clear this node's `online_users` on boot (`DatabaseManager::clearNodePresence`, `Server::start`).
-- [ ] Resume `LOGIN` adopts `online_users` when the row’s node has a new boot id (`node_id` becomes this node, rumor the move). Same boot id still rejects a second login (§3).
+- [x] Clear this node's `online_users` on boot (`DatabaseManager::clearNodePresence`, `Server::start`).
+- [x] `RECONNECT` adopts `online_users` when the recorded `node_id` is not a live peer (`node_id` becomes this node, membership moves with it, rumor the move). A live peer with that `node_id` still rejects a second session (§3).
 
 
 
@@ -297,7 +156,7 @@ Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, and
 - [ ] Two `chat_server` processes: LOGIN on A → B `online_users`; USER_CREATED cross-login; duplicate login rejected across nodes.
 - [ ] ROOM_JOIN / MESSAGE / ACL over real peer sockets (not only in-process gossip fixtures).
 - [ ] `MAX_EVENT_LOG` drop: late PULL cannot resurrect ids.
-- [ ] **Failover E2E:** stop node A; logged-in client fails over to B still as that user, in the same room, with no login prompt; messaging resumes (§3).
+- [x] **Failover E2E:** stop node A; logged-in client fails over to B still as that user, in the same room, with no login prompt; messaging resumes (§3).
 
 
 

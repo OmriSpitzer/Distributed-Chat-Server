@@ -325,3 +325,26 @@ TEST_CASE("PacketBuilder accepts whitespace-only arguments", "[packet_builder][e
   const Packet join = PacketBuilder::buildJoinRoom("alice", " ");
   REQUIRE(join.room == " ");
 }
+
+// 14. buildReconnect maps fields
+TEST_CASE("PacketBuilder buildReconnect maps fields", "[packet_builder][reconnect]") {
+  const Packet packet = PacketBuilder::buildReconnect("alice", "General");
+
+  REQUIRE(packet.type == Packet::PacketType::RECONNECT);
+  REQUIRE(packet.sender == "alice");
+  REQUIRE(packet.message.empty());
+  REQUIRE(packet.room == "General");
+  REQUIRE(packet.receiver.empty());
+}
+
+// 15. buildReconnect rejects empty arguments
+TEST_CASE("PacketBuilder buildReconnect rejects empty arguments",
+          "[packet_builder][reconnect][edge]") {
+  SECTION("empty username") {
+    REQUIRE_THROWS_AS(PacketBuilder::buildReconnect("", "Lobby"), std::invalid_argument);
+  }
+  SECTION("empty room defaults to Lobby") {
+    const Packet packet = PacketBuilder::buildReconnect("alice", "");
+    REQUIRE(packet.room == "Lobby");
+  }
+}

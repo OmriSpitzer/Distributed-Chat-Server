@@ -152,6 +152,30 @@ function failWaiters() {
   }
 }
 
+function resumeSignedIn() {
+  if (!session.user || session.user.type === "GUEST") {
+    return;
+  }
+  const room = session.currentRoom?.name || "Lobby";
+  request({
+    type: PacketType.RECONNECT,
+    sender: session.user.username,
+    room,
+  }).then((response) => {
+    if (!response || response.responseCode !== 200) {
+      return;
+    }
+    const user = parseUser(response.message);
+    if (user) {
+      session.user = user;
+    }
+    if (response.room) {
+      applyRoomDirectory(response.room);
+    }
+    notify();
+  });
+}
+
 function onFrame(event) {
   const packet = decodePacket(event.data);
   if (!packet || !connected()) {
@@ -190,6 +214,7 @@ function openSocket() {
     }
     session.link = "Connected";
     notify();
+    resumeSignedIn();
   };
   current.onmessage = onFrame;
   current.onerror = () => {

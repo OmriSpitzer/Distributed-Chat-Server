@@ -539,9 +539,45 @@ bool GossipManager::applyEvent(const Packet &event) {
       return false;
     }
 
+    // a later RECONNECT already placed this user on another node
+    if (const auto current = db.onlineNode(username)) {
+      if (*current != content) {
+        Logger::logInfo("GossipManager", "Ignored LOGIN for " + username + " on " + content);
+        return true;
+      }
+    }
+
     // set the user online
     db.setOnline(username, content);
     Logger::logInfo("GossipManager", "Applied LOGIN for " + username + " on " + content);
+    return true;
+  }
+
+  // reconnect moves the live socket to content (the new node id)
+  if (type == "RECONNECT") {
+    if (username.empty() || content.empty()) {
+      Logger::logWarning("GossipManager", "Malformed RECONNECT event");
+      return false;
+    }
+
+    db.setOnline(username, content);
+    db.moveMembership(username, content);
+
+    if (content != config::NODE_ID) {
+      for (const auto &entry : connections.getSessions()) {
+        const auto &session = entry.second;
+        if (!session || !session->isAuthenticated() ||
+            session->getUser().getUsername() != username) {
+          continue;
+        }
+        session->setAuthenticated(false);
+        RoomManager::getInstance().leaveAll(*session);
+        session->setUser(User::anonymousUser());
+        RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *session);
+      }
+    }
+
+    Logger::logInfo("GossipManager", "Applied RECONNECT for " + username + " on " + content);
     return true;
   }
 
@@ -833,6 +869,15 @@ bool GossipManager::applyEvent(const Packet &event) {
     RoomManager::getInstance().broadcast(*room, push, connections, INVALID_SOCKET);
   }
   return true;
+}
+
+bool GossipManager::isNodeLive(const std::string &nodeId) const {
+  std::lock_guard lock(peersMutex);
+  const auto it = clientPeers.find(nodeId);
+  if (it == clientPeers.end()) {
+    return false;
+  }
+  return it->second.getSocket() != INVALID_SOCKET;
 }
 
 // rumor a packet

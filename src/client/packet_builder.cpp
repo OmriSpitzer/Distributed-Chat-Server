@@ -19,6 +19,16 @@ Packet PacketBuilder::buildLogin(std::string_view username, std::string_view pas
   return Packet(username, "", Packet::PacketType::LOGIN, "", password);
 }
 
+// build a reconnect packet
+Packet PacketBuilder::buildReconnect(std::string_view username, std::string_view room) {
+  if (username.empty()) {
+    throw std::invalid_argument("Username is required");
+  }
+
+  const std::string roomName = room.empty() ? std::string("Lobby") : std::string(room);
+  return Packet(username, "", Packet::PacketType::RECONNECT, roomName, "");
+}
+
 // build a register packet
 Packet PacketBuilder::buildRegister(std::string_view username, std::string_view password,
                                     std::string_view email) {

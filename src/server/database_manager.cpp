@@ -318,6 +318,15 @@ bool DatabaseManager::isUserOnline(std::string_view username) {
   return !query(db::sql::is_user_online, {username}).empty();
 }
 
+// node that owns the live session
+std::optional<std::string> DatabaseManager::onlineNode(std::string_view username) {
+  const SqlResult rows = query(db::sql::get_online_node, {username});
+  if (rows.empty() || rows[0].empty()) {
+    return std::nullopt;
+  }
+  return rows[0][0];
+}
+
 // set user online
 void DatabaseManager::setOnline(std::string_view username, std::string_view nodeId) {
   execute(db::sql::set_online, {username, nodeId});
@@ -326,6 +335,33 @@ void DatabaseManager::setOnline(std::string_view username, std::string_view node
 // clear user online
 void DatabaseManager::clearOnline(std::string_view username) {
   execute(db::sql::clear_online, {username});
+}
+
+// drop presence rows held by one node
+void DatabaseManager::clearNodePresence(std::string_view nodeId) {
+  execute(db::sql::clear_node_presence, {nodeId});
+}
+
+// adopt the row when its node_id is not still live
+bool DatabaseManager::canClaimPresence(std::string_view username, bool ownerIsLive) {
+  if (!onlineNode(username)) {
+    return false;
+  }
+  return !ownerIsLive;
+}
+
+// move every room membership for this user onto nodeId
+void DatabaseManager::moveMembership(std::string_view username, std::string_view nodeId) {
+  execute(db::sql::move_membership, {nodeId, username});
+}
+
+// which node holds this user in one room
+std::optional<std::string> DatabaseManager::membershipNode(std::string_view username, int roomId) {
+  const SqlResult rows = query(db::sql::membership_node, {username, std::to_string(roomId)});
+  if (rows.empty() || rows[0].empty()) {
+    return std::nullopt;
+  }
+  return rows[0][0];
 }
 
 // clear all user membership

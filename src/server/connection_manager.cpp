@@ -49,6 +49,10 @@ void ConnectionManager::rumor(const Packet &event) {
   }
 }
 
+bool ConnectionManager::isNodeLive(const std::string &nodeId) const {
+  return gossip_ && gossip_->isNodeLive(nodeId);
+}
+
 void ConnectionManager::pushServerDirectory(const std::string &body, SOCKET only) {
   Packet packet("server", "*", Packet::PacketType::SERVER_DIRECTORY, "", body, 0);
   if (only != INVALID_SOCKET) {

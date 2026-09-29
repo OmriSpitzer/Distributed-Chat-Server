@@ -191,7 +191,7 @@ Cluster-wide “who is logged in.” One row per username; `node_id` is the node
 | `username` | `TEXT` | `PRIMARY KEY` |
 | `node_id` | `TEXT` | `NOT NULL` |
 
-No foreign key: a crash can leave a stale row. Clearing presence on boot is still an open item (see [STEPS.md](STEPS.md)).
+No foreign key: a crash can leave a stale row on peers. `Server::start` deletes `online_users` rows whose `node_id` is this node. `RECONNECT` then sets `online_users.node_id` and every `membership.node_id` for that user to the node that accepted the new socket, and gossips that move.
 
 ### `allow_list`
 
@@ -290,7 +290,9 @@ flowchart LR
   subgraph Presence
     set_online
     clear_online
+    clear_node_presence
     is_user_online
+    get_online_node
   end
 
   subgraph Rooms
@@ -306,6 +308,8 @@ flowchart LR
     set_membership
     clear_membership
     clear_all_membership
+    move_membership
+    membership_node
   end
 
   subgraph ACL
@@ -328,7 +332,11 @@ flowchart LR
 | `clearMembership` | `clear_membership.sql` | drop one room |
 | `clearAllMembership` | `clear_all_membership.sql` | drop all rooms for user |
 | `isUserOnline` | `is_user_online.sql` | presence probe |
+| `onlineNode` | `get_online_node.sql` | `node_id` for a username |
 | `setOnline` / `clearOnline` | matching files | upsert / delete presence |
+| `clearNodePresence` | `clear_node_presence.sql` | delete presence rows for one `node_id` |
+| `moveMembership` | `move_membership.sql` | set `membership.node_id` for every room of a user |
+| `membershipNode` | `membership_node.sql` | `node_id` for one user in one room |
 | `createRoom` | `create_room.sql` | insert; id from `last_insert_rowid` |
 | `getRoom` / `listRooms` | matching files | by id / all rows |
 | `deleteRoom` | `delete_room.sql` | allow_list → membership → messages → room |
@@ -407,6 +415,8 @@ sequenceDiagram
 ```
 
 Logout clears `online_users` and all `membership` rows for that username, then rumors `LOGOUT`.
+
+`RECONNECT` looks the user up by username. When an `online_users` row exists and its `node_id` is not a live peer, it writes that `node_id` and every `membership.node_id` for the user to this node and rumors `RECONNECT`. Peers apply that rumor as the user's current node. A `LOGIN` rumor does not move a user who is already recorded on a different `node_id`.
 
 ---
 

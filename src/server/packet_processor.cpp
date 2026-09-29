@@ -260,6 +260,83 @@ Packet PacketProcessor::processPacket(const Packet &packet, ClientSession &sessi
     break;
   }
 
+    // resume a logged-in client on this node
+  case Packet::PacketType::RECONNECT: {
+    try {
+      auto &db = DatabaseManager::getInstance();
+      const auto found = db.getUser(packet.sender);
+      if (!found) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "unknown user";
+        break;
+      }
+
+      User user = *found;
+      const std::string username = user.getUsername();
+      if (!db.onlineNode(username)) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "not logged in";
+        break;
+      }
+
+      bool ownerLive = false;
+      if (const auto node = db.onlineNode(username)) {
+        if (*node == config::NODE_ID) {
+          ownerLive = connections.hasSession(user);
+        } else {
+          ownerLive = connections.isNodeLive(*node);
+        }
+      }
+
+      if (connections.hasSession(user) || !db.canClaimPresence(username, ownerLive)) {
+        response.responseCode = static_cast<int>(RESPONSE_CODES::ERROR);
+        response.message = "user already logged in";
+        break;
+      }
+
+      const std::string prevRoom = session.getRoom().getName();
+      session.setUser(user);
+      session.setAuthenticated(true);
+
+      db.setOnline(username, config::NODE_ID);
+      db.moveMembership(username, config::NODE_ID);
+
+      const std::string requested =
+          packet.room.empty() ? RoomManager::LOBBY.getName() : packet.room;
+      const auto room = RoomManager::getInstance().getRoom(requested);
+      const bool privateBlocked =
+          room && room->getPrivacy() == Room::Privacy::PRIVATE && !isAdmin(session) &&
+          !db.isAllowed(room->getId(), user.getEmail());
+
+      std::string joined = RoomManager::LOBBY.getName();
+      if (room && !privateBlocked && RoomManager::getInstance().joinRoom(requested, session)) {
+        joined = requested;
+      } else {
+        RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), session);
+      }
+
+      if (joined != RoomManager::LOBBY.getName()) {
+        if (const auto joinedRoom = RoomManager::getInstance().getRoom(joined)) {
+          if (joinedRoom->getPrivacy() == Room::Privacy::PUBLIC) {
+            db.addToAllowList(joinedRoom->getId(), user.getEmail(), false);
+          }
+        }
+      }
+
+      rumorPresence(connections, "RECONNECT", username);
+      rumorRoomJoin(connections, username, joined, prevRoom);
+
+      response.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
+      response.message = user.serialize();
+      response.room = encodeRoomDirectory();
+      connections.refreshServerDirectory(session.getSocket());
+    } catch (...) {
+      response.responseCode = static_cast<int>(RESPONSE_CODES::INTERNAL_SERVER_ERROR);
+      response.message = std::string("reconnect failed");
+    }
+    break;
+  }
+
     // register packet
   case Packet::PacketType::REGISTER: {
     try {

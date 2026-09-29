@@ -142,8 +142,7 @@ bool hasLogContaining(LogMessage::Type type, std::string_view needle) {
 }
 
 std::string startedMessage(std::uint16_t port) {
-  return "Started on port " + std::to_string(port) + " with " +
-         std::to_string(config::THREAD_COUNT) + " worker threads";
+  return "Started on port " + std::to_string(port);
 }
 
 std::string captureDashboard(Server &server) {

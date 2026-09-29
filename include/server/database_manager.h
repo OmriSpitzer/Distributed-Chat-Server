@@ -72,11 +72,27 @@ public:
   // true if username has a cluster presence row
   bool isUserOnline(std::string_view username);
 
+  // node_id that currently owns this user's session, if any
+  std::optional<std::string> onlineNode(std::string_view username);
+
   // upsert online_users (username → node holding the live socket)
   void setOnline(std::string_view username, std::string_view nodeId);
 
   // drop cluster presence for username
   void clearOnline(std::string_view username);
+
+  // drop online_users rows whose node_id is this node
+  void clearNodePresence(std::string_view nodeId);
+
+  // true when a presence row exists and its node_id is not still live.
+  // ownerIsLive is true when that node_id still has a live peer (or a local session).
+  bool canClaimPresence(std::string_view username, bool ownerIsLive);
+
+  // point every membership row for this user at nodeId
+  void moveMembership(std::string_view username, std::string_view nodeId);
+
+  // node_id stored for this user in one room, if a row exists
+  std::optional<std::string> membershipNode(std::string_view username, int roomId);
 
   // drop all room membership rows for username
   void clearAllMembership(std::string_view username);

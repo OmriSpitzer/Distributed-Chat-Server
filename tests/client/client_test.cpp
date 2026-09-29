@@ -47,6 +47,7 @@
  * 11. connect failure walks to the next endpoint
  * 12. peer close walks to the next endpoint
  * 13. hop reports reconnecting and does not re-login
+ * 14. logged-in hop sends RECONNECT
  */
 
 namespace {
@@ -579,4 +580,84 @@ TEST_CASE("Client reports reconnecting on hop without re-login", "[client][failo
 
   client.stop();
   REQUIRE_FALSE(client.isReconnecting());
+}
+
+// 14. logged-in hop sends RECONNECT and keeps the user
+TEST_CASE("Client sends RECONNECT on hop when logged in", "[client][failover][reconnect]") {
+  REQUIRE(winsock().ok);
+  ConfigGuard guard;
+  FailoverConfigGuard failoverGuard;
+
+  TestPeer primary;
+  TestPeer backup;
+  REQUIRE(primary.listen());
+  const auto primaryPort = config::PORT;
+  REQUIRE(backup.listen());
+  const auto backupPort = config::PORT;
+
+  config::SERVER_HOST = "127.0.0.1";
+  config::PORT = primaryPort;
+  config::NEIGHBOR_SERVERS = {ServerPoint{"127.0.0.1", backupPort}};
+  config::TEST_MODE = true;
+
+  const User user("alice", "alice@example.com", User::UserType::USER);
+  std::atomic<bool> drop{false};
+
+  std::thread primaryThread([&primary, &drop, &user] {
+    REQUIRE(primary.acceptOnce());
+    REQUIRE(socket_io::writePacket(primary.peer, connectWelcome()));
+    const auto login = socket_io::readPacket(primary.peer);
+    REQUIRE(login.has_value());
+    REQUIRE(login->type == Packet::PacketType::LOGIN);
+    REQUIRE(socket_io::writePacket(primary.peer, authSuccess(Packet::PacketType::LOGIN, user)));
+    while (!drop.load()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    socket_io::close(primary.peer);
+    primary.peer = INVALID_SOCKET;
+  });
+
+  std::thread backupThread([&backup, &user] {
+    REQUIRE(backup.acceptOnce());
+    REQUIRE(socket_io::writePacket(backup.peer, connectWelcome()));
+    const DWORD timeoutMs = 3000;
+    REQUIRE(setsockopt(backup.peer, SOL_SOCKET, SO_RCVTIMEO,
+                       reinterpret_cast<const char *>(&timeoutMs), sizeof(timeoutMs)) == 0);
+    const auto resume = socket_io::readPacket(backup.peer);
+    REQUIRE(resume.has_value());
+    REQUIRE(resume->type == Packet::PacketType::RECONNECT);
+    REQUIRE(resume->sender == "alice");
+    REQUIRE(resume->message.empty());
+    REQUIRE(resume->room == "Lobby");
+    REQUIRE(socket_io::writePacket(backup.peer,
+                                   authSuccess(Packet::PacketType::RECONNECT, user)));
+  });
+
+  Client client;
+  const bool started = client.start();
+  if (!started) {
+    drop = true;
+    if (primary.listener != INVALID_SOCKET) {
+      socket_io::close(primary.listener);
+      primary.listener = INVALID_SOCKET;
+    }
+    if (backup.listener != INVALID_SOCKET) {
+      socket_io::close(backup.listener);
+      backup.listener = INVALID_SOCKET;
+    }
+  }
+  REQUIRE(started);
+  REQUIRE(client.login("alice", "secret").empty());
+  REQUIRE(client.getState().isLoggedIn());
+
+  drop = true;
+
+  primaryThread.join();
+  backupThread.join();
+
+  REQUIRE(client.isAlive());
+  REQUIRE_FALSE(client.isReconnecting());
+  REQUIRE(client.getState().isLoggedIn());
+  REQUIRE(client.getState().user->getUsername() == "alice");
+  client.stop();
 }

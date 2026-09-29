@@ -951,3 +951,37 @@ TEST_CASE("GossipManager pushes SERVER_DIRECTORY to chat clients on peer change"
     acceptThread.join();
   fixture.gossip->stop();
 }
+
+// 25. RECONNECT moves node_id; a later LOGIN for the old node is ignored
+TEST_CASE("GossipManager rumor RECONNECT moves presence and membership",
+          "[gossip_manager][rumor][reconnect]") {
+  REQUIRE(winsock().ok);
+  GossipFixture fixture;
+  REQUIRE(fixture.start());
+
+  const std::string user = unique("moved");
+  db().createUser(user, Authentication::hashPassword("secret"), user + "@example.com");
+  db().setOnline(user, "old-node");
+  db().setMembership(user, RoomManager::LOBBY.getId(), "old-node");
+
+  fixture.gossip->rumor(makeEvent("RECONNECT", unique("rc"), user, "new-node", "0"));
+  REQUIRE(waitUntil(std::chrono::seconds(1), [&] {
+    const auto node = db().onlineNode(user);
+    return node.has_value() && *node == "new-node";
+  }));
+
+  const auto member = db().membershipNode(user, RoomManager::LOBBY.getId());
+  REQUIRE(member.has_value());
+  REQUIRE(*member == "new-node");
+  REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Applied RECONNECT for " + user));
+
+  fixture.gossip->rumor(makeEvent("LOGIN", unique("late"), user, "old-node", "0"));
+  const auto stayed = db().onlineNode(user);
+  REQUIRE(stayed.has_value());
+  REQUIRE(*stayed == "new-node");
+  REQUIRE(hasLogContaining(LogMessage::Type::INFO, "Ignored LOGIN for " + user + " on old-node"));
+
+  db().clearOnline(user);
+  db().clearAllMembership(user);
+  fixture.gossip->stop();
+}

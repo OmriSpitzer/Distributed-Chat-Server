@@ -130,12 +130,19 @@ private:
   std::atomic<bool> supervisorRunning{false}; // supervisor thread is inside its loop
   std::atomic<bool> reconnecting{false};      // supervisor is dialing after a live link dropped
   std::atomic<int> reconnects{0};             // live-link drops since start
+  std::atomic<bool> resumePending{false};     // send RECONNECT after the next successful dial
   std::mutex waitMutex;                       // guards the failover wait
   std::condition_variable waitCv;             // wakes sleep on stop or link down
   std::mt19937 rng{std::random_device{}()};   // jitter source
 
   // waiting for a packet of a specific type
   std::optional<Packet> waitFor(Packet::PacketType expected);
+
+  // same wait, but give up when the timeout elapses
+  std::optional<Packet> waitFor(Packet::PacketType expected, std::chrono::milliseconds timeout);
+
+  // after a hop, send RECONNECT for the in-memory user and room
+  void resumeSession();
 
   // rebuild the ring: directory-up endpoints, then the static seed
   void rebuildEndpoints();

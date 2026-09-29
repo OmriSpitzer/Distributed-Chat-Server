@@ -50,6 +50,9 @@ void Server::start() {
 
   Logger::logInfo("Server", "Starting server"); // log the server starting
 
+  // this process no longer holds the sockets from the previous boot
+  DatabaseManager::getInstance().clearNodePresence(config::NODE_ID);
+
   // initialize winsock 2.2
   WSADATA data;
   if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {

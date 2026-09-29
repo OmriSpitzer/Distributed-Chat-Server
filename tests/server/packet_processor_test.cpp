@@ -749,3 +749,64 @@ TEST_CASE("PacketProcessor ADMIN privilege checks", "[packet_processor][admin]")
     REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::FORBIDDEN));
   }
 }
+
+// 20. RECONNECT adopts a node id that is not live
+TEST_CASE("PacketProcessor reconnect adopts a down node", "[packet_processor][reconnect]") {
+  Fixture fx;
+  const User user = fx.createUser("secret");
+  db().setOnline(user.getUsername(), "dead-node");
+  db().setMembership(user.getUsername(), RoomManager::LOBBY.getId(), "dead-node");
+
+  Packet req(user.getUsername(), "server", Packet::PacketType::RECONNECT, "General", "");
+  const Packet res = process(req, fx.session, fx.connections);
+
+  REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS));
+  REQUIRE(fx.session.isAuthenticated());
+  REQUIRE(fx.session.getUser().getUsername() == user.getUsername());
+  REQUIRE(fx.session.getRoom().getName() == "General");
+
+  const auto node = db().onlineNode(user.getUsername());
+  REQUIRE(node.has_value());
+  REQUIRE(*node == config::NODE_ID);
+
+  const auto member = db().membershipNode(user.getUsername(), RoomManager::GENERAL.getId());
+  REQUIRE(member.has_value());
+  REQUIRE(*member == config::NODE_ID);
+}
+
+// 21. RECONNECT rejects an unknown user, a user with no presence row, and a live local session
+TEST_CASE("PacketProcessor reconnect rejects a live local session",
+          "[packet_processor][reconnect][edge]") {
+  Fixture fx;
+  const User user = fx.createUser("secret");
+
+  SECTION("unknown user") {
+    Packet req(unique("nobody"), "server", Packet::PacketType::RECONNECT, "Lobby", "");
+    const Packet res = process(req, fx.session, fx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+    REQUIRE(res.message == "unknown user");
+    REQUIRE_FALSE(fx.session.isAuthenticated());
+  }
+
+  SECTION("no presence row") {
+    Packet req(user.getUsername(), "server", Packet::PacketType::RECONNECT, "Lobby", "");
+    const Packet res = process(req, fx.session, fx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+    REQUIRE(res.message == "not logged in");
+    REQUIRE_FALSE(fx.session.isAuthenticated());
+  }
+
+  SECTION("already logged in on this node") {
+    Packet login(user.getUsername(), "server", Packet::PacketType::LOGIN, "", "secret");
+    REQUIRE(process(login, fx.session, fx.connections).responseCode ==
+            static_cast<int>(RESPONSE_CODES::SUCCESS));
+
+    ClientSession other(nextFakeSocket(), User::anonymousUser(), RoomManager::LOBBY);
+    Packet again(user.getUsername(), "server", Packet::PacketType::RECONNECT, "Lobby", "");
+    const Packet res = process(again, other, fx.connections);
+    REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+    REQUIRE(res.message == "user already logged in");
+    REQUIRE_FALSE(other.isAuthenticated());
+    rooms().leaveAll(other);
+  }
+}

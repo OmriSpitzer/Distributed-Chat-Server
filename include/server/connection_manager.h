@@ -78,6 +78,9 @@ public:
   // fan-out via injected gossip; no-op if not set
   void rumor(const Packet &event);
 
+  // true when nodeId is a connected gossip peer
+  bool isNodeLive(const std::string &nodeId) const;
+
   // push SERVER_DIRECTORY to one client (only != INVALID) or all sessions
   void pushServerDirectory(const std::string &body, SOCKET only = INVALID_SOCKET);
 

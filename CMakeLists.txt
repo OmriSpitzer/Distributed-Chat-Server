@@ -119,8 +119,12 @@ set(DB_SCHEMAS
   "set_membership:src/database/queries/set_membership.sql"
   "clear_membership:src/database/queries/clear_membership.sql"
   "is_user_online:src/database/queries/is_user_online.sql"
+  "get_online_node:src/database/queries/get_online_node.sql"
   "set_online:src/database/queries/set_online.sql"
   "clear_online:src/database/queries/clear_online.sql"
+  "clear_node_presence:src/database/queries/clear_node_presence.sql"
+  "move_membership:src/database/queries/move_membership.sql"
+  "membership_node:src/database/queries/membership_node.sql"
   "clear_all_membership:src/database/queries/clear_all_membership.sql"
   "create_room:src/database/queries/create_room.sql"
   "get_room:src/database/queries/get_room.sql"
@@ -304,6 +308,13 @@ add_executable(session_rules_test
 target_link_libraries(session_rules_test PRIVATE
   server_lib client_lib Catch2::Catch2WithMain Threads::Threads)
 
+add_executable(failover_e2e_test
+  tests/func/failover_e2e_test.cpp
+  tests/client/main_page_stub.cpp)
+target_link_libraries(failover_e2e_test PRIVATE
+  client_lib Catch2::Catch2WithMain Threads::Threads)
+add_dependencies(failover_e2e_test chat_server)
+
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
@@ -350,6 +361,7 @@ catch_discover_tests(web_connection_test)
 
 catch_discover_tests(two_client_message_push_test)
 catch_discover_tests(session_rules_test)
+catch_discover_tests(failover_e2e_test)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - Tests - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^ - ^
