@@ -12,6 +12,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <winsock2.h>
 #ifdef ERROR
@@ -47,6 +48,18 @@ public:
   // accept loop
   void acceptLoop();
 
+  // session + Lobby + welcome, without starting a TCP read loop
+  bool openSession(SOCKET fd);
+
+  // touch, process, and reply. false means the caller should drop the socket
+  bool dispatchPacket(SOCKET fd, const Packet &packet);
+
+  // later sendPacket calls wrap this socket in a binary WebSocket frame
+  void markWebSocket(SOCKET socket);
+
+  // close the socket and drop the session
+  void releaseClient(SOCKET socket);
+
   // does the user have a session
   bool hasSession(const User &user) const;
 
@@ -75,6 +88,7 @@ private:
   GossipManager *gossip_{nullptr}; // gossip manager owned by Server
 
   std::unordered_map<SOCKET, std::shared_ptr<ClientSession>> sessions; // sessions
+  std::unordered_set<SOCKET> webSockets_;                              // browser sockets
   SOCKET listeningSocket;                                              // listening socket
   std::atomic<bool> listening{false};                                  // is the server listening
   mutable std::mutex sessionsMutex;                                    // sessions mutex

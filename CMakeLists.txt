@@ -41,6 +41,7 @@ add_library(server_lib
     src/server/heartbeat.cpp
     src/server/server.cpp
     src/server/gossip_manager.cpp
+    src/server/web_connection.cpp
     src/utils/health/db_health_adapter.cpp
     src/utils/health/heartbeat_health_adapter.cpp
     src/utils/health/server_health_adapter.cpp
@@ -286,6 +287,10 @@ target_link_libraries(connection_manager_test PRIVATE server_lib Catch2::Catch2W
 add_executable(server_test tests/server/server_test.cpp)
 target_link_libraries(server_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
 
+# ------------ Sidecar ------------
+add_executable(web_connection_test tests/server/web_connection_test.cpp)
+target_link_libraries(web_connection_test PRIVATE server_lib Catch2::Catch2WithMain Threads::Threads)
+
 # ------------ Func / E2E connections ------------
 
 add_executable(two_client_message_push_test
@@ -340,6 +345,7 @@ catch_discover_tests(gossip_manager_test)
 catch_discover_tests(packet_processor_test)
 catch_discover_tests(connection_manager_test)
 catch_discover_tests(server_test)
+catch_discover_tests(web_connection_test)
 
 # ------------ Func / E2E tests ------------
 

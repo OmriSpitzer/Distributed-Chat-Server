@@ -8,6 +8,8 @@ Shared types (`Packet`, `User`, `Room`, `Message`, `Logger`, `gossip_payload`) l
 
 Local multi-node demo: `.\scripts\run_cluster.ps1` (2 servers + 2 clients). See README “Two-node cluster”.
 
+`Server` owns `WebConnection` the same way it owns `ConnectionManager`. `WebConnection` listens on `--ws-port` and `Server` runs `acceptLoop` on its own thread. Each browser binary frame is one length-prefixed `Packet`. The socket is a `ConnectionManager` session, so welcome, heartbeat, and room sends use `sendPacket`. Qt clients stay on `--port`. Gossip stays on `--peer-port`.
+
 ---
 
 ## Layered architecture

@@ -64,6 +64,14 @@ void Server::start() {
     return;
   }
 
+  if (!webConnection.startListening(config::WS_PORT)) {
+    Logger::logError("Server",
+                     "Failed to start WebSocket listening on port " + std::to_string(config::WS_PORT));
+    connectionManager.stopListening();
+    WSACleanup();
+    return;
+  }
+
   running = true; // set the server to running
 
   // start heartbeat thread
@@ -73,8 +81,9 @@ void Server::start() {
   connectionManager.setGossip(&gossipManager);
   gossipManager.start();
 
-  // start the accept loop
+  // start the accept loops
   acceptThread = std::thread([this] { connectionManager.acceptLoop(); });
+  webAcceptThread = std::thread([this] { webConnection.acceptLoop(); });
 
   // add the health checks to the health monitor
   healthMonitor.add(std::make_unique<ServerHealthAdapter>(*this));        // server health
@@ -98,6 +107,12 @@ void Server::stop() {
   // set the server to not running
   running = false;
 
+  // stop the WebSocket accept thread before closing client sockets
+  webConnection.stopListening();
+  if (webAcceptThread.joinable()) {
+    webAcceptThread.join();
+  }
+
   // stop all threads
   heartbeat.stop();
   gossipManager.stop();
@@ -108,6 +123,7 @@ void Server::stop() {
   }
   // acceptLoop can spawn one more handler while it is unwinding
   connectionManager.joinClientThreads();
+  webConnection.joinClientThreads();
   threadPool.shutdown();
 
   // clean up winsock
@@ -121,8 +137,9 @@ void Server::dashboard() {
   std::cout << "Server dashboard" << std::endl;
   std::cout << "--------------------------------" << std::endl;
   std::cout << "Node id: " << config::NODE_ID << std::endl;
-  std::cout << "Port: " << config::PORT << " Peer port: " << config::PEER_PORT
-            << " Thread count: " << config::THREAD_COUNT << std::endl;
+  std::cout << "Port: " << config::PORT << " Web port: " << webConnection.port()
+            << " Peer port: " << config::PEER_PORT << " Thread count: " << config::THREAD_COUNT
+            << std::endl;
   std::cout << "Database path: " << config::DB_PATH << std::endl;
   std::cout << "Gossip seeds: ";
   if (config::PEERS.empty()) {

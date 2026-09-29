@@ -2,13 +2,13 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **29** executables, **387** `TEST_CASE`s.
+Totals: **30** executables, **392** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
 `tests/class/` is leftover and is **not** built.
 
-**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [FUTURE_WORK.md](../FUTURE_WORKs.md)
+**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [FUTURE_WORK.md](../FUTURE_WORK.md)
 
 Manual multi-node smoke (not Catch2): `.\scripts\run_cluster.ps1` — 2 servers + 2 clients.
 
@@ -535,6 +535,24 @@ ctest --test-dir build --output-on-failure
 - Server start fails when the client port is exclusive
 - Server accept loop accepts a client
 - Server typical start dashboard stop flow
+
+---
+
+## WebConnection
+
+`WebConnection` is owned by `Server` and linked into `server_lib`.
+
+| Executable | File | Cases |
+|---|---|---|
+| `web_connection_test` | `tests/server/web_connection_test.cpp` | 5 |
+
+### WebConnection (`[web_connection]`)
+
+- WebConnection accept key matches RFC 6455
+- WebConnection upgrade response
+- WebConnection upgrade rejects a request without a key
+- WebConnection binary frame round-trip
+- WebConnection session receives welcome and heartbeat pong
 
 ---
 

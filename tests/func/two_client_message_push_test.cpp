@@ -121,6 +121,7 @@ struct LiveNode {
     config::SERVER_HOST = "127.0.0.1";
     config::PORT = port;
     config::PEER_PORT = peerPort;
+    config::WS_PORT = 0;
     config::NODE_ID = "func-e2e-node";
     config::PEERS.clear();
 

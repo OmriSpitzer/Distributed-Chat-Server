@@ -108,6 +108,7 @@ void applyServerConfig(std::uint16_t port, std::uint16_t peerPort, const std::st
                        const std::string &dbPath) {
   config::PORT = port;
   config::PEER_PORT = peerPort;
+  config::WS_PORT = 0;
   config::NODE_ID = nodeId;
   config::DB_PATH = dbPath;
   config::PEERS.clear();

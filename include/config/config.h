@@ -25,6 +25,9 @@ inline std::string SERVER_HOST = "127.0.0.1";
 // TCP port the server listens on
 inline std::uint16_t PORT = 5555;
 
+// WebSocket port for browser clients (0 = ephemeral)
+inline std::uint16_t WS_PORT = 8080;
+
 // TCP port for gossip between servers
 inline std::uint16_t PEER_PORT = 5557;
 
@@ -58,6 +61,7 @@ inline void printUsage(const char *program) {
             << "  --node-id ID          node identity (default: node1)\n"
             << "  --host HOST           client connect host (default: 127.0.0.1)\n"
             << "  --port N              client TCP port (default: 5555)\n"
+            << "  --ws-port N           browser WebSocket port (default: 8080)\n"
             << "  --servers H:P,H:P     other client endpoints for failover\n"
             << "  --peer-port N         gossip listen port (default: 5557)\n"
             << "  --peers H:P,H:P       other nodes' gossip addresses\n"
@@ -201,6 +205,19 @@ inline bool parseArgs(int argc, char *argv[]) {
       }
 
       removeNeighborServer(SERVER_HOST, PORT);
+      continue;
+    }
+
+    // browser WebSocket port
+    if (arg == "--ws-port") {
+      const char *value = next("--ws-port");
+      if (!value) {
+        return false;
+      }
+      if (!parsePort(value, WS_PORT)) {
+        std::cerr << "Invalid --ws-port\n";
+        return false;
+      }
       continue;
     }
 

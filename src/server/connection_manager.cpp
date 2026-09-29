@@ -15,6 +15,8 @@
 #include "utils/logger/logger.h"
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
+#include "server/web_connection.h"
+#include "utils/serializer.h"
 #include "utils/socket_io.h"
 #include <atomic>
 #include <cstdint>
@@ -143,46 +145,84 @@ void ConnectionManager::acceptLoop() {
     SOCKET fd = client;
     Logger::logInfo("ConnectionManager", "New client connected socket " + std::to_string(fd));
 
-    // add the new client session (non-copyable: mutex + atomic closed flag)
-    auto session = std::make_shared<ClientSession>(fd, User::anonymousUser(), RoomManager::LOBBY);
-    addSession(fd, session);
-
-    // register in Lobby membership so room broadcasts reach this socket
-    if (!RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *session)) {
-      Logger::logWarning("ConnectionManager",
-                         "Failed to place new client in Lobby, socket " + std::to_string(fd));
-      closeClient(fd);
-      removeSession(fd);
+    if (!openSession(fd)) {
       continue;
-    }
-
-    // push connect snapshot: anon user (sender), Lobby (room), directory (message)
-    std::vector<Room> directory = RoomManager::getInstance().listRooms();
-    if (directory.empty()) {
-      directory = {RoomManager::LOBBY, RoomManager::GENERAL};
-    }
-    Packet welcome("server", session->getUser().serialize(), Packet::PacketType::ROOM_LIST,
-                   RoomManager::LOBBY.getName(), Room::serializeList(directory), 0);
-    if (!sendPacket(fd, welcome)) {
-      Logger::logWarning("ConnectionManager",
-                         "Failed to send connect welcome, socket " + std::to_string(fd));
-      closeClient(fd);
-      removeSession(fd);
-      continue;
-    }
-
-    Logger::logInfo("ConnectionManager", "Sent connect welcome with " +
-                                             std::to_string(directory.size()) + " rooms, socket " +
-                                             std::to_string(fd));
-
-    // push live chat-endpoint directory (failover hints) when gossip is wired
-    if (gossip_) {
-      pushServerDirectory(gossip_->buildServerDirectory(), fd);
     }
 
     // handle the client on a joined thread (stop waits for it before the manager dies)
     spawnClientHandler(fd);
   }
+}
+
+// session + Lobby + welcome, without starting a TCP read loop
+bool ConnectionManager::openSession(SOCKET fd) {
+  auto session = std::make_shared<ClientSession>(fd, User::anonymousUser(), RoomManager::LOBBY);
+  addSession(fd, session);
+
+  if (!RoomManager::getInstance().joinRoom(RoomManager::LOBBY.getName(), *session)) {
+    Logger::logWarning("ConnectionManager",
+                       "Failed to place new client in Lobby, socket " + std::to_string(fd));
+    closeClient(fd);
+    removeSession(fd);
+    return false;
+  }
+
+  std::vector<Room> directory = RoomManager::getInstance().listRooms();
+  if (directory.empty()) {
+    directory = {RoomManager::LOBBY, RoomManager::GENERAL};
+  }
+  Packet welcome("server", session->getUser().serialize(), Packet::PacketType::ROOM_LIST,
+                 RoomManager::LOBBY.getName(), Room::serializeList(directory), 0);
+  if (!sendPacket(fd, welcome)) {
+    Logger::logWarning("ConnectionManager",
+                       "Failed to send connect welcome, socket " + std::to_string(fd));
+    closeClient(fd);
+    removeSession(fd);
+    return false;
+  }
+
+  Logger::logInfo("ConnectionManager", "Sent connect welcome with " +
+                                           std::to_string(directory.size()) + " rooms, socket " +
+                                           std::to_string(fd));
+
+  if (gossip_) {
+    pushServerDirectory(gossip_->buildServerDirectory(), fd);
+  }
+  return true;
+}
+
+// touch, process, and reply. false means the caller should drop the socket
+bool ConnectionManager::dispatchPacket(SOCKET clientSocket, const Packet &packet) {
+  std::shared_ptr<ClientSession> session;
+  {
+    std::lock_guard<std::mutex> lock(sessionsMutex);
+    auto it = sessions.find(clientSocket);
+    if (it == sessions.end()) {
+      return false;
+    }
+    session = it->second;
+  }
+
+  session->touch();
+
+  if (packet.type == Packet::PacketType::HEARTBEAT && packet.message != "ping") {
+    return true;
+  }
+
+  Packet response = PacketProcessor::processPacket(packet, *session, *this);
+  return sendPacket(clientSocket, response);
+}
+
+// later sendPacket calls wrap this socket in a binary WebSocket frame
+void ConnectionManager::markWebSocket(SOCKET socket) {
+  std::lock_guard<std::mutex> lock(sessionsMutex);
+  webSockets_.insert(socket);
+}
+
+// close the socket and drop the session
+void ConnectionManager::releaseClient(SOCKET socket) {
+  closeClient(socket);
+  removeSession(socket);
 }
 
 // track a handleClient thread, or close the socket if stop already won
@@ -218,45 +258,13 @@ void ConnectionManager::joinClientThreads() {
 // handle the client
 void ConnectionManager::handleClient(SOCKET clientSocket) {
   while (listening.load()) {
-    // read a packet from the client socket
     std::optional<Packet> packet = socket_io::readPacket(clientSocket);
-
-    // check if the packet is valid
-    if (!packet) {
-      break;
-    }
-
-    // find the session for the client socket
-    std::shared_ptr<ClientSession> session;
-    {
-      std::lock_guard<std::mutex> lock(sessionsMutex);
-      auto it = sessions.find(clientSocket);
-      if (it == sessions.end()) {
-        break;
-      }
-      session = it->second;
-    }
-
-    // touch the session to keep it alive
-    session->touch();
-
-    // ignore all heartbeats except client pings
-    if (packet->type == Packet::PacketType::HEARTBEAT && packet->message != "ping") {
-      continue;
-    }
-
-    // process the packet
-    Packet response = PacketProcessor::processPacket(*packet, *session, *this);
-
-    // send the response packet to the client
-    if (!sendPacket(clientSocket, response)) {
+    if (!packet || !dispatchPacket(clientSocket, *packet)) {
       break;
     }
   }
 
-  // close at most once (heartbeat / stopListening may have closed already)
-  closeClient(clientSocket);
-  removeSession(clientSocket);
+  releaseClient(clientSocket);
   Logger::logInfo("ConnectionManager",
                   "Client disconnected, socket " + std::to_string(clientSocket));
 }
@@ -279,6 +287,7 @@ void ConnectionManager::removeSession(SOCKET socket) {
     if (it != sessions.end()) {
       session = it->second;
       sessions.erase(it);
+      webSockets_.erase(socket);
     }
   }
   if (!session) {
@@ -337,6 +346,7 @@ bool ConnectionManager::hasSession(const User &user) const {
 // send a packet to a connected client
 bool ConnectionManager::sendPacket(SOCKET socket, const Packet &packet) {
   std::shared_ptr<ClientSession> session;
+  bool webSocket = false;
   {
     std::lock_guard<std::mutex> lock(sessionsMutex);
     auto it = sessions.find(socket);
@@ -344,6 +354,7 @@ bool ConnectionManager::sendPacket(SOCKET socket, const Packet &packet) {
       return false;
     }
     session = it->second;
+    webSocket = webSockets_.count(socket) != 0;
   }
   if (session->isClosed()) {
     return false;
@@ -353,7 +364,17 @@ bool ConnectionManager::sendPacket(SOCKET socket, const Packet &packet) {
   if (session->isClosed()) {
     return false;
   }
-  return socket_io::writePacket(socket, packet);
+  if (!webSocket) {
+    return socket_io::writePacket(socket, packet);
+  }
+
+  const std::string framed = Serializer::serialize(packet);
+  if (framed.empty()) {
+    return false;
+  }
+  const std::string frame =
+      web_connection::encodeFrame(web_connection::WsOpcode::Binary, framed, false);
+  return socket_io::sendExact(socket, frame.data(), static_cast<int>(frame.size()));
 }
 
 // close a client socket so its read loop exits (at most once)

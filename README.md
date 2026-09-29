@@ -141,6 +141,12 @@ Manual equivalent:
 | `scripts/run_cluster.ps1` | Build + 2-node cluster + 2 clients |
 | `scripts/run_test.ps1` | Build the Catch2 suite and run it with CTest |
 
+### Browser WebSocket
+
+`chat_server` also listens for browser WebSockets. `Server` owns `WebConnection` and runs that accept loop beside the TCP accept loop. Each binary frame is one framed `Packet`. Pass `--ws-port` (default `8080`). Qt clients keep using `--port`.
+
+The Vite app in `web/` is the same dashboard as the Qt client: sign in, log in, logout, profile, rooms (join, leave, create, invite, kick, delete), chat, and history. It answers heartbeat pings with `pong`. From `web/`, run `npm run dev` and open the printed local URL while a server is listening on `--ws-port`.
+
 Legacy helpers `src/server.ps1` and `src/client.ps1` still build-and-run a single binary; prefer `scripts/`.
 
 ## Configuration
@@ -152,6 +158,7 @@ CLI flags map onto `include/config/config.h`:
 | `--node-id ID` | `node1` | Cluster identity for this process |
 | `--host HOST` | `127.0.0.1` | Client connect host |
 | `--port N` | `5555` | Client TCP listen / connect port |
+| `--ws-port N` | `8080` | Browser WebSocket listen port |
 | `--peer-port N` | `5557` | Gossip listen port |
 | `--peers H:P,H:P` | *(empty)* | Other nodes' gossip addresses |
 | `--db PATH` | `data/node-1.db` | SQLite path |
@@ -173,7 +180,7 @@ Distributed-Chat-Server/
 │   ├── auth/               Argon2id wrapper
 │   ├── client/             Network, packets, state, Qt dashboard
 │   ├── config/             Ports, peers, DB path, CLI parser
-│   ├── server/             Sessions, rooms, gossip, heartbeat, Qt panels
+│   ├── server/             Sessions, rooms, gossip, heartbeat, WebConnection, Qt panels
 │   └── utils/              Packet, serializer, socket_io, models
 ├── src/
 │   ├── auth/
@@ -192,7 +199,7 @@ Headers live in `include/`; implementations live in `src/`. CMake adds `include/
 |--------|------|
 | `utils` | Models, serializer, socket I/O, gossip payload |
 | `auth` | Argon2id hash / verify |
-| `server_lib` / `chat_server` | Server library and Qt/console executable |
+| `server_lib` / `chat_server` | Server library and Qt/console executable (`WebConnection` included) |
 | `client_lib` / `chat_client` | Client library and Qt/console executable |
 | `sqlite3` | Bundled SQLite amalgamation |
 | `*_test` | Catch2 binaries (discovered by CTest) |
@@ -203,10 +210,10 @@ Headers live in `include/`; implementations live in `src/`. CMake adds `include/
 .\scripts\run_test.ps1 -R "Client login"
 ```
 
-See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**24** executables, **339** `TEST_CASE`s).
+See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**30** executables, **392** `TEST_CASE`s).
 
 ## Status
 
 **Working today:** framed TCP, Qt and console clients/servers (`--test` for console), register / login / logout / profile, public and private rooms (join, leave, create, invite, kick, delete), ADMIN gates (invite/kick any room, delete except Lobby/General, join PRIVATE), live chat plus history for registered users, heartbeat, gossip rumor + anti-entropy, cluster-wide single login, PowerShell cluster helpers, Catch2 coverage for utils, auth, client, and server.
 
-**Still open:** WebSocket or a shared remote database, clear stale `online_users` on node boot, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). See [FUTURE_WORK.md](FUTURE_WORK.md).
+**Still open:** cluster-status pages and a website-only account store, a shared remote database, clear stale `online_users` on node boot, live gossip sockets on the server Ports panel, event-driven GUI refresh (panels poll on a timer). See [FUTURE_WORK.md](FUTURE_WORK.md).

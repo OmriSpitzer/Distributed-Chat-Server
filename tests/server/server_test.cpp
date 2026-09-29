@@ -157,6 +157,7 @@ std::string captureDashboard(Server &server) {
 void applyConfig(std::uint16_t port, std::uint16_t peerPort, const std::string &nodeId) {
   config::PORT = port;
   config::PEER_PORT = peerPort;
+  config::WS_PORT = 0;
   config::NODE_ID = nodeId;
   config::PEERS.clear();
 }

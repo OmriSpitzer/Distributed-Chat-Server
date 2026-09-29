@@ -256,7 +256,8 @@ Desktop Qt/console stay primary for chat; website is admin + light client / stat
 
 - [ ] Thin **gateway** (separate process or sidecar): REST and/or WebSocket for domain ops (login, rooms list, history read, optional send).
 - [ ] Do **not** put REST inside `PacketProcessor`; it still sees only `Packet`. A gateway, when used, talks TCP/`Packet` to a chosen node.
-- [ ] **Also** a WebSocket listener on `chat_server` (`--ws-port`): HTTP upgrade in `socket_io` / `ConnectionManager` only. Each binary frame payload is one existing length-prefixed `Packet`. Qt clients stay on `--port`. Gossip stays on `--peer-port`. `wss` terminates at the reverse proxy.
+- [x] WebSocket listener on `chat_server` (`--ws-port`): `Server` owns `WebConnection` and runs its accept loop beside `ConnectionManager`. Each binary frame payload is one existing length-prefixed `Packet`. The socket is a `ConnectionManager` session. Qt clients stay on `--port`. Gossip stays on `--peer-port`. `wss` terminates at the reverse proxy.
+- [x] Browser dashboard in `web/` uses that socket for the same actions as `DashboardPage`: register, login, logout, profile, join / leave / create / invite / kick / delete, send, and history. Heartbeat `ping` is answered with `pong`. The chat session is the WebSocket; there is no separate website login cookie.
 - [ ] Public pages: cluster status (nodes up/down), room directory (public only), optional read-only message feed.
 - [ ] Auth pages: register / login against chat cluster (via gateway); session cookie/JWT for website only — chat nodes keep Argon2id + binary sessions.
 - [ ] Admin UI: kick/invite/delete room (ADMIN), view online users across nodes (aggregated from gateway polls or events).
@@ -370,7 +371,7 @@ Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-
 ## 9. Transport & API surface (website)
 
 - [ ] WebSocket and/or REST gateway implementing website ops (§4).
-- [ ] Optional `--ws-port` on `chat_server` (§4): binary frames carry the same `Packet` bytes, so a browser can skip a separate gateway.
+- [x] `--ws-port` on `chat_server` (§4): `Server` owns `WebConnection`; binary frames carry the same `Packet` bytes.
 - [ ] OpenAPI (REST) or schema doc for gateway; map HTTP errors to existing `200`/`400`/`404`/`500` meanings.
 - [ ] Rate limits on gateway register/login; same Argon2id verification path via cluster, not a second hash scheme.
 - [ ] “RESTfulness on APIs” = gateway resources (`/rooms`, `/rooms/{id}/messages`), not rewriting binary `Packet` into REST inside each node.
