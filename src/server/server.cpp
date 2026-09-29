@@ -65,8 +65,8 @@ void Server::start() {
   }
 
   if (!webConnection.startListening(config::WS_PORT)) {
-    Logger::logError("Server",
-                     "Failed to start WebSocket listening on port " + std::to_string(config::WS_PORT));
+    Logger::logError("Server", "Failed to start WebSocket listening on port " +
+                                   std::to_string(config::WS_PORT));
     connectionManager.stopListening();
     WSACleanup();
     return;
@@ -91,9 +91,8 @@ void Server::start() {
   healthMonitor.add(
       std::make_unique<DbHealthAdapter>(DatabaseManager::getInstance())); // database health
 
-  Logger::logInfo("Server", "Started on port " + std::to_string(config::PORT) + " with " +
-                                std::to_string(config::THREAD_COUNT) +
-                                " worker threads"); // log the server started
+  Logger::logInfo("Server",
+                  "Started on port " + std::to_string(config::PORT)); // log the server started
 }
 
 // stop the server
@@ -124,7 +123,6 @@ void Server::stop() {
   // acceptLoop can spawn one more handler while it is unwinding
   connectionManager.joinClientThreads();
   webConnection.joinClientThreads();
-  threadPool.shutdown();
 
   // clean up winsock
   WSACleanup();
@@ -138,8 +136,7 @@ void Server::dashboard() {
   std::cout << "--------------------------------" << std::endl;
   std::cout << "Node id: " << config::NODE_ID << std::endl;
   std::cout << "Port: " << config::PORT << " Web port: " << webConnection.port()
-            << " Peer port: " << config::PEER_PORT << " Thread count: " << config::THREAD_COUNT
-            << std::endl;
+            << " Peer port: " << config::PEER_PORT << std::endl;
   std::cout << "Database path: " << config::DB_PATH << std::endl;
   std::cout << "Gossip seeds: ";
   if (config::PEERS.empty()) {

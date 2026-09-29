@@ -34,7 +34,6 @@ find_package(Threads REQUIRED)
 add_library(server_lib
     src/server/database_manager.cpp
     src/server/room_manager.cpp
-    src/server/thread_pool.cpp
     src/server/packet_processor.cpp
     src/server/client_session.cpp
     src/server/connection_manager.cpp

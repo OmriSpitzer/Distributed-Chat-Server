@@ -5,11 +5,9 @@
  */
 
 #pragma once
-#include "config/config.h"
 #include "server/connection_manager.h"
 #include "server/gossip_manager.h"
 #include "server/heartbeat.h"
-#include "server/thread_pool.h"
 #include "server/web_connection.h"
 #include "utils/health/health_monitor.h"
 #include <atomic>
@@ -42,7 +40,6 @@ public:
   HealthMonitor &health();
 
 private:
-  ThreadPool threadPool{config::THREAD_COUNT};                    // worker threads
   ConnectionManager connectionManager{};                          // client connections
   GossipManager gossipManager = GossipManager(connectionManager); // server gossip manager
   Heartbeat heartbeat = Heartbeat(connectionManager);             // heartbeat

@@ -40,9 +40,6 @@ inline std::vector<std::string> PEERS;
 // other servers for failover
 inline std::vector<ServerPoint> NEIGHBOR_SERVERS;
 
-// number of worker threads in the thread pool
-inline constexpr std::size_t THREAD_COUNT = 4;
-
 // path to the database file
 inline std::string DB_PATH = "data/node-1.db";
 

@@ -77,7 +77,7 @@ Framing works (`socket_io` + `Serializer`), but sockets are still raw `int` / ca
 
 ## 6. Server runtime & architecture
 
-- [x] `ThreadPool`: kept constructed with `Server` and shut down on stop; session I/O stays on dedicated threads (pool is not the accept path).
+- [x] `ThreadPool` removed. Accept, WebSocket accept, heartbeat, gossip, and each client session use dedicated threads.
 - [x] Singletons (`DatabaseManager`, `RoomManager`) are acceptable for this small node. Prefer DI (owned by `Server`) only if tests need it — not a must.
 - [x] Cap / rotate gossip event log: verify ops story when `MAX_EVENT_LOG` drops old ids.
 
@@ -155,15 +155,6 @@ Qt Widgets dashboard; keep console entry points for tests/scripts. Presentation-
 
 Ship the structural patterns below so client and server stay testable. Shared types (`IHealthCheck`, `HealthMonitor`) live in a common place; each process wires only the adapters it owns.
 
-### Design patterns on the server
-
-- [ ] **Sidecar** — optional side process / plugin for dynamic logic (metrics scrape, audit export, hot-config) without bloating `PacketProcessor`.
-- [ ] **Strategy** for join / ACL / ADMIN gates so room privacy rules are swappable without touching TCP.
-- [ ] **Observer / event bus** for GUI + website: domain events (`UserOnline`, `MessagePosted`, `RoomCreated`) instead of Qt `QTimer` polls only.
-- [ ] Keep singletons (`DatabaseManager`, `RoomManager`) or migrate to DI owned by `Server` if website tests need fakes.
-
-
-
 ### Health checks (Adapter + Composite)
 
 Shared `IHealthCheck` (Adapter target) and `HealthMonitor` (Composite). Same monitor type on client and server; each process registers different leaf adapters.
@@ -190,23 +181,11 @@ Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLog
 
 
 
-## 2. Architecture — cluster presence & node lifecycle
-
-Today each node has its own SQLite; gossip syncs events. Crash leaves stale `online_users` (no clear-on-boot).
-
-- [ ] Clear cluster presence on node boot (`online_users` must not survive a crash as “still online”); rumor peer cleanup or local wipe + HELLO.
-- [ ] On graceful `Server::stop`, clear local sessions / rumor LOGOUT for still-connected users.
-- [ ] Live peer sockets on Ports panel (`GossipManager` snapshot getters — connected node ids, not only `config::PEERS`).
-- [ ] Document “source of truth”: per-node SQLite remains chat store; website/AWS is a **separate** account/admin surface (see §5–§6), not a replacement for gossip.
-- [ ] Optional: node readiness flag (accept clients only after DB open + gossip listen + presence wipe).
-
-
-
 ## 3. Client failover — servers publish neighbors; clients reconnect **(goal)**
 
-**Design:** Topology for client failover lives with the servers (they already gossip). Clients stay dumb: bootstrap from a seed, cache a directory, reconnect when the current node dies, re-auth. Dead nodes cannot hand clients off; peers do not dial clients.
+**Design:** Topology for client failover lives with the servers (they already gossip). Clients stay dumb: bootstrap from a seed, cache a directory, reconnect when the current node dies. Dead nodes cannot hand clients off; peers do not dial clients. A user who was already logged in stays logged in: the UI does not return to anonymous and does not ask for the password again. After the new socket is up, the client sends `LOGIN` and `ROOM_JOIN` from the in-memory session (username, password already held for this process, current room).
 
-`Network::connect(host, port)` dials one endpoint. The client supervisor walks one failover list: endpoints the last `SERVER_DIRECTORY` reported as up, then the static seed (`--host`/`--port`, then `--servers`) that were not in that directory, with backoff and jitter. The connected endpoint stays at the front until the link fails. Re-`LOGIN` after a hop is still open.
+`Network::connect(host, port)` dials one endpoint. The client supervisor walks one failover list: endpoints the last `SERVER_DIRECTORY` reported as up, then the static seed (`--host`/`--port`, then `--servers`) that were not in that directory, with backoff and jitter. The connected endpoint stays at the front until the link fails. On boot this node should clear its own `online_users`. On the node the client lands on, a resume `LOGIN` takes the existing row when the recorded `node_id` is a process that has died (its `HELLO` boot id changed): `online_users` becomes `username → this node`, then that move is rumored. The row is not deleted first, so a third node cannot slip in a second login. A node that is still up (same boot id) still rejects the login as “user already logged in.”
 
 ### Ownership
 
@@ -214,7 +193,7 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 | Who        | Owns                                                                                               | Does not                                            |
 | ---------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | **Server** | Known **client-facing** neighbors (`host:port` chat TCP), pushed as a directory from gossip/health | Client TCP sessions on other nodes; dialing clients |
-| **Client** | Seed + cached directory; reconnect / round-robin; re-`LOGIN` + re-`ROOM_JOIN`                      | Gossip `--peers` / `PEER_PORT`                      |
+| **Client** | Seed + cached directory; reconnect / round-robin; resume in-memory user + room (no login prompt)   | Gossip `--peers` / `PEER_PORT`                      |
 
 
 `--servers` / `NEIGHBOR_SERVERS` = client failover endpoints. `--peers` = server-to-server gossip only.
@@ -230,6 +209,7 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 - [x] Each node tracks live **client** endpoints of cluster members (from gossip HELLO / peer health — not raw `--peers` gossip ports).
 - [x] Push (or reply to) a lightweight **directory** packet of `host:port` chat endpoints to connected clients (on connect, on membership change, and/or periodically).
 - [x] Refresh after login so the client’s cache matches who the new node believes is up.
+- [ ] On resume `LOGIN`, if `online_users.node_id` is a node whose boot id changed, set that row to this node and rumor the move. Persist the last boot id seen per node. Same boot id means that node is still up: reject the login. Do not take a row from a bare reconnect with no `LOGIN`.
 
 
 
@@ -237,32 +217,28 @@ Today each node has its own SQLite; gossip syncs events. Crash leaves stale `onl
 
 - [x] Merge seed + server directory into a failover list; prefer endpoints the last directory reported as up.
 - [x] On connect failure, peer close, heartbeat miss / `isAlive() == false`, or failed `HealthMonitor` / Client adapter: try the next endpoint (round-robin or priority) with backoff + jitter.
-- [x] Surface “reconnecting...” in the console and the Qt header while the supervisor dials the next endpoint. No re-login or re-join yet.
-- [ ] Cap reconnect storms; do not retry forever without UI cancel.
+- [x] Surface “reconnecting...” in the console and the Qt header while the supervisor dials the next endpoint. Session resume is not wired yet.
+- [x] Cap reconnect storms; do not retry forever without UI cancel.
+- [ ] When the new socket is up and the process still holds a logged-in user, send `LOGIN` then `ROOM_JOIN` for the room they were in. Keep the same user and room on screen. Do not ask for the password again. A guest with no account stays a guest.
 - [x] Wire reconnect triggers to `HealthMonitor` (pairs with §1), not ad-hoc checks only.
 
 
 
 ### Verify
 
-- [ ] E2E: kill node A while client is in a room; client uses cached directory, lands on node B, re-auths, and receives MESSAGE again (pairs with §7).
-- [ ] Optional later: LB / gateway (§4) so clients hit one address and may not need a neighbor list — does not replace this path for direct TCP clients.
+- [ ] E2E: kill node A while a logged-in client is in a room; client uses the cached directory, lands on node B, still shows the same user and room (no login prompt), and receives MESSAGE again (pairs with §7).
 
 
 
 ## 4. Website integration **(goal)**
 
-Desktop Qt/console stay primary for chat; website is admin + light client / status, not a second gossip peer.
+Desktop Qt/console stay primary for chat; the website is the same kind of client, not a second gossip peer. The browser talks to a node on `--ws-port`. There is no gateway process and no website cookie or JWT.
 
-- [ ] Thin **gateway** (separate process or sidecar): REST and/or WebSocket for domain ops (login, rooms list, history read, optional send).
-- [ ] Do **not** put REST inside `PacketProcessor`; it still sees only `Packet`. A gateway, when used, talks TCP/`Packet` to a chosen node.
+- [x] Do **not** put REST inside `PacketProcessor`; it still sees only `Packet`.
 - [x] WebSocket listener on `chat_server` (`--ws-port`): `Server` owns `WebConnection` and runs its accept loop beside `ConnectionManager`. Each binary frame payload is one existing length-prefixed `Packet`. The socket is a `ConnectionManager` session. Qt clients stay on `--port`. Gossip stays on `--peer-port`. `wss` terminates at the reverse proxy.
 - [x] Browser dashboard in `web/` uses that socket for the same actions as `DashboardPage`: register, login, logout, profile, join / leave / create / invite / kick / delete, send, and history. Heartbeat `ping` is answered with `pong`. The chat session is the WebSocket; there is no separate website login cookie.
-- [ ] Public pages: cluster status (nodes up/down), room directory (public only), optional read-only message feed.
-- [ ] Auth pages: register / login against chat cluster (via gateway); session cookie/JWT for website only — chat nodes keep Argon2id + binary sessions.
-- [ ] Admin UI: kick/invite/delete room (ADMIN), view online users across nodes (aggregated from gateway polls or events).
-- [ ] CORS / TLS termination at reverse proxy (nginx / ALB); chat servers stay on private ports.
-- [ ] Document threat model: website creds ≠ wire `Packet` auth; no plaintext passwords in browser storage beyond normal session practice.
+- [x] Website auth is that same `Packet` session. Chat nodes keep Argon2id. The page does not store a second credential.
+- [x] Threat model (README “Browser WebSocket”): the password rides in the `Packet` and is not written to browser storage.
 
 
 
@@ -272,10 +248,10 @@ Chat traffic stays on per-node SQLite + gossip. Website gets its own remote DB f
 
 - [ ] Provision managed DB (e.g. **Amazon RDS** PostgreSQL or Aurora) for website schema only — users mirror / profile cache, sessions, audit log, feature flags — **not** live `messages` gossip log.
 - [ ] Sync strategy (pick one and document):
-  - **A.** Gateway writes website DB on REGISTER/UPDATE; chat nodes remain authoritative for passwords via cluster login API; or
+  - **A.** The chat node stays authoritative for passwords (Argon2id on REGISTER/UPDATE). A website DB, if added, mirrors those events from the node; or
   - **B.** Website DB stores website-only accounts; link username to chat user after first successful cluster login.
 - [ ] Never point `DatabaseManager` / `init.sql` at RDS for node local chat — keep SQLite on each Windows node for low-latency rumor apply.
-- [ ] Optional later: S3 for exports / attachments; Secrets Manager for gateway DB URL; IAM auth for RDS.
+- [ ] Optional later: S3 for exports / attachments; Secrets Manager for the website DB URL; IAM auth for RDS.
 - [ ] Migrations (Flyway/Liquibase or SQL scripts) versioned beside website code; separate from `src/database/init.sql`.
 - [ ] Backup / PITR on RDS; chat SQLite backup remains per-node (`data/*.db`) + gossip recovery.
 
@@ -286,7 +262,7 @@ Chat traffic stays on per-node SQLite + gossip. Website gets its own remote DB f
 Five fixed fields (`type`, `eventId`, `username`, `content`, `field5`) already limit ROOM_CREATED+ACL and force overloading `field5`.
 
 - [ ] Versioned envelope: `{ version, type, eventId, body }` with typed body structs per event (LOGIN, MESSAGE, ROOM_CREATED, …).
-- [ ] Keep length-prefixed binary or add JSON/CBOR for website/gateway debugging — same semantic types either way.
+- [ ] Keep length-prefixed binary or add JSON/CBOR for website debugging — same semantic types either way.
 - [ ] Backward-compatible decode: v1 five-field still accepted for one release; peers advertise version on HELLO.
 - [ ] Unit tests for every event type round-trip; reject unknown version cleanly.
 
@@ -294,23 +270,23 @@ Five fixed fields (`type`, `eventId`, `username`, `content`, `field5`) already l
 
 ## 7. Testing — more kinds **(goal)**
 
-Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, gateway, and load (see `tests/TESTS.md`).
+Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, and load (see `tests/TESTS.md`).
 
 ### 7.1 Unit / component (still missing)
 
 - [ ] `config::parseArgs` / `parsePort` / `parsePeers` (and new `--servers`).
-- [ ] `ThreadPool` enqueue / shutdown (even if unused for session I/O).
 - [ ] `PacketHandler` for every RPC type, not only LOGIN/REGISTER/UPDATE_USER.
 - [ ] `IHealthCheck` adapters + `HealthMonitor` rollup (§1).
 - [ ] `allow_list` CRUD edges as dedicated `DatabaseManager` cases.
-- [ ] Clear-`online_users`-on-boot once implemented.
+- [ ] Clear this node's `online_users` on boot (`DatabaseManager::clearNodePresence`, `Server::start`).
+- [ ] Resume `LOGIN` adopts `online_users` when the row’s node has a new boot id (`node_id` becomes this node, rumor the move). Same boot id still rejects a second login (§3).
 
 
 
 ### 7.2 Integration / E2E (live `Server` + `Client`)
 
 - [ ] Disconnect while logged in → presence cleared + LOGOUT rumor.
-- [ ] Client reconnect after server restart (anonymous until login).
+- [ ] Client reconnect after server restart resumes the in-memory user and room. The UI does not drop to anonymous or ask for the password again.
 - [ ] Invite + private join allow-list across live client.
 - [ ] Full-stack heartbeat timeout clears presence (`Network` + `Heartbeat` together).
 
@@ -321,7 +297,7 @@ Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, gat
 - [ ] Two `chat_server` processes: LOGIN on A → B `online_users`; USER_CREATED cross-login; duplicate login rejected across nodes.
 - [ ] ROOM_JOIN / MESSAGE / ACL over real peer sockets (not only in-process gossip fixtures).
 - [ ] `MAX_EVENT_LOG` drop: late PULL cannot resurrect ids.
-- [ ] **Failover E2E:** stop node A; client fails over to B; messaging resumes (§3).
+- [ ] **Failover E2E:** stop node A; logged-in client fails over to B still as that user, in the same room, with no login prompt; messaging resumes (§3).
 
 
 
@@ -331,7 +307,6 @@ Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, gat
 - [ ] **Property / fuzz** light: random oversize/malformed frames must not kill `handleClient`.
 - [ ] **Load / soak** (optional Catch2 `[slow]` or separate script): N clients, M msg/s, gossip lag bounds.
 - [ ] **Chaos:** kill gossip peer mid-rumor; anti-entropy heals within digest interval.
-- [ ] **Website/gateway API** tests (HTTP status + JSON schema) once §4 ships — separate from Catch2 C++ if stack is different.
 - [ ] **GUI smoke** (optional): Qt Test or scripted `--test` console paths for login → join → send.
 - [ ] CI matrix: Debug/Release + `ctest --output-on-failure`; tag `[slow]` / `[cluster]` excluded from default PR job if flaky.
 
@@ -345,6 +320,7 @@ Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-
 
 - [ ] Event-driven refresh (subscribe to Logger / connection / room events) — keep timer as fallback.
 - [ ] Ports: live peer table (node id, socket, last HELLO/DIGEST time, up/down).
+- [ ] Live peer sockets on Ports panel (`GossipManager` snapshot getters — connected node ids, not only `config::PEERS`).
 - [ ] Users: show which **node** holds the session (from `online_users`), not only local `getSessions()`.
 - [ ] Gossip/event-log panel: recent rumor types, digest size, dropped ids near `MAX_EVENT_LOG`.
 - [ ] Health panel or Ports footer: `HealthMonitor` reports (DB / Heartbeat / Server).
@@ -362,25 +338,18 @@ Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-
 
 
 
-### Optional third UI
-
-- [ ] Website admin/status pages (§4) styled separately; do not embed Qt WebEngine unless product requires it.
-
-
-
 ## 9. Transport & API surface (website)
 
-- [ ] WebSocket and/or REST gateway implementing website ops (§4).
+The website uses the chat node's `--ws-port`. There is no gateway and no REST API on the node.
+
 - [x] `--ws-port` on `chat_server` (§4): `Server` owns `WebConnection`; binary frames carry the same `Packet` bytes.
-- [ ] OpenAPI (REST) or schema doc for gateway; map HTTP errors to existing `200`/`400`/`404`/`500` meanings.
-- [ ] Rate limits on gateway register/login; same Argon2id verification path via cluster, not a second hash scheme.
-- [ ] “RESTfulness on APIs” = gateway resources (`/rooms`, `/rooms/{id}/messages`), not rewriting binary `Packet` into REST inside each node.
+- [x] `PacketProcessor` sees only `Packet` (§4).
 
 
 
 ## 10. Docs & ops
 
-- [ ] Update README architecture diagram: clients → multi-server failover; website → gateway → node, or browser → `--ws-port`; AWS RDS for website only.
+- [ ] Update README architecture diagram: clients → multi-server failover; browser → `--ws-port`; AWS RDS for website only.
 - [ ] Runbook: node crash, client failover, RDS failover, gossip partition.
 - [ ] Sync `tests/TESTS.md` checkboxes when §7 cases land; fix doc typo link `FUTURE_WORKs.md` → `FUTURE_WORK.md`.
 - [ ] Version badge / changelog note for 3.0.0 when shipping.

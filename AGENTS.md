@@ -15,6 +15,7 @@ Before planning or touching code, read **every** Markdown file in the repo. At m
 | [database.md](database.md) | Per-node SQLite schema, queries, write paths, gossip persistence |
 | [tests/TESTS.md](tests/TESTS.md) | Catch2 catalog, tags, totals, untested gaps |
 | [FUTURE_WORK.md](FUTURE_WORK.md) | Backlog, goals, what is done vs. open |
+| [web/README.md](web/README.md) | Browser dashboard, WebSocket client, npm scripts |
 | [src/database/sqlite/autosetup/README.md](src/database/sqlite/autosetup/README.md) | Vendored SQLite build notes |
 
 If new `.md` files exist that are not listed here, read them too (search `**/*.md`). Do not skip this step because the task "looks simple" — the docs define conventions the code relies on.

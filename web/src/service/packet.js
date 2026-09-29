@@ -22,10 +22,6 @@ export const PacketType = {
   SERVER_DIRECTORY: 19,
 };
 
-export const ResponseCode = {
-  SUCCESS: 200,
-};
-
 function appendU32(bytes, value) {
   bytes.push((value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff);
 }

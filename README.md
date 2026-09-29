@@ -21,6 +21,7 @@ Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` f
 | [database.md](database.md) | Per-node SQLite schema, ER model, `allow_list`, query catalog, write paths |
 | [tests/TESTS.md](tests/TESTS.md) | Catch2 catalog and remaining gaps |
 | [FUTURE_WORK.md](FUTURE_WORK.md) | Backlog and open work |
+| [web/README.md](web/README.md) | Browser dashboard: Vite app, WebSocket, scripts |
 
 ## Features
 
@@ -145,7 +146,9 @@ Manual equivalent:
 
 `chat_server` also listens for browser WebSockets. `Server` owns `WebConnection` and runs that accept loop beside the TCP accept loop. Each binary frame is one framed `Packet`. Pass `--ws-port` (default `8080`). Qt clients keep using `--port`.
 
-The Vite app in `web/` is the same dashboard as the Qt client: sign in, log in, logout, profile, rooms (join, leave, create, invite, kick, delete), chat, and history. It answers heartbeat pings with `pong`. From `web/`, run `npm run dev` and open the printed local URL while a server is listening on `--ws-port`.
+The Vite app in `web/` is the same dashboard as the Qt client: sign in, log in, logout, profile, rooms (join, leave, create, invite, kick, delete), chat, and history. It answers heartbeat pings with `pong`. From `web/`, run `npm run dev` and open the printed local URL while a server is listening on `--ws-port`. Setup, scripts, and the frame layout are in [web/README.md](web/README.md).
+
+The browser is a chat client on that socket. Register, login, and profile update put the password in a `Packet`. The page does not keep a cookie or JWT, and it does not write the password to `localStorage` or `sessionStorage`. Argon2id stays on the node. For a deployed site, TLS ends at the reverse proxy and the chat ports stay private.
 
 Legacy helpers `src/server.ps1` and `src/client.ps1` still build-and-run a single binary; prefer `scripts/`.
 
@@ -188,7 +191,8 @@ Distributed-Chat-Server/
 │   ├── database/           init.sql + queries (baked into sql_schemas.h)
 │   ├── server/
 │   └── utils/
-└── tests/                  auth · client · server · utils (+ TESTS.md)
+├── tests/                  auth · client · server · utils (+ TESTS.md)
+└── web/                    Vite browser client — see web/README.md
 ```
 
 Headers live in `include/`; implementations live in `src/`. CMake adds `include/` as a public include path and embeds SQL files from `DB_SCHEMAS` into a generated `sql_schemas.h` at configure time.
