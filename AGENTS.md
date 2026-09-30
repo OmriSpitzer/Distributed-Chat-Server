@@ -44,6 +44,7 @@ If the task is large or ambiguous, confirm the plan with the user before coding.
 - Gossip payloads use the length-prefixed field format, never `|`-delimited strings.
 - Never put password hashes or plaintext on objects meant for UI or the wire.
 - Keep changes focused; do not refactor unrelated code.
+- A change to the Qt client dashboard (`DashboardPage` and the client GUI under `src/client/gui/`) also lands in the browser dashboard (`web/`). Match the same actions and the same look. Panels under `web/src/assets/` only render; `App.jsx` and `web/src/contexts/` own session and appearance.
 
 ---
 
@@ -52,14 +53,14 @@ If the task is large or ambiguous, confirm the plan with the user before coding.
 Every behavior change needs tests.
 
 - Add or update Catch2 cases in the matching `tests/<module>/` file. Use the tags from `TESTS.md`: `[flow]`, `[edge]`, `[thread]` / `[concurrent]`, `[slow]`.
-- Build and run the full suite:
+- Run only the Catch2 cases that cover this change. Do not run the full suite:
 
 ```powershell
-.\scripts\run_test.ps1
+.\scripts\run_test.ps1 -R "test name"
 ```
 
 - For cluster / gossip changes, also smoke test manually with `.\scripts\run_cluster.ps1` (or `-Test` for console UIs).
-- All tests must pass before the task is considered done. Do not delete or weaken tests to make them pass.
+- Those tests must pass before the task is considered done. Do not delete or weaken tests to make them pass.
 
 ---
 
@@ -70,7 +71,7 @@ When something fails:
 - Read the actual error / CTest output; reproduce with the single failing test executable (e.g. `.\build\client_test.exe "<test name>"`).
 - Find the root cause instead of patching symptoms. Check threading, socket lifetime, and SQLite locking first — those are the usual suspects here.
 - Remove any temporary debug logging before finishing.
-- Re-run the full suite after the fix.
+- Re-run the specific tests for the change after the fix. Do not run the full suite.
 
 ---
 
@@ -93,7 +94,7 @@ Finish every task with a short summary for the user:
 
 1. **What** was done (one or two sentences).
 2. **Files** changed, and why each one.
-3. **Tests** added/updated and the result of the full `ctest` run.
+3. **Tests** added/updated and the result of the specific cases you ran.
 4. **Open issues** or follow-ups, if any.
 
 Keep it brief and in plain sentences.

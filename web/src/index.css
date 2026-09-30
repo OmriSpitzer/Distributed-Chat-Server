@@ -74,8 +74,10 @@
 
 .page {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   flex-direction: column;
+  overflow: hidden;
   background: var(--canvas);
   color: var(--ink);
 }
@@ -129,9 +131,19 @@
 .side {
   width: var(--side-width);
   flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.chat { min-width: 0; flex: 1; }
+.chat {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.chat-head,
+.composer { flex-shrink: 0; }
 
 .section {
   font-size: 0.75rem;
@@ -143,8 +155,9 @@
 .room-list,
 .transcript {
   min-height: 0;
-  flex: 1;
-  overflow: auto;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .room-list {

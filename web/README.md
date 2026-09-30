@@ -50,7 +50,7 @@ For a public site, terminate TLS at the reverse proxy (`wss://…`) and keep the
 | Create room | signed-in | Public or private. The page joins the new room after create succeeds. |
 | Invite | signed-in | Allow-lists a username for the current room. Not available from Lobby. |
 | Kick / Delete room | ADMIN | Delete refuses Lobby and General. |
-| Send / history | anyone in a room | History loads on join. Live pushes append while you stay in that room. |
+| Send / history | anyone in a room | History loads on join and sits at the latest line. Live pushes follow the view. If you have scrolled up, the view stays and **N new** jumps to the latest line. |
 | Light / Dark, Comfortable / Compact | anyone | Header buttons call `UiContext`. That context sets `data-theme` and `data-density`. Colors, spacing, and the button labels live in `index.css`. Nothing is sent on the socket. |
 
 A heartbeat `ping` is answered with `pong` and is not shown in the transcript. If the socket drops, the page retries about one second later while it stays open.

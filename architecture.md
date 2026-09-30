@@ -116,7 +116,7 @@ flowchart TB
 
 | Layer | Classes | Role |
 |-------|---------|------|
-| Presentation | `DashboardPage`, `ConsoleUI` | Qt dashboard + dialogs, or console menus (`--test`). Theme and density live on `Client`; the page applies the stylesheet and spacing |
+| Presentation | `DashboardPage`, `ConsoleUI` | Qt dashboard + dialogs, or console menus (`--test`). Theme and density live on `Client`; the page applies the stylesheet and spacing. The transcript stays put when scrolled up and shows an unread count that jumps to the latest line. The browser chat panel does the same |
 | Application | `Client`, `PacketBuilder`, `PacketHandler`, `ClientState` | Action methods (`joinRoom`, `login`, …), parse replies, remember user/room |
 | Transport | `Network`, `socket_io`, `Serializer` | Connect, send, reader thread (pong heartbeats, `ROOM_LIST` / `MESSAGE` pushes) |
 | Shared domain | `Packet`, `User`, `Room` | Same models as the server wire |

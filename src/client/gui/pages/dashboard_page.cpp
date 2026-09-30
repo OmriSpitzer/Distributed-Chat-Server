@@ -25,6 +25,7 @@
 #include <QListWidgetItem>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QScrollBar>
 #include <QVariant>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -164,12 +165,22 @@ void DashboardPage::buildWorkspace() {
   // transcript
   transcript = new QPlainTextEdit(chat);
   transcript->setReadOnly(true);
+  connect(transcript->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) {
+    if (adjustingScroll || !transcriptAtBottom()) {
+      return;
+    }
+    unreadCount = 0;
+    showUnread();
+  });
 
   // composer row
   auto *composerRow = new QHBoxLayout();
+  unreadButton =
+      new Button("1 new", [this]() { scrollTranscriptToBottom(); }, false, chat, "PrimaryButton");
   composer = new QLineEdit(chat);
   composer->setPlaceholderText("Write a message…");
   sendButton = new Button("Send", [this]() { sendMessage(); }, true, chat, "PrimaryButton");
+  composerRow->addWidget(unreadButton);
   composerRow->addWidget(composer, 1);
   composerRow->addWidget(sendButton);
 
@@ -329,9 +340,65 @@ void DashboardPage::applyAppearance() {
   header()->applySpacing(spacing.headerMarginH, spacing.headerMarginV, spacing.headerSpacing);
 }
 
+// true when the transcript viewport is on the latest line
+bool DashboardPage::transcriptAtBottom() const {
+  if (!transcript) {
+    return true;
+  }
+  const QScrollBar *bar = transcript->verticalScrollBar();
+  return bar->value() >= bar->maximum();
+}
+
+// show or hide the "N new" control
+void DashboardPage::showUnread() {
+  if (unreadCount < 0) {
+    unreadCount = 0;
+  }
+  if (!unreadButton) {
+    return;
+  }
+  if (unreadCount == 0) {
+    unreadButton->setVisible(false);
+    return;
+  }
+  unreadButton->setText(unreadCount == 1 ? QStringLiteral("1 new")
+                                          : QString::number(unreadCount) + QStringLiteral(" new"));
+  unreadButton->setVisible(true);
+}
+
+// move the transcript to the latest line and clear the badge
+void DashboardPage::scrollTranscriptToBottom() {
+  if (!transcript) {
+    unreadCount = 0;
+    showUnread();
+    return;
+  }
+  adjustingScroll = true;
+  QScrollBar *bar = transcript->verticalScrollBar();
+  bar->setValue(bar->maximum());
+  adjustingScroll = false;
+  unreadCount = 0;
+  showUnread();
+}
+
 // append a message to the transcript
 void DashboardPage::appendMessage(const QString &author, const QString &text, quint64 timestamp) {
+  if (!transcript) {
+    return;
+  }
+  QScrollBar *bar = transcript->verticalScrollBar();
+  const int saved = bar->value();
+  const bool atBottom = saved >= bar->maximum();
+  adjustingScroll = true;
   transcript->appendPlainText(formatChatTime(timestamp) + "  ·  " + author + "  ·  " + text);
+  if (atBottom) {
+    bar->setValue(bar->maximum());
+  } else {
+    bar->setValue(saved);
+  }
+  adjustingScroll = false;
+  unreadCount = atBottom ? 0 : unreadCount + 1;
+  showUnread();
 }
 
 // drain network chat pushes into the transcript
@@ -351,7 +418,11 @@ void DashboardPage::resetTranscriptForCurrentRoom() {
     return;
   }
   client()->clearPendingChatMessages();
+  adjustingScroll = true;
   transcript->clear();
+  unreadCount = 0;
+  showUnread();
+  adjustingScroll = false;
 
   std::vector<ChatLine> lines;
   const std::string error = client()->loadMessageHistory(lines);
@@ -762,6 +833,7 @@ void DashboardPage::sendMessage() {
   }
 
   flushIncomingChat();
+  scrollTranscriptToBottom();
   composer->clear();
 }
 

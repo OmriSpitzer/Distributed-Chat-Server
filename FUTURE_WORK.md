@@ -171,11 +171,13 @@ Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, and
 
 ## 8. Client GUI additions **(goal)**
 
+
+
 ### Client GUI
 
 - [ ] Connection status strip: connected host:port, reconnecting, failed over to X (`HealthMonitor` / Client adapter).
 - [ ] Server picker / auto-failover progress (ties to §3); manual “switch server”.
-- [ ] Unread badge / scroll-to-bottom; optional toast on kick/invite/ROOM_LIST change.
+- [x] Unread badge / scroll-to-bottom on the Qt transcript and the browser dashboard. A scrolled-up view stays put; "N new" jumps to the latest line.
 - [x] Dark/light or denser chat layout without putting logic in widgets (still `Client` only). The browser dashboard uses the same pair of controls; `App` holds the choice and the panels only paint it.
 - [ ] Accessibility: tab order, high-contrast errors, no updates off the GUI thread (keep queued signals).
 

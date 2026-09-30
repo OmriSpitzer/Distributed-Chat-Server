@@ -50,6 +50,9 @@ private:
   QPlainTextEdit *transcript{nullptr};  // transcript plain text edit
   QLineEdit *composer{nullptr};         // composer line edit
   Button *sendButton{nullptr};          // send button
+  Button *unreadButton{nullptr};        // jump to the latest line
+  int unreadCount{0};                   // lines arrived while scrolled up
+  bool adjustingScroll{false};          // ignore scrollbar noise during an append
 
   // connect the header
   void connectHeader();
@@ -65,6 +68,15 @@ private:
 
   // append a message to the transcript (timestamp = unix seconds; 0 uses now)
   void appendMessage(const QString &author, const QString &text, quint64 timestamp = 0);
+
+  // true when the transcript viewport is on the latest line
+  bool transcriptAtBottom() const;
+
+  // show or hide the "N new" control
+  void showUnread();
+
+  // move the transcript to the latest line and clear the badge
+  void scrollTranscriptToBottom();
 
   // drain network chat pushes into the transcript
   void flushIncomingChat();
