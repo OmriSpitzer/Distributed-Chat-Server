@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="470" viewBox="0 0 980 470" role="img">
+  <title>Several browser and Qt clients connect to each server node. More clients, nodes, and databases sit in the middle. The nodes gossip, and each node has its own SQLite database.</title>
+  <defs>
+    <marker id="down" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 1 L11 6 L0 11 Z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="980" height="470" rx="18" fill="#f4f7fb"/>
+
+  <!-- two clients into each server, each arrow landing on its own point -->
+  <g fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#down)">
+    <path d="M100 112 C100 150 136 150 136 178"/>
+    <path d="M272 112 C272 150 236 150 236 178"/>
+    <path d="M708 112 C708 150 744 150 744 178"/>
+    <path d="M880 112 C880 150 844 150 844 178"/>
+    <path d="M186 268 V330"/>
+    <path d="M794 268 V330"/>
+  </g>
+
+  <!-- gossip both ways between the servers, through the middle -->
+  <g fill="#e08a2c" stroke="#e08a2c" stroke-width="2.5" stroke-linecap="butt">
+    <line x1="314" y1="224" x2="426" y2="224"/>
+    <polygon points="296,224 314,217 314,231" stroke="none"/>
+    <polygon points="444,224 426,217 426,231" stroke="none"/>
+    <line x1="554" y1="224" x2="666" y2="224"/>
+    <polygon points="536,224 554,217 554,231" stroke="none"/>
+    <polygon points="684,224 666,217 666,231" stroke="none"/>
+  </g>
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#c2410c" text-anchor="middle">
+    <text x="370" y="210">gossip</text>
+    <text x="610" y="210">gossip</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700" fill="#94a3b8" text-anchor="middle">
+    <text x="490" y="78">···</text>
+    <text x="490" y="236">···</text>
+    <text x="490" y="392">···</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <rect x="20" y="24" width="160" height="88" rx="16" fill="#e8f2ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <rect x="80" y="38" width="40" height="26" rx="5" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="100" y="92" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">Browser client</text>
+
+    <rect x="192" y="24" width="160" height="88" rx="16" fill="#e7f8f1" stroke="#10b981" stroke-width="1.5"/>
+    <rect x="252" y="38" width="40" height="26" rx="5" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+    <rect x="252" y="38" width="40" height="8" rx="4" fill="#10b981"/>
+    <text x="272" y="92" text-anchor="middle" font-size="14" font-weight="600" fill="#065f46">Qt client</text>
+
+    <rect x="628" y="24" width="160" height="88" rx="16" fill="#e8f2ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <rect x="688" y="38" width="40" height="26" rx="5" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="708" y="92" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">Browser client</text>
+
+    <rect x="800" y="24" width="160" height="88" rx="16" fill="#e7f8f1" stroke="#10b981" stroke-width="1.5"/>
+    <rect x="860" y="38" width="40" height="26" rx="5" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+    <rect x="860" y="38" width="40" height="8" rx="4" fill="#10b981"/>
+    <text x="880" y="92" text-anchor="middle" font-size="14" font-weight="600" fill="#065f46">Qt client</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <rect x="86" y="180" width="200" height="88" rx="16" fill="#1e3554"/>
+    <text x="186" y="230" text-anchor="middle" font-size="17" font-weight="600" fill="#ffffff">Server node</text>
+    <rect x="694" y="180" width="200" height="88" rx="16" fill="#1e3554"/>
+    <text x="794" y="230" text-anchor="middle" font-size="17" font-weight="600" fill="#ffffff">Server node</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif" stroke="#ea580c" stroke-width="1.5">
+    <g>
+      <rect x="138" y="348" width="96" height="48" fill="#fff4e8"/>
+      <ellipse cx="186" cy="396" rx="48" ry="13" fill="#fff4e8"/>
+      <ellipse cx="186" cy="348" rx="48" ry="13" fill="#ffedd5"/>
+      <text x="186" y="378" text-anchor="middle" font-size="15" font-weight="600" fill="#9a3412" stroke="none">SQLite</text>
+    </g>
+    <g>
+      <rect x="746" y="348" width="96" height="48" fill="#fff4e8"/>
+      <ellipse cx="794" cy="396" rx="48" ry="13" fill="#fff4e8"/>
+      <ellipse cx="794" cy="348" rx="48" ry="13" fill="#ffedd5"/>
+      <text x="794" y="378" text-anchor="middle" font-size="15" font-weight="600" fill="#9a3412" stroke="none">SQLite</text>
+    </g>
+  </g>
+</svg>

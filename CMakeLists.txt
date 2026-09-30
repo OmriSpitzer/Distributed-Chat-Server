@@ -248,6 +248,10 @@ target_link_libraries(gossip_payload_test PRIVATE utils Catch2::Catch2WithMain)
 add_executable(health_test tests/utils/health_test.cpp tests/client/main_page_stub.cpp)
 target_link_libraries(health_test PRIVATE server_lib client_lib Catch2::Catch2WithMain Threads::Threads)
 
+add_executable(config_test tests/config/config_test.cpp)
+target_include_directories(config_test PRIVATE include)
+target_link_libraries(config_test PRIVATE Catch2::Catch2WithMain)
+
 # ------------ Auth connections ------------
 
 add_executable(authentication_test tests/auth/authentication_test.cpp)
@@ -335,6 +339,7 @@ catch_discover_tests(logger_test)
 catch_discover_tests(packet_test)
 catch_discover_tests(gossip_payload_test)
 catch_discover_tests(health_test)
+catch_discover_tests(config_test)
 catch_discover_tests(authentication_test)
 
 # ------------ Client tests ------------

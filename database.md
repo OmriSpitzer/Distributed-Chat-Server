@@ -4,7 +4,7 @@ Each `chat_server` node owns a local SQLite file (default `data/node-1.db`). The
 
 Schema source of truth: `src/database/init.sql`. Queries live in `src/database/queries/`.
 
-**Related docs:** [README.md](README.md), [architecture.md](architecture.md) (who calls `DatabaseManager`), [tests/TESTS.md](tests/TESTS.md), [STEPS.md](STEPS.md).
+**Related docs:** [README.md](README.md), [architecture.md](architecture.md) (who calls `DatabaseManager`), [tests/TESTS.md](tests/TESTS.md), [FUTURE_WORK.md](FUTURE_WORK.md).
 
 ---
 
@@ -459,7 +459,7 @@ flowchart TB
   subgraph Gaps["Still open"]
     OFK["online_users has no FK to users"]
     Casc["No ON DELETE CASCADE — delete_room.sql orders DELETEs"]
-    Boot["Stale online_users after crash (no clear-on-boot)"]
+    Boot["Peers can keep a presence row after this node crashes"]
   end
 ```
 

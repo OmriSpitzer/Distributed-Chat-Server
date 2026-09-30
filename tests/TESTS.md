@@ -2,7 +2,7 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **31** executables, **404** `TEST_CASE`s.
+Totals: **32** executables, **417** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
@@ -196,6 +196,26 @@ ctest --test-dir build --output-on-failure
 
 ---
 
+## Config
+
+| Executable | File | Cases |
+|---|---|---|
+| `config_test` | `tests/config/config_test.cpp` | 9 |
+
+### Config (`[config]`)
+
+- parsePort accepts in-range ports
+- parsePort rejects invalid text
+- parsePeers splits commas and skips empty items
+- parseNeighborServers stores endpoints
+- parseNeighborServers skips the primary endpoint and duplicates
+- parseNeighborServers rejects a bad entry
+- parseArgs applies flags including servers
+- parseArgs host and port drop a matching neighbor
+- parseArgs rejects help unknown flags missing values and bad ports
+
+---
+
 ## Auth — Argon2id
 
 | Executable | File | Cases |
@@ -228,7 +248,7 @@ ctest --test-dir build --output-on-failure
 | `client_state_test` | `tests/client/client_state_test.cpp` | 10 |
 | `endpoint_ring_test` | `tests/client/endpoint_ring_test.cpp` | 9 |
 | `packet_builder_test` | `tests/client/packet_builder_test.cpp` | 23 |
-| `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 7 |
+| `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 8 |
 | `network_test` | `tests/client/network_test.cpp` | 11 |
 | `console_ui_test` | `tests/client/console_ui_test.cpp` | 18 |
 | `client_test` | `tests/client/client_test.cpp` | 17 |
@@ -292,9 +312,10 @@ ctest --test-dir build --output-on-failure
 
 - PacketHandler LOGIN success deserializes user
 - PacketHandler REGISTER success deserializes user
+- PacketHandler UPDATE_USER success deserializes user
 - PacketHandler rejects non-SUCCESS auth responses
 - PacketHandler rejects invalid auth payload
-- PacketHandler ignores non-auth packet types
+- PacketHandler ignores every non-user packet type
 - PacketHandler SUCCESS with empty message fails
 - PacketHandler responseCode edge values
 
@@ -363,10 +384,10 @@ ctest --test-dir build --output-on-failure
 | Executable | File | Cases |
 |---|---|---|
 | `client_session_test` | `tests/server/client_session_test.cpp` | 11 |
-| `database_manager_test` | `tests/server/database_manager_test.cpp` | 22 |
+| `database_manager_test` | `tests/server/database_manager_test.cpp` | 24 |
 | `heartbeat_test` | `tests/server/heartbeat_test.cpp` | 19 |
 | `room_manager_test` | `tests/server/room_manager_test.cpp` | 18 |
-| `packet_processor_test` | `tests/server/packet_processor_test.cpp` | 20 |
+| `packet_processor_test` | `tests/server/packet_processor_test.cpp` | 21 |
 | `connection_manager_test` | `tests/server/connection_manager_test.cpp` | 19 |
 | `gossip_manager_test` | `tests/server/gossip_manager_test.cpp` | 24 |
 | `server_test` | `tests/server/server_test.cpp` | 13 |
@@ -410,6 +431,8 @@ ctest --test-dir build --output-on-failure
 - DatabaseManager updateUser password and username
 - DatabaseManager claims presence when the recorded node is down
 - DatabaseManager clearNodePresence drops one node
+- DatabaseManager allow list add check and remove
+- DatabaseManager allow list edges
 
 ### Heartbeat (`[heartbeat]`)
 
@@ -477,6 +500,7 @@ ctest --test-dir build --output-on-failure
 - PacketProcessor ADMIN privilege checks
 - PacketProcessor reconnect adopts a down node
 - PacketProcessor reconnect rejects a live local session
+- PacketProcessor answers every packet type
 
 ### ConnectionManager (`[connection_manager]`)
 
@@ -617,14 +641,14 @@ Unit coverage exists in `gossip_manager_test`. Still open as **two `chat_server`
 - Duplicate login across nodes: A holds the socket, B rejects LOGIN.
 - ROOM_JOIN / MESSAGE / ACL across live peer sockets (beyond in-process peer fixtures).
 - Event-log cap (`MAX_EVENT_LOG`): late PULL cannot resurrect dropped ids.
-- Clear `online_users` on node boot (product TODO — see STEPS §6).
+- [x] Clear this node's `online_users` on boot (`DatabaseManager clearNodePresence drops one node`; `Server::start` calls `clearNodePresence`).
 
 Smoke: `.\scripts\run_cluster.ps1`.
 
 ### Persistence and rooms
 
-- `allow_list` CRUD edges as dedicated `DatabaseManager` cases (join/invite covered via packet processor / gossip).
-- Server restart with the same `--db`: users, rooms, messages, membership survive; `online_users` should be empty until login (clear-on-boot not implemented).
+- [x] `allow_list` add, check, and remove (`DatabaseManager allow list add check and remove`).
+- Still open as a live Catch2 case: restart one `chat_server` on the same `--db` and check that users, rooms, messages, and membership are still there. Boot already clears this node's `online_users` rows (`Server::start` calls `clearNodePresence`).
 
 ### Heartbeat (client + server together)
 
@@ -635,8 +659,8 @@ Covered at component level (`heartbeat_test`, `network_test` pong). Still open:
 ### Missing unit / config surfaces
 
 - **ThreadPool**: enqueue, worker execution, shutdown while tasks queued (pool is constructed but unused for session I/O).
-- **config::parseArgs / parsePort / parsePeers**: CLI flags, invalid port, unknown flag, missing value.
-- **PacketHandler** beyond LOGIN/REGISTER (Client often checks `responseCode` alone).
+- [x] **config::parseArgs / parsePort / parsePeers / `--servers`**: CLI flags, invalid port, unknown flag, missing value (`config_test`).
+- [x] **PacketHandler** for every type: LOGIN, REGISTER, and UPDATE_USER deserialize a user; every other type returns empty (`packet_handler_test`). `PacketProcessor` answers every `PacketType`, including `ROOM_LIST` and `SERVER_DIRECTORY`.
 - ConsoleUI invite / history / leave prompts if added as dedicated screens.
 - `waitFor` skipping unexpected queued types.
 - `Network` receive timeout with no packet as a named case.

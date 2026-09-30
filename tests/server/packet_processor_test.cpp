@@ -51,6 +51,9 @@
  * 17. LOAD_MESSAGE_HISTORY
  * 18. typical register / message / logout flow
  * 19. ADMIN privilege checks
+ * 20. RECONNECT adopts a down node
+ * 21. RECONNECT rejects unknown, absent, and live sessions
+ * 22. every packet type returns a response
  */
 
 namespace {
@@ -808,5 +811,53 @@ TEST_CASE("PacketProcessor reconnect rejects a live local session",
     REQUIRE(res.message == "user already logged in");
     REQUIRE_FALSE(other.isAuthenticated());
     rooms().leaveAll(other);
+  }
+}
+
+// 22. every PacketType is handled on the client port
+TEST_CASE("PacketProcessor answers every packet type", "[packet_processor][flow]") {
+  const Packet::PacketType types[] = {
+      Packet::PacketType::LOGIN,
+      Packet::PacketType::LOGOUT,
+      Packet::PacketType::MESSAGE,
+      Packet::PacketType::ROOM_JOIN,
+      Packet::PacketType::ROOM_LEAVE,
+      Packet::PacketType::DEFAULT,
+      Packet::PacketType::HEARTBEAT,
+      Packet::PacketType::REGISTER,
+      Packet::PacketType::GOSSIP_HELLO,
+      Packet::PacketType::GOSSIP_EVENT,
+      Packet::PacketType::GOSSIP_DIGEST,
+      Packet::PacketType::GOSSIP_PULL,
+      Packet::PacketType::UPDATE_USER,
+      Packet::PacketType::ROOM_CREATE,
+      Packet::PacketType::ROOM_LIST,
+      Packet::PacketType::LOAD_MESSAGE_HISTORY,
+      Packet::PacketType::ROOM_INVITE,
+      Packet::PacketType::ROOM_DELETE,
+      Packet::PacketType::ROOM_KICK,
+      Packet::PacketType::SERVER_DIRECTORY,
+      Packet::PacketType::RECONNECT,
+  };
+
+  for (Packet::PacketType type : types) {
+    Fixture fx;
+    Packet req("anon", "server", type, "", "");
+    const Packet res = process(req, fx.session, fx.connections);
+    INFO(Packet::packetTypeToString(type));
+    REQUIRE(res.type == type);
+    REQUIRE(res.sender == "server");
+    REQUIRE(res.receiver == "anon");
+    REQUIRE(res.responseCode != 0);
+
+    if (type == Packet::PacketType::ROOM_LIST || type == Packet::PacketType::SERVER_DIRECTORY ||
+        type == Packet::PacketType::GOSSIP_HELLO || type == Packet::PacketType::GOSSIP_EVENT ||
+        type == Packet::PacketType::GOSSIP_DIGEST || type == Packet::PacketType::GOSSIP_PULL) {
+      REQUIRE(res.responseCode == static_cast<int>(RESPONSE_CODES::ERROR));
+      REQUIRE(res.message == "unsupported on client port");
+    }
+    if (type == Packet::PacketType::DEFAULT) {
+      REQUIRE(res.message == "unknown packet type");
+    }
   }
 }

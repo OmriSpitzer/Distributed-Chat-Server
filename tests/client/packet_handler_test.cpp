@@ -1,8 +1,8 @@
 /**
  * PacketHandler unit tests
  *
- * @brief Includes: successful login / register deserialize, non-SUCCESS rejection,
- * invalid payload, non-auth packet types return nullopt, responseCode edge values.
+ * @brief Includes: successful login / register / profile-update deserialize, non-SUCCESS
+ * rejection, invalid payload, every other packet type returns nullopt, responseCode edges.
  * @date 13-09-2026
  */
 
@@ -12,15 +12,17 @@
 #include "utils/models/user.h"
 #include <catch2/catch_test_macros.hpp>
 #include <optional>
+#include <vector>
 
 /**
  * 1. LOGIN success deserializes user
  * 2. REGISTER success deserializes user
- * 3. LOGIN / REGISTER reject non-SUCCESS
- * 4. LOGIN / REGISTER reject invalid payload
- * 5. non-auth packet types return nullopt
- * 6. SUCCESS with empty message fails
- * 7. responseCode edge values
+ * 3. UPDATE_USER success deserializes user
+ * 4. LOGIN / REGISTER / UPDATE_USER reject non-SUCCESS
+ * 5. LOGIN / REGISTER / UPDATE_USER reject invalid payload
+ * 6. every other packet type returns nullopt
+ * 7. SUCCESS with empty message fails
+ * 8. responseCode edge values
  */
 
 namespace {
@@ -31,6 +33,38 @@ Packet authPacket(Packet::PacketType type, int responseCode, const std::string &
   packet.responseCode = responseCode;
   packet.message = message;
   return packet;
+}
+
+const std::vector<Packet::PacketType> &allPacketTypes() {
+  static const std::vector<Packet::PacketType> types = {
+      Packet::PacketType::LOGIN,
+      Packet::PacketType::LOGOUT,
+      Packet::PacketType::MESSAGE,
+      Packet::PacketType::ROOM_JOIN,
+      Packet::PacketType::ROOM_LEAVE,
+      Packet::PacketType::DEFAULT,
+      Packet::PacketType::HEARTBEAT,
+      Packet::PacketType::REGISTER,
+      Packet::PacketType::GOSSIP_HELLO,
+      Packet::PacketType::GOSSIP_EVENT,
+      Packet::PacketType::GOSSIP_DIGEST,
+      Packet::PacketType::GOSSIP_PULL,
+      Packet::PacketType::UPDATE_USER,
+      Packet::PacketType::ROOM_CREATE,
+      Packet::PacketType::ROOM_LIST,
+      Packet::PacketType::LOAD_MESSAGE_HISTORY,
+      Packet::PacketType::ROOM_INVITE,
+      Packet::PacketType::ROOM_DELETE,
+      Packet::PacketType::ROOM_KICK,
+      Packet::PacketType::SERVER_DIRECTORY,
+      Packet::PacketType::RECONNECT,
+  };
+  return types;
+}
+
+bool returnsUser(Packet::PacketType type) {
+  return type == Packet::PacketType::LOGIN || type == Packet::PacketType::REGISTER ||
+         type == Packet::PacketType::UPDATE_USER;
 }
 
 } // namespace
@@ -67,7 +101,23 @@ TEST_CASE("PacketHandler REGISTER success deserializes user", "[packet_handler][
   REQUIRE(result->getUserType() == User::UserType::ADMIN);
 }
 
-// 3. LOGIN / REGISTER reject non-SUCCESS
+// 3. UPDATE_USER success deserializes user
+TEST_CASE("PacketHandler UPDATE_USER success deserializes user", "[packet_handler][update]") {
+  PacketHandler handler;
+  const User expected("carol", "carol@example.com", User::UserType::USER);
+  const Packet packet =
+      authPacket(Packet::PacketType::UPDATE_USER, static_cast<int>(RESPONSE_CODES::SUCCESS),
+                 expected.serialize());
+
+  const std::optional<User> result = handler.handlePacket(packet);
+
+  REQUIRE(result.has_value());
+  REQUIRE(result->getUsername() == "carol");
+  REQUIRE(result->getEmail() == "carol@example.com");
+  REQUIRE(result->getUserType() == User::UserType::USER);
+}
+
+// 4. LOGIN / REGISTER / UPDATE_USER reject non-SUCCESS
 TEST_CASE("PacketHandler rejects non-SUCCESS auth responses", "[packet_handler][edge]") {
   PacketHandler handler;
   const std::string payload = User("alice", "a@b.com", User::UserType::USER).serialize();
@@ -88,6 +138,11 @@ TEST_CASE("PacketHandler rejects non-SUCCESS auth responses", "[packet_handler][
                                      "login failed");
     REQUIRE_FALSE(handler.handlePacket(packet).has_value());
   }
+  SECTION("UPDATE_USER ERROR") {
+    const Packet packet = authPacket(Packet::PacketType::UPDATE_USER,
+                                     static_cast<int>(RESPONSE_CODES::ERROR), payload);
+    REQUIRE_FALSE(handler.handlePacket(packet).has_value());
+  }
 }
 
 // 4. LOGIN / REGISTER reject invalid payload
@@ -106,51 +161,46 @@ TEST_CASE("PacketHandler rejects invalid auth payload", "[packet_handler][edge]"
                    "user(alice|only-one-field)");
     REQUIRE_FALSE(handler.handlePacket(packet).has_value());
   }
+  SECTION("UPDATE_USER malformed") {
+    const Packet packet =
+        authPacket(Packet::PacketType::UPDATE_USER, static_cast<int>(RESPONSE_CODES::SUCCESS),
+                   "not-a-user");
+    REQUIRE_FALSE(handler.handlePacket(packet).has_value());
+  }
 }
 
-// 5. non-auth packet types return nullopt
-TEST_CASE("PacketHandler ignores non-auth packet types", "[packet_handler][edge]") {
+// 6. every type other than LOGIN / REGISTER / UPDATE_USER returns nullopt
+TEST_CASE("PacketHandler ignores every non-user packet type", "[packet_handler][edge]") {
   PacketHandler handler;
+  const std::string payload = User("alice", "a@b.com", User::UserType::USER).serialize();
+  int checked = 0;
 
-  SECTION("MESSAGE") {
-    Packet packet;
-    packet.type = Packet::PacketType::MESSAGE;
-    packet.responseCode = 0;
-    packet.sender = "alice";
-    packet.message = "hello";
+  for (Packet::PacketType type : allPacketTypes()) {
+    if (returnsUser(type)) {
+      continue;
+    }
+    const Packet packet =
+        authPacket(type, static_cast<int>(RESPONSE_CODES::SUCCESS), payload);
+    INFO(Packet::packetTypeToString(type));
     REQUIRE_FALSE(handler.handlePacket(packet).has_value());
+    ++checked;
   }
-  SECTION("LOGOUT") {
-    Packet packet;
-    packet.type = Packet::PacketType::LOGOUT;
-    packet.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
-    REQUIRE_FALSE(handler.handlePacket(packet).has_value());
-  }
-  SECTION("ROOM_JOIN") {
-    Packet packet;
-    packet.type = Packet::PacketType::ROOM_JOIN;
-    packet.responseCode = static_cast<int>(RESPONSE_CODES::SUCCESS);
-    packet.room = "General";
-    REQUIRE_FALSE(handler.handlePacket(packet).has_value());
-  }
-  SECTION("HEARTBEAT") {
-    Packet packet;
-    packet.type = Packet::PacketType::HEARTBEAT;
-    packet.message = "ping";
-    REQUIRE_FALSE(handler.handlePacket(packet).has_value());
-  }
+
+  REQUIRE(checked == static_cast<int>(allPacketTypes().size()) - 3);
 }
 
-// 6. SUCCESS with empty message fails
+// 7. SUCCESS with empty message fails
 TEST_CASE("PacketHandler SUCCESS with empty message fails", "[packet_handler][edge]") {
   PacketHandler handler;
-  const Packet packet =
-      authPacket(Packet::PacketType::LOGIN, static_cast<int>(RESPONSE_CODES::SUCCESS), "");
-
-  REQUIRE_FALSE(handler.handlePacket(packet).has_value());
+  for (Packet::PacketType type : {Packet::PacketType::LOGIN, Packet::PacketType::REGISTER,
+                                  Packet::PacketType::UPDATE_USER}) {
+    const Packet packet = authPacket(type, static_cast<int>(RESPONSE_CODES::SUCCESS), "");
+    INFO(Packet::packetTypeToString(type));
+    REQUIRE_FALSE(handler.handlePacket(packet).has_value());
+  }
 }
 
-// 7. responseCode edge values
+// 8. responseCode edge values
 TEST_CASE("PacketHandler responseCode edge values", "[packet_handler][edge]") {
   PacketHandler handler;
   const std::string payload = User("alice", "a@b.com", User::UserType::USER).serialize();

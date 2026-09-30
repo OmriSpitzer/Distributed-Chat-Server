@@ -1,10 +1,10 @@
 # Architecture
 
-C++17 distributed chat: `chat_server` and `chat_client` are separate processes. They meet only on TCP as framed `Packet`s (`socket_io` + `Serializer`). Cluster nodes also gossip on a peer port. Each binary defaults to a Qt Widgets dashboard; `--test` runs the console UI.
+C++17 distributed chat: `chat_server` and `chat_client` are separate processes. Qt and console clients meet a node on TCP `--port` and can fail over to another node's client port. Browsers meet a node on `--ws-port`. Both carry framed `Packet`s (`socket_io` + `Serializer` on TCP; the same bytes inside a WebSocket binary frame). Cluster nodes gossip on `--peer-port`. Each binary defaults to a Qt Widgets dashboard; `--test` runs the console UI. Chat state is that node's SQLite file.
 
 Shared types (`Packet`, `User`, `Room`, `Message`, `Logger`, `gossip_payload`) live in `utils`. They are not a third process. Qt stays in the executables: widgets read `Server*` / `Client*` on the GUI thread and do not live in `server_lib` / `client_lib` domain or transport code.
 
-**Related docs:** [README.md](README.md) (quick start / scripts), [database.md](database.md) (SQLite schema and write paths), [tests/TESTS.md](tests/TESTS.md), [STEPS.md](STEPS.md).
+**Related docs:** [README.md](README.md) (quick start / scripts), [database.md](database.md) (SQLite schema and write paths), [tests/TESTS.md](tests/TESTS.md), [FUTURE_WORK.md](FUTURE_WORK.md).
 
 Local multi-node demo: `.\scripts\run_cluster.ps1` (2 servers + 2 clients). See README “Two-node cluster”.
 
@@ -81,25 +81,38 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-  subgraph C_L1["1. Presentation"]
-    direction LR
-    DashboardPage
-    ConsoleUI
+  subgraph Desktop["Qt / console"]
+    direction TB
+    subgraph C_L1["1. Presentation"]
+      direction LR
+      DashboardPage
+      ConsoleUI
+    end
+
+    subgraph C_L2["2. Application"]
+      direction LR
+      Client
+      PacketBuilder
+      PacketHandler
+      ClientState
+    end
+
+    subgraph C_L3["3. Transport"]
+      direction LR
+      Network
+      socket_io
+      Serializer
+    end
+
+    C_L1 --> C_L2
+    C_L2 --> C_L3
   end
 
-  subgraph C_L2["2. Application"]
-    direction LR
-    Client
-    PacketBuilder
-    PacketHandler
-    ClientState
-  end
-
-  subgraph C_L3["3. Transport"]
-    direction LR
-    Network
-    socket_io
-    Serializer
+  subgraph Web["Browser web/"]
+    direction TB
+    Panels["web panels"] --> AppJs["App.jsx"]
+    AppJs --> WebServices["user / room / admin services"]
+    WebServices --> ChatService["chatService.js"]
   end
 
   subgraph C_L4["4. Shared domain"]
@@ -109,17 +122,16 @@ flowchart TB
     Room
   end
 
-  C_L1 --> C_L2
-  C_L2 --> C_L3
-  C_L3 --> C_L4
+  Serializer --> Packet
+  ChatService --> Packet
 ```
 
 | Layer | Classes | Role |
 |-------|---------|------|
-| Presentation | `DashboardPage`, `ConsoleUI` | Qt dashboard + dialogs, or console menus (`--test`). Theme and density live on `Client`; the page applies the stylesheet and spacing. The transcript stays put when scrolled up and shows an unread count that jumps to the latest line. The browser chat panel does the same |
-| Application | `Client`, `PacketBuilder`, `PacketHandler`, `ClientState` | Action methods (`joinRoom`, `login`, …), parse replies, remember user/room |
-| Transport | `Network`, `socket_io`, `Serializer` | Connect, send, reader thread (pong heartbeats, `ROOM_LIST` / `MESSAGE` pushes) |
-| Shared domain | `Packet`, `User`, `Room` | Same models as the server wire |
+| Presentation | `DashboardPage`, `ConsoleUI`, `App.jsx`, web panels | Qt dashboard + dialogs, or console menus (`--test`). Theme and density live on `Client`; the page applies the stylesheet and spacing. The transcript stays put when scrolled up and shows an unread count that jumps to the latest line. In the browser, `App.jsx` holds the handlers and the panels only render; `UiContext` sets the same theme and density |
+| Application | `Client`, `PacketBuilder`, `PacketHandler`, `ClientState`, `userService` / `roomService` / `adminService` | Action methods (`joinRoom`, `login`, …), parse replies, remember user/room. The browser services send the same actions through `chatService.js` |
+| Transport | `Network`, `socket_io`, `Serializer`, `chatService.js` | Connect, send, reader thread (pong heartbeats, `ROOM_LIST` / `MESSAGE` pushes). The browser socket retries one `--ws-port` URL and answers heartbeat `ping` with `pong` |
+| Shared domain | `Packet`, `User`, `Room` | Same models as the server wire. `packet.js` matches the C++ frame |
 
 ---
 
@@ -167,22 +179,34 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-  Client["Client"]
+  subgraph Desktop["Qt / console"]
+    direction TB
+    Client["Client"]
 
-  Client -->|"showDashboard_2"| DashboardPage
-  Client -->|"showDashboard"| ConsoleUI
-  Client -->|"connect / sendPacket / waitFor"| Network
-  Client -->|"handlePacket"| PacketHandler
-  Client --> ClientState
+    Client -->|"showDashboard_2"| DashboardPage
+    Client -->|"showDashboard"| ConsoleUI
+    Client -->|"connect / sendPacket / waitFor"| Network
+    Client -->|"handlePacket"| PacketHandler
+    Client --> ClientState
 
-  DashboardPage -->|"joinRoom / leaveRoom / login / sendMessage / …"| Client
-  ConsoleUI -->|"prompts → Client actions"| Client
-  Client -->|"PacketBuilder"| PacketBuilder
-  PacketHandler -->|"deserialize User on LOGIN / REGISTER"| ClientState
-  Network -->|"readerLoop: pong HEARTBEAT, ROOM_LIST, enqueue MESSAGE, queue replies"| Network
+    DashboardPage -->|"joinRoom / leaveRoom / login / sendMessage / …"| Client
+    ConsoleUI -->|"prompts → Client actions"| Client
+    Client -->|"PacketBuilder"| PacketBuilder
+    PacketHandler -->|"deserialize User on LOGIN / REGISTER"| ClientState
+    Network -->|"readerLoop: pong HEARTBEAT, ROOM_LIST, enqueue MESSAGE, queue replies"| Network
+  end
+
+  subgraph Web["Browser web/"]
+    direction TB
+    Panels["web panels"] -->|"render"| AppJs["App.jsx"]
+    AppJs -->|"click handlers"| WebServices["user / room / admin services"]
+    WebServices -->|"request"| ChatService["chatService.js"]
+  end
+
+  ChatService -->|"WebSocket binary Packet on --ws-port"| Packet
 ```
 
-`Network` is the only client class that talks to the server. Widgets and `ConsoleUI` never touch a socket; they call `Client` on the UI / main thread. `MESSAGE` pushes are queued under a mutex and drained on the Qt timer (not from the reader thread).
+`Network` is the only C++ client class that talks to the server. Widgets and `ConsoleUI` never touch a socket; they call `Client` on the UI / main thread. `MESSAGE` pushes are queued under a mutex and drained on the Qt timer (not from the reader thread). The browser does not call `Client`. `App.jsx` calls the user, room, and admin services, and `chatService.js` writes the same framed `Packet` on `--ws-port`.
 
 The failover supervisor dials `EndpointRing`. `mergeFailoverList` builds that ring from the cached `SERVER_DIRECTORY` and the static seed (`--host`/`--port`, then `--servers`). Endpoints the last directory reported as up come first; seed addresses the directory did not list stay after them. The connected endpoint stays at the front so a directory push does not drop a live socket. The next hop tries the other directory-up endpoints before the leftover seed. While that dial is in progress the console prints `reconnecting...` and the Qt header shows the same label. A live link shows `Connected host:port` on that subtitle, and the browser header shows the same for its socket URL. The hop does not re-login or re-join the current room.
 

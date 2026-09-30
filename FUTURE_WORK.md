@@ -103,19 +103,12 @@ Desktop Qt/console stay primary for chat; the website is the same kind of client
 
 Unit coverage is broad; the gaps are live dual-process, failover, GUI, and load (see `tests/TESTS.md`).
 
-- [ ] Test argument parsing, including `--servers`.
-- [ ] Test every packet handler, not only login, register, and profile update.
-- [ ] Test health adapters and the monitor rollup (§1).
-- [ ] Test allow-list add, check, and remove.
+- [x] Test argument parsing, including `--servers`.
+- [x] Test every packet handler, not only login, register, and profile update.
+- [x] Test health adapters and the monitor rollup (§1).
+- [x] Test allow-list add, check, and remove.
 - [x] Boot clears this node's online users.
 - [x] Reconnect takes a presence row only when that node is not a live peer (§2).
-- [ ] Logged-in disconnect clears presence and rumors logout.
-- [ ] Reconnect after a restart keeps the user and room, with no password prompt.
-- [ ] Invite and private join work through a live client.
-- [ ] A heartbeat timeout clears presence.
-- [ ] Login on one node is visible on the other, and a second login is rejected.
-- [ ] Join, message, and allow-list travel over real peer sockets.
-- [ ] A dropped event id stays gone after a late pull.
 - [x] Failover: stop node A; the client lands on B as the same user, in the same room (§2).
 
 
@@ -139,33 +132,6 @@ The website uses the chat node's `--ws-port`. There is no gateway and no REST AP
 
 ## 7. Docs & ops
 
-- [ ] Update README architecture diagram: clients → multi-server failover; browser → `--ws-port`; AWS RDS for website only.
-- [ ] Runbook: node crash, client failover, RDS failover, gossip partition.
-- [ ] Sync `tests/TESTS.md` checkboxes when §4 cases land; fix doc typo link `FUTURE_WORKs.md` → `FUTURE_WORK.md`.
-- [ ] Version badge / changelog note for 3.0.0 when shipping.
-
-
-
-# ------------------------------ VERSION 4.0 ------------------------------
-
-## 1. AWS database for the website **(goal)**
-
-Chat traffic stays on per-node SQLite + gossip. Website gets its own remote DB for accounts/metadata that the browser product needs.
-
-- [ ] Provision managed DB (e.g. **Amazon RDS** PostgreSQL or Aurora) for website schema only — users mirror / profile cache, sessions, audit log, feature flags — **not** live `messages` gossip log.
-- [ ] Sync strategy (pick one and document):
-  - **A.** The chat node stays authoritative for passwords (Argon2id on REGISTER/UPDATE). A website DB, if added, mirrors those events from the node; or
-  - **B.** Website DB stores website-only accounts; link username to chat user after first successful cluster login.
-- [ ] Never point `DatabaseManager` / `init.sql` at RDS for node local chat — keep SQLite on each Windows node for low-latency rumor apply.
-- [ ] Optional later: S3 for exports / attachments; Secrets Manager for the website DB URL; IAM auth for RDS.
-- [ ] Migrations (Flyway/Liquibase or SQL scripts) versioned beside website code; separate from `src/database/init.sql`.
-- [ ] Backup / PITR on RDS; chat SQLite backup remains per-node (`data/*.db`) + gossip recovery.
-
-## 2. Gossip payload — object-oriented & scalable
-
-Five fixed fields (`type`, `eventId`, `username`, `content`, `field5`) already limit ROOM_CREATED+ACL and force overloading `field5`.
-
-- [ ] Versioned envelope: `{ version, type, eventId, body }` with typed body structs per event (LOGIN, MESSAGE, ROOM_CREATED, …).
-- [ ] Keep length-prefixed binary or add JSON/CBOR for website debugging — same semantic types either way.
-- [ ] Backward-compatible decode: v1 five-field still accepted for one release; peers advertise version on HELLO.
-- [ ] Unit tests for every event type round-trip; reject unknown version cleanly.
+- [x] Update README architecture diagram: clients → multi-server failover; browser → `--ws-port`; AWS RDS for website only.
+- [x] Sync `tests/TESTS.md` checkboxes when §4 cases land; fix doc typo link `FUTURE_WORKs.md` → `FUTURE_WORK.md`.
+- [x] Version badge / changelog note for 3.0.0 when shipping.

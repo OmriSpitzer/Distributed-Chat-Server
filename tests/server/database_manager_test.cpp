@@ -48,6 +48,11 @@
  * 17. concurrent writes
  * 18. typical register / login / logout flow
  * 19. createRoom assigns AUTOINCREMENT id; get/list/delete round-trip
+ * 20. updateUser password and username
+ * 21. claim presence when the recorded node is down
+ * 22. clearNodePresence drops one node
+ * 23. allow list add, check, and remove
+ * 24. allow list edges: missing row, foreign keys, creator flag stays on ignore
  */
 
 namespace {
@@ -803,4 +808,88 @@ TEST_CASE("DatabaseManager clearNodePresence drops one node",
 
   database.clearOnline(there);
   database.clearAllMembership(here);
+}
+
+// 23. allow list add, check, and remove
+TEST_CASE("DatabaseManager allow list add check and remove", "[database_manager][allow_list]") {
+  DatabaseManager &database = db();
+  const User creator = createUniqueUser();
+  const User member = createUniqueUser();
+  const Room room = database.createRoom(unique("acl"), Room::RoomType::OTHER, Room::Privacy::PRIVATE,
+                                        creator.getEmail());
+  const Room other =
+      database.createRoom(unique("other"), Room::RoomType::OTHER, Room::Privacy::PRIVATE);
+
+  REQUIRE(database.isAllowed(room.getId(), creator.getEmail()));
+  REQUIRE(database.isAllowListCreator(room.getId(), creator.getEmail()));
+  REQUIRE_FALSE(database.isAllowed(room.getId(), member.getEmail()));
+  REQUIRE_FALSE(database.isAllowListCreator(room.getId(), member.getEmail()));
+  REQUIRE(database.getAllowList(other.getId()).empty());
+  REQUIRE_FALSE(database.isAllowed(other.getId(), creator.getEmail()));
+
+  database.addToAllowList(room.getId(), member.getEmail(), false);
+  REQUIRE(database.isAllowed(room.getId(), member.getEmail()));
+  REQUIRE_FALSE(database.isAllowListCreator(room.getId(), member.getEmail()));
+
+  const std::vector<std::string> listed = database.getAllowList(room.getId());
+  REQUIRE(listed.size() == 2);
+  REQUIRE(std::find(listed.begin(), listed.end(), creator.getEmail()) != listed.end());
+  REQUIRE(std::find(listed.begin(), listed.end(), member.getEmail()) != listed.end());
+
+  database.removeFromAllowList(room.getId(), member.getEmail());
+  REQUIRE_FALSE(database.isAllowed(room.getId(), member.getEmail()));
+  REQUIRE(database.isAllowed(room.getId(), creator.getEmail()));
+  REQUIRE(database.getAllowList(room.getId()).size() == 1);
+
+  database.removeFromAllowList(room.getId(), creator.getEmail());
+  REQUIRE_FALSE(database.isAllowed(room.getId(), creator.getEmail()));
+  REQUIRE_FALSE(database.isAllowListCreator(room.getId(), creator.getEmail()));
+  REQUIRE(database.getAllowList(room.getId()).empty());
+
+  database.deleteRoom(room.getId());
+  database.deleteRoom(other.getId());
+}
+
+// 24. missing rows, foreign keys, and INSERT OR IGNORE keeping the creator flag
+TEST_CASE("DatabaseManager allow list edges", "[database_manager][allow_list][edge]") {
+  DatabaseManager &database = db();
+  const User creator = createUniqueUser();
+  const Room room = database.createRoom(unique("acl"), Room::RoomType::OTHER, Room::Privacy::PUBLIC,
+                                        creator.getEmail());
+
+  SECTION("check and remove before add") {
+    const std::string email = unique("missing") + "@example.com";
+    REQUIRE_FALSE(database.isAllowed(room.getId(), email));
+    REQUIRE_FALSE(database.isAllowListCreator(room.getId(), email));
+    REQUIRE_NOTHROW(database.removeFromAllowList(room.getId(), email));
+    REQUIRE(database.getAllowList(room.getId()).size() == 1);
+  }
+
+  SECTION("unknown email is rejected") {
+    REQUIRE_THROWS_AS(database.addToAllowList(room.getId(), unique("ghost") + "@example.com", false),
+                      DatabaseManager::ConstraintError);
+    REQUIRE(database.isAllowListCreator(room.getId(), creator.getEmail()));
+  }
+
+  SECTION("unknown room is rejected") {
+    REQUIRE_THROWS_AS(database.addToAllowList(999999, creator.getEmail(), false),
+                      DatabaseManager::ConstraintError);
+  }
+
+  SECTION("a later add does not clear the creator flag") {
+    database.addToAllowList(room.getId(), creator.getEmail(), false);
+    REQUIRE(database.isAllowed(room.getId(), creator.getEmail()));
+    REQUIRE(database.isAllowListCreator(room.getId(), creator.getEmail()));
+  }
+
+  SECTION("first insert wins when the row already exists as a member") {
+    const User member = createUniqueUser();
+    database.addToAllowList(room.getId(), member.getEmail(), false);
+    database.addToAllowList(room.getId(), member.getEmail(), true);
+    REQUIRE(database.isAllowed(room.getId(), member.getEmail()));
+    REQUIRE_FALSE(database.isAllowListCreator(room.getId(), member.getEmail()));
+    database.removeFromAllowList(room.getId(), member.getEmail());
+  }
+
+  database.deleteRoom(room.getId());
 }

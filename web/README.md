@@ -13,7 +13,7 @@ Same chat dashboard as the Qt client, in the browser. It opens one WebSocket to 
 
 Passwords ride inside a `LOGIN` or `REGISTER` `Packet` and are hashed with Argon2id on the node. The page does not keep the password after that request, and does not write it to `localStorage` or `sessionStorage`. A dropped socket resumes with `RECONNECT` using the username already on screen.
 
-**Read next:** [../README.md](../README.md) (wire format, server flags) · [../architecture.md](../architecture.md) (`WebConnection`) · [../FUTURE_WORK.md](../FUTURE_WORK.md) (§4 website)
+**Read next:** [../README.md](../README.md) (wire format, server flags) · [../architecture.md](../architecture.md) (`WebConnection`) · [../FUTURE_WORK.md](../FUTURE_WORK.md) (§3 website)
 
 ## Quick start
 
