@@ -248,6 +248,7 @@ void Client::markReconnecting() {
     resumePending.store(true);
   }
   Logger::logInfo("Client " + id, "reconnecting...");
+  forgetConnected();
 }
 
 // dial the ring until stop or the attempt budget is spent
@@ -274,6 +275,7 @@ void Client::supervisorLoop() {
     }
 
     hadLink = true;
+    rememberConnected(endpoint);
     reconnecting.store(false);
     waitCv.notify_all();
     attempt = 0;
@@ -305,6 +307,7 @@ void Client::supervisorLoop() {
   }
 
   reconnecting.store(false);
+  forgetConnected();
   supervisorRunning = false;
   waitCv.notify_all();
 }
@@ -429,6 +432,29 @@ bool Client::isRunning() const { return supervisorRunning.load(); }
 
 // true from a live-link drop until the next dial succeeds
 bool Client::isReconnecting() const { return reconnecting.load(); }
+
+// host:port of the live socket; empty when the link is down
+std::string Client::connectedEndpoint() const {
+  std::lock_guard<std::mutex> lock(endpointMutex);
+  if (connectedHost.empty() || connectedPort == 0) {
+    return {};
+  }
+  return connectedHost + ":" + std::to_string(connectedPort);
+}
+
+// remember the host:port of the live socket
+void Client::rememberConnected(const ServerPoint &endpoint) {
+  std::lock_guard<std::mutex> lock(endpointMutex);
+  connectedHost = endpoint.host;
+  connectedPort = endpoint.port;
+}
+
+// drop the host:port of the live socket
+void Client::forgetConnected() {
+  std::lock_guard<std::mutex> lock(endpointMutex);
+  connectedHost.clear();
+  connectedPort = 0;
+}
 
 // how many times a live link has dropped since start
 int Client::reconnectCount() const { return reconnects.load(); }

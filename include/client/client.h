@@ -59,6 +59,9 @@ public:
   // how many times a live link has dropped since start
   int reconnectCount() const;
 
+  // host:port of the live socket; empty when the link is down
+  std::string connectedEndpoint() const;
+
   // showing the dashboard (console)
   void showDashboard();
 
@@ -141,6 +144,9 @@ private:
   std::atomic<bool> supervisorRunning{false}; // supervisor thread is inside its loop
   std::atomic<bool> reconnecting{false};      // supervisor is dialing after a live link dropped
   std::atomic<int> reconnects{0};             // live-link drops since start
+  mutable std::mutex endpointMutex;          // guards the live endpoint
+  std::string connectedHost;                 // host of the live socket
+  std::uint16_t connectedPort{0};            // port of the live socket
   std::atomic<bool> resumePending{false};     // send RECONNECT after the next successful dial
   std::mutex waitMutex;                       // guards the failover wait
   std::condition_variable waitCv;             // wakes sleep on stop or link down
@@ -166,6 +172,10 @@ private:
 
   // mark a hop and log "reconnecting..." once per drop
   void markReconnecting();
+
+  // remember or drop the host:port of the live socket
+  void rememberConnected(const ServerPoint &endpoint);
+  void forgetConnected();
 
   // advance the ring, sleep with backoff + jitter; false when the budget or stop ends the loop
   bool failAndWait(int &attempt);

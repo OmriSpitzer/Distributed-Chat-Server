@@ -236,6 +236,10 @@ void DashboardPage::refresh() {
     subtitle = QStringLiteral("reconnecting...");
   } else if (link == HealthStatus::Up) {
     subtitle = QStringLiteral("Connected");
+    const std::string endpoint = client()->connectedEndpoint();
+    if (!endpoint.empty()) {
+      subtitle += QStringLiteral(" ") + QString::fromStdString(endpoint);
+    }
   } else if (link == HealthStatus::Degraded) {
     subtitle = QStringLiteral("Degraded");
   }

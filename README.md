@@ -215,7 +215,7 @@ Headers live in `include/`; implementations live in `src/`. CMake adds `include/
 .\scripts\run_test.ps1 -R "Client login"
 ```
 
-See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**31** executables, **403** `TEST_CASE`s).
+See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**31** executables, **404** `TEST_CASE`s).
 
 ## Status
 

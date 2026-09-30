@@ -50,6 +50,7 @@
  * 14. logged-in hop sends RECONNECT
  * 15. appearance defaults to light and comfortable
  * 16. appearance toggles round-trip
+ * 17. connected endpoint is the dialed host:port
  */
 
 namespace {
@@ -682,4 +683,20 @@ TEST_CASE("Client appearance toggles round-trip", "[client][flow]") {
   client.toggleDensity();
   REQUIRE(client.density() == Client::Density::Comfortable);
   REQUIRE(client.theme() == Client::Theme::Light);
+}
+
+TEST_CASE("Client connected endpoint is the dialed host port", "[client][flow]") {
+  REQUIRE(winsock().ok);
+  Client idle;
+  REQUIRE(idle.connectedEndpoint().empty());
+
+  ConfigGuard guard;
+  TestPeer server;
+  REQUIRE(server.listen());
+
+  Client client;
+  REQUIRE(startClient(client, server));
+  REQUIRE(client.connectedEndpoint() == "127.0.0.1:" + std::to_string(config::PORT));
+  client.stop();
+  REQUIRE(client.connectedEndpoint().empty());
 }

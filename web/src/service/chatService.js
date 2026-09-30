@@ -13,6 +13,16 @@ import { isAdmin } from "./adminService.js";
 import { isLoggedIn } from "./userService.js";
 
 const SOCKET_URL = import.meta.env.VITE_SERVER_URL ?? "ws://127.0.0.1:8080";
+
+function connectedLabel() {
+  try {
+    const parsed = new URL(SOCKET_URL);
+    const port = parsed.port || (parsed.protocol === "wss:" ? "443" : "80");
+    return `Connected ${parsed.hostname}:${port}`;
+  } catch {
+    return "Connected";
+  }
+}
 const LISTENERS = new Set();
 const WAITERS = [];
 let CONN_SOCKET = null;
@@ -51,7 +61,7 @@ function snapshot() {
   return {
     link: session.link,
     busy: session.busy,
-    connected: session.link === "Connected",
+    connected: session.link.startsWith("Connected"),
     loggedIn: isLoggedIn(),
     admin: isAdmin(),
     username: session.user?.username ?? "Guest",
@@ -62,7 +72,7 @@ function snapshot() {
       privacy: room.privacy === "PRIVATE" ? "Private" : "Public",
       here: room.name === current,
     })),
-    waiting: rooms.length === 0 && session.link === "Connected",
+    waiting: rooms.length === 0 && session.link.startsWith("Connected"),
     currentRoom: current,
     inLobby: current === "Lobby",
     transcript: session.transcript.map((line) => ({ ...line })),
@@ -212,7 +222,7 @@ function openSocket() {
     if (CONN_SOCKET !== current) {
       return;
     }
-    session.link = "Connected";
+    session.link = connectedLabel();
     notify();
     resumeSignedIn();
   };

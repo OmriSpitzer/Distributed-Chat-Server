@@ -28,7 +28,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL Vite prints (usually `http://localhost:5173`). The header turns green when the socket is up.
+Open the local URL Vite prints (usually `http://localhost:5173`). The header turns green and shows `Connected host:port` when the socket is up.
 
 Seed accounts from the node database: `admin` / `admin` (ADMIN) and `user` / `user`. Guests can join public rooms and send messages before they sign in; the server assigns an anonymous user on the welcome push.
 

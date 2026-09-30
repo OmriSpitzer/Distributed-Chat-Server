@@ -21,7 +21,7 @@ Shared `IHealthCheck` (Adapter target) and `HealthMonitor` (Composite). Same mon
 - [x] **Server adapters:** `DatabaseHealthAdapter`, `HeartbeatHealthAdapter`, `ServerHealthAdapter` (`isAlive` / listening) — register in `Server::start`.
 - [x] **Client adapters:** `ClientHealthAdapter` (`Network` connected) — register in `Client::start`.
 - [x] Do not register DB / Heartbeat adapters on the client (those objects do not live there).
-- [x] Wire failover (§3) and GUI status to `HealthMonitor`, not ad-hoc `isAlive()` only.
+- [x] Wire failover (§2) and GUI status to `HealthMonitor`, not ad-hoc `isAlive()` only.
 - [x] Unit-test each adapter against live objects; test monitor rollup (one child Down → overall Down / Degraded).
 
 
@@ -38,7 +38,7 @@ Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLog
 
 
 
-## 3. Client failover — servers publish neighbors; clients reconnect **(goal)**
+## 2. Client failover — servers publish neighbors; clients reconnect **(goal)**
 
 **Design:** Topology for client failover lives with the servers (they already gossip). Clients stay dumb: bootstrap from a seed, cache a directory, reconnect when the current node dies. Dead nodes cannot hand clients off; peers do not dial clients. A user who was already logged in stays logged in: the UI does not return to anonymous and does not ask for the password again. After the new socket is up, the client sends `RECONNECT` (username and current room already held for this process). The password is not stored.
 
@@ -83,11 +83,11 @@ Façade + singleton: call sites keep `Logger::log*`; sinks register with `addLog
 
 ### Verify
 
-- [x] E2E: kill node A while a logged-in client is in a room; client uses the cached directory, lands on node B, still shows the same user and room (no login prompt), and receives MESSAGE again (pairs with §7).
+- [x] E2E: kill node A while a logged-in client is in a room; client uses the cached directory, lands on node B, still shows the same user and room (no login prompt), and receives MESSAGE again (pairs with §4).
 
 
 
-## 4. Website integration **(goal)**
+## 3. Website integration **(goal)**
 
 Desktop Qt/console stay primary for chat; the website is the same kind of client, not a second gossip peer. The browser talks to a node on `--ws-port`. There is no gateway process and no website cookie or JWT.
 
@@ -99,7 +99,56 @@ Desktop Qt/console stay primary for chat; the website is the same kind of client
 
 
 
-## 5. AWS database for the website **(goal)**
+## 4. Testing — more kinds **(goal)**
+
+Unit coverage is broad; the gaps are live dual-process, failover, GUI, and load (see `tests/TESTS.md`).
+
+- [ ] Test argument parsing, including `--servers`.
+- [ ] Test every packet handler, not only login, register, and profile update.
+- [ ] Test health adapters and the monitor rollup (§1).
+- [ ] Test allow-list add, check, and remove.
+- [x] Boot clears this node's online users.
+- [x] Reconnect takes a presence row only when that node is not a live peer (§2).
+- [ ] Logged-in disconnect clears presence and rumors logout.
+- [ ] Reconnect after a restart keeps the user and room, with no password prompt.
+- [ ] Invite and private join work through a live client.
+- [ ] A heartbeat timeout clears presence.
+- [ ] Login on one node is visible on the other, and a second login is rejected.
+- [ ] Join, message, and allow-list travel over real peer sockets.
+- [ ] A dropped event id stays gone after a late pull.
+- [x] Failover: stop node A; the client lands on B as the same user, in the same room (§2).
+
+
+
+## 5. Client GUI additions **(goal)**
+
+- [x] Connection status strip shows `Connected host:port` on the Qt subtitle and the browser header.
+- [x] Unread badge / scroll-to-bottom on the Qt transcript and the browser dashboard. A scrolled-up view stays put; "N new" jumps to the latest line.
+- [x] Dark/light or denser chat layout without putting logic in widgets (still `Client` only). The browser dashboard uses the same pair of controls; `App` holds the choice and the panels only paint it.
+
+
+
+## 6. Transport & API surface (website)
+
+The website uses the chat node's `--ws-port`. There is no gateway and no REST API on the node.
+
+- [x] `--ws-port` on `chat_server` (§3): `Server` owns `WebConnection`; binary frames carry the same `Packet` bytes.
+- [x] `PacketProcessor` sees only `Packet` (§3).
+
+
+
+## 7. Docs & ops
+
+- [ ] Update README architecture diagram: clients → multi-server failover; browser → `--ws-port`; AWS RDS for website only.
+- [ ] Runbook: node crash, client failover, RDS failover, gossip partition.
+- [ ] Sync `tests/TESTS.md` checkboxes when §4 cases land; fix doc typo link `FUTURE_WORKs.md` → `FUTURE_WORK.md`.
+- [ ] Version badge / changelog note for 3.0.0 when shipping.
+
+
+
+# ------------------------------ VERSION 4.0 ------------------------------
+
+## 1. AWS database for the website **(goal)**
 
 Chat traffic stays on per-node SQLite + gossip. Website gets its own remote DB for accounts/metadata that the browser product needs.
 
@@ -112,9 +161,7 @@ Chat traffic stays on per-node SQLite + gossip. Website gets its own remote DB f
 - [ ] Migrations (Flyway/Liquibase or SQL scripts) versioned beside website code; separate from `src/database/init.sql`.
 - [ ] Backup / PITR on RDS; chat SQLite backup remains per-node (`data/*.db`) + gossip recovery.
 
-
-
-## 6. Gossip payload — object-oriented & scalable
+## 2. Gossip payload — object-oriented & scalable
 
 Five fixed fields (`type`, `eventId`, `username`, `content`, `field5`) already limit ROOM_CREATED+ACL and force overloading `field5`.
 
@@ -122,79 +169,3 @@ Five fixed fields (`type`, `eventId`, `username`, `content`, `field5`) already l
 - [ ] Keep length-prefixed binary or add JSON/CBOR for website debugging — same semantic types either way.
 - [ ] Backward-compatible decode: v1 five-field still accepted for one release; peers advertise version on HELLO.
 - [ ] Unit tests for every event type round-trip; reject unknown version cleanly.
-
-
-
-## 7. Testing — more kinds **(goal)**
-
-Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, and load (see `tests/TESTS.md`).
-
-### 7.1 Unit / component (still missing)
-
-- [ ] `config::parseArgs` / `parsePort` / `parsePeers` (and new `--servers`).
-- [ ] `PacketHandler` for every RPC type, not only LOGIN/REGISTER/UPDATE_USER.
-- [ ] `IHealthCheck` adapters + `HealthMonitor` rollup (§1).
-- [ ] `allow_list` CRUD edges as dedicated `DatabaseManager` cases.
-- [x] Clear this node's `online_users` on boot (`DatabaseManager::clearNodePresence`, `Server::start`).
-- [x] `RECONNECT` adopts `online_users` when the recorded `node_id` is not a live peer (`node_id` becomes this node, membership moves with it, rumor the move). A live peer with that `node_id` still rejects a second session (§3).
-
-
-
-### 7.2 Integration / E2E (live `Server` + `Client`)
-
-- [ ] Disconnect while logged in → presence cleared + LOGOUT rumor.
-- [ ] Client reconnect after server restart resumes the in-memory user and room. The UI does not drop to anonymous or ask for the password again.
-- [ ] Invite + private join allow-list across live client.
-- [ ] Full-stack heartbeat timeout clears presence (`Network` + `Heartbeat` together).
-
-
-
-### 7.3 Cluster / multi-process
-
-- [ ] Two `chat_server` processes: LOGIN on A → B `online_users`; USER_CREATED cross-login; duplicate login rejected across nodes.
-- [ ] ROOM_JOIN / MESSAGE / ACL over real peer sockets (not only in-process gossip fixtures).
-- [ ] `MAX_EVENT_LOG` drop: late PULL cannot resurrect ids.
-- [x] **Failover E2E:** stop node A; logged-in client fails over to B still as that user, in the same room, with no login prompt; messaging resumes (§3).
-
-
-
-### 7.4 New test kinds
-
-- [ ] **Contract / golden** tests for `Serializer` + gossip envelope bytes (fixtures under `tests/fixtures/`).
-- [ ] **Property / fuzz** light: random oversize/malformed frames must not kill `handleClient`.
-- [ ] **Load / soak** (optional Catch2 `[slow]` or separate script): N clients, M msg/s, gossip lag bounds.
-- [ ] **Chaos:** kill gossip peer mid-rumor; anti-entropy heals within digest interval.
-- [ ] **GUI smoke** (optional): Qt Test or scripted `--test` console paths for login → join → send.
-- [ ] CI matrix: Debug/Release + `ctest --output-on-failure`; tag `[slow]` / `[cluster]` excluded from default PR job if flaky.
-
-
-
-## 8. Client GUI additions **(goal)**
-
-
-
-### Client GUI
-
-- [ ] Connection status strip: connected host:port, reconnecting, failed over to X (`HealthMonitor` / Client adapter).
-- [ ] Server picker / auto-failover progress (ties to §3); manual “switch server”.
-- [x] Unread badge / scroll-to-bottom on the Qt transcript and the browser dashboard. A scrolled-up view stays put; "N new" jumps to the latest line.
-- [x] Dark/light or denser chat layout without putting logic in widgets (still `Client` only). The browser dashboard uses the same pair of controls; `App` holds the choice and the panels only paint it.
-- [ ] Accessibility: tab order, high-contrast errors, no updates off the GUI thread (keep queued signals).
-
-
-
-## 9. Transport & API surface (website)
-
-The website uses the chat node's `--ws-port`. There is no gateway and no REST API on the node.
-
-- [x] `--ws-port` on `chat_server` (§4): `Server` owns `WebConnection`; binary frames carry the same `Packet` bytes.
-- [x] `PacketProcessor` sees only `Packet` (§4).
-
-
-
-## 10. Docs & ops
-
-- [ ] Update README architecture diagram: clients → multi-server failover; browser → `--ws-port`; AWS RDS for website only.
-- [ ] Runbook: node crash, client failover, RDS failover, gossip partition.
-- [ ] Sync `tests/TESTS.md` checkboxes when §7 cases land; fix doc typo link `FUTURE_WORKs.md` → `FUTURE_WORK.md`.
-- [ ] Version badge / changelog note for 3.0.0 when shipping.
