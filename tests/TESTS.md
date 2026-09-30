@@ -2,7 +2,7 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **31** executables, **401** `TEST_CASE`s.
+Totals: **31** executables, **403** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
@@ -231,7 +231,7 @@ ctest --test-dir build --output-on-failure
 | `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 7 |
 | `network_test` | `tests/client/network_test.cpp` | 11 |
 | `console_ui_test` | `tests/client/console_ui_test.cpp` | 18 |
-| `client_test` | `tests/client/client_test.cpp` | 14 |
+| `client_test` | `tests/client/client_test.cpp` | 16 |
 
 ### ClientState (`[client_state]`)
 
@@ -352,6 +352,8 @@ ctest --test-dir build --output-on-failure
 - Client fails over when the peer closes
 - Client reports reconnecting on hop without re-login
 - Client sends RECONNECT on hop when logged in
+- Client appearance defaults to light and comfortable
+- Client appearance toggles round-trip
 
 ---
 

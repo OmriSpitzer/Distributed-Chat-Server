@@ -5,6 +5,7 @@
  */
 
 #pragma once
+#include "client/appearance.h"
 #include "client/client_state.h"
 #include "client/endpoint_ring.h"
 #include "client/network.h"
@@ -23,7 +24,6 @@
 #include <thread>
 #include <vector>
 
-
 struct ChatLine {
   std::string author;
   std::string text;
@@ -32,6 +32,9 @@ struct ChatLine {
 
 class Client {
 public:
+  using Theme = ChatLook::Theme;
+  using Density = ChatLook::Density;
+
   // joins the failover thread
   ~Client();
 
@@ -65,6 +68,12 @@ public:
   // get the client state
   ClientState &getState() { return state; }
   const ClientState &getState() const { return state; }
+
+  // local dashboard look (not sent on the wire, not cleared on logout)
+  Theme theme() const { return appearanceTheme; }
+  Density density() const { return appearanceDensity; }
+  void toggleTheme();
+  void toggleDensity();
 
   // join a room by name (guests OK for public rooms). Empty = success; otherwise error text.
   std::string joinRoom(std::string_view roomName);
@@ -110,10 +119,12 @@ public:
   void clearPendingChatMessages();
 
 private:
-  std::string id;        // client id
-  Network network;       // network class
-  PacketHandler handler; // packet handler class
-  ClientState state;     // client state class
+  std::string id;                                  // client id
+  Network network;                                 // network class
+  PacketHandler handler;                           // packet handler class
+  ClientState state;                               // client state class
+  Theme appearanceTheme{Theme::Light};             // theme appearance
+  Density appearanceDensity{Density::Comfortable}; // density appearance
 
   std::mutex welcomeMutex;           // guards welcomeReceived
   std::condition_variable welcomeCv; // signaled when ROOM_LIST applied

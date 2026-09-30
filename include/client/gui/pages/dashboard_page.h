@@ -5,15 +5,19 @@
  */
 
 #pragma once
+#include "client/appearance.h"
 #include "client/gui/components/page.h"
 #include <QString>
 #include <QStringList>
 
 class Button;
+class QHBoxLayout;
 class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPlainTextEdit;
+class QVBoxLayout;
+class QWidget;
 
 class DashboardPage : public Page {
   Q_OBJECT
@@ -25,6 +29,12 @@ public:
   ~DashboardPage() override = default;
 
 private:
+  // layout targets for density numbers from Client
+  QWidget *sideCard{nullptr};
+  QHBoxLayout *splitRow{nullptr};
+  QVBoxLayout *sideLayout{nullptr};
+  QVBoxLayout *chatLayout{nullptr};
+
   // rooms
   QListWidget *roomsList{nullptr};   // rooms list widget
   Button *joinButton{nullptr};       // join button
@@ -49,6 +59,9 @@ private:
 
   // refresh the page
   void refresh() override;
+
+  // paint Client theme and density; widgets do not choose the values
+  void applyAppearance();
 
   // append a message to the transcript (timestamp = unix seconds; 0 uses now)
   void appendMessage(const QString &author, const QString &text, quint64 timestamp = 0);
@@ -91,6 +104,11 @@ private:
 
   // leave the room
   void leaveRoom();
+
+  // last look applied to the window; refresh skips the stylesheet when unchanged
+  bool appearanceApplied{false};
+  ChatLook::Theme appliedTheme{ChatLook::Theme::Light};
+  ChatLook::Density appliedDensity{ChatLook::Density::Comfortable};
 
   // send a message
   void sendMessage();

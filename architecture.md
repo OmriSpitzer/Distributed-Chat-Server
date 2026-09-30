@@ -116,7 +116,7 @@ flowchart TB
 
 | Layer | Classes | Role |
 |-------|---------|------|
-| Presentation | `DashboardPage`, `ConsoleUI` | Qt dashboard + dialogs, or console menus (`--test`) |
+| Presentation | `DashboardPage`, `ConsoleUI` | Qt dashboard + dialogs, or console menus (`--test`). Theme and density live on `Client`; the page applies the stylesheet and spacing |
 | Application | `Client`, `PacketBuilder`, `PacketHandler`, `ClientState` | Action methods (`joinRoom`, `login`, …), parse replies, remember user/room |
 | Transport | `Network`, `socket_io`, `Serializer` | Connect, send, reader thread (pong heartbeats, `ROOM_LIST` / `MESSAGE` pushes) |
 | Shared domain | `Packet`, `User`, `Room` | Same models as the server wire |
@@ -184,7 +184,7 @@ flowchart TB
 
 `Network` is the only client class that talks to the server. Widgets and `ConsoleUI` never touch a socket; they call `Client` on the UI / main thread. `MESSAGE` pushes are queued under a mutex and drained on the Qt timer (not from the reader thread).
 
-The failover supervisor dials `EndpointRing`. `mergeFailoverList` builds that ring from the cached `SERVER_DIRECTORY` and the static seed (`--host`/`--port`, then `--servers`). Endpoints the last directory reported as up come first; seed addresses the directory did not list stay after them. The connected endpoint stays at the front so a directory push does not drop a live socket. The next hop tries the other directory-up endpoints before the leftover seed. While that dial is in progress the console prints `reconnecting...` and the Qt header shows the same label. A guest hop only redials. A logged-in client sends `RECONNECT` (username and current room) once the new socket is up, and retries that packet a few times if the landing node still treats the previous `node_id` as a live peer. The anonymous Lobby welcome on that new socket does not replace the in-memory user or room. The landing node takes the existing presence row when that `node_id` is not a live peer, rewrites `online_users.node_id` and `membership.node_id` to itself, and rumors that move.
+The failover supervisor dials `EndpointRing`. `mergeFailoverList` builds that ring from the cached `SERVER_DIRECTORY` and the static seed (`--host`/`--port`, then `--servers`). Endpoints the last directory reported as up come first; seed addresses the directory did not list stay after them. The connected endpoint stays at the front so a directory push does not drop a live socket. The next hop tries the other directory-up endpoints before the leftover seed. While that dial is in progress the console prints `reconnecting...` and the Qt header shows the same label. The hop does not re-login or re-join the current room.
 
 ---
 

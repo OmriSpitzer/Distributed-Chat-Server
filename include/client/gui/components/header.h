@@ -10,6 +10,7 @@
 
 class Button;
 class QLabel;
+class QHBoxLayout;
 
 class Header : public QWidget {
   Q_OBJECT
@@ -27,10 +28,15 @@ public:
   QLabel *subtitleLabel() const { return headingSubLabel; }
 
   // buttons
+  Button *themeButton() const { return themeBtn; }
+  Button *densityButton() const { return densityBtn; }
   Button *signUpButton() const { return signUpBtn; }
   Button *logInButton() const { return logInBtn; }
   Button *userChip() const { return userChipBtn; }
   Button *logoutButton() const { return logoutBtn; }
+
+  // assign header padding; the caller supplies the numbers
+  void applySpacing(int marginH, int marginV, int spacing);
 
   // show Sign in / Log in, or the user chip + logout
   void setLoggedIn(bool loggedIn, const QString &username = QString());
@@ -38,6 +44,9 @@ public:
 private:
   QLabel *headingLabel{nullptr};    // page title
   QLabel *headingSubLabel{nullptr}; // page subtitle
+  QHBoxLayout *rootLayout{nullptr}; // header row
+  Button *themeBtn{nullptr};        // light / dark
+  Button *densityBtn{nullptr};      // comfortable / compact
   Button *signUpBtn{nullptr};       // Sign in
   Button *logInBtn{nullptr};        // Log in
   Button *userChipBtn{nullptr};     // logged-in username chip

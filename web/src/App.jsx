@@ -167,7 +167,7 @@ const App = () => {
   const deletable = view.rooms.filter((room) => room.name !== "Lobby" && room.name !== "General");
 
   return (
-    <main className="flex min-h-screen flex-col bg-stone-100 text-stone-900">
+    <main className="page">
       <Header
         view={view}
         onLogout={() => void after("Logout", logout)}
@@ -202,7 +202,7 @@ const App = () => {
         }}
       />
 
-      <div className="flex min-h-0 flex-1 gap-4 p-5">
+      <div className="workspace">
         <RoomSidebar
           view={view}
           onJoinRoom={(name) => void after("Join room", () => joinRoom(name))}

@@ -48,6 +48,8 @@
  * 12. peer close walks to the next endpoint
  * 13. hop reports reconnecting and does not re-login
  * 14. logged-in hop sends RECONNECT
+ * 15. appearance defaults to light and comfortable
+ * 16. appearance toggles round-trip
  */
 
 namespace {
@@ -660,4 +662,24 @@ TEST_CASE("Client sends RECONNECT on hop when logged in", "[client][failover][re
   REQUIRE(client.getState().isLoggedIn());
   REQUIRE(client.getState().user->getUsername() == "alice");
   client.stop();
+}
+
+TEST_CASE("Client appearance defaults to light and comfortable", "[client][flow]") {
+  Client client;
+  REQUIRE(client.theme() == Client::Theme::Light);
+  REQUIRE(client.density() == Client::Density::Comfortable);
+}
+
+TEST_CASE("Client appearance toggles round-trip", "[client][flow]") {
+  Client client;
+  client.toggleTheme();
+  REQUIRE(client.theme() == Client::Theme::Dark);
+  client.toggleTheme();
+  REQUIRE(client.theme() == Client::Theme::Light);
+
+  client.toggleDensity();
+  REQUIRE(client.density() == Client::Density::Compact);
+  client.toggleDensity();
+  REQUIRE(client.density() == Client::Density::Comfortable);
+  REQUIRE(client.theme() == Client::Theme::Light);
 }

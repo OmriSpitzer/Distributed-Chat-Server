@@ -196,6 +196,8 @@ target_sources(chat_client PRIVATE
   src/client/gui/components/page.cpp
   src/client/gui/pages/dashboard_page.cpp
   src/client/gui/pages/main_page.cpp
+  src/client/gui/chat_style.cpp
+  include/client/gui/chat_style.h
   include/client/gui/components/button.h
   include/client/gui/components/pop_up_window.h
   include/client/gui/components/header.h

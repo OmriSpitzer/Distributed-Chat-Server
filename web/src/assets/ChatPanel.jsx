@@ -7,33 +7,28 @@ function formatChatTime(timestamp) {
 
 export default function ChatPanel({ view, draft, onDraftChange, onSend, onUpdateProfile }) {
   return (
-    <section className="flex min-w-0 flex-1 flex-col gap-3 rounded-2xl bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">#  {view.currentRoom}</h2>
-        <button
-          type="button"
-          className="rounded-lg border border-stone-300 px-3 py-2 text-sm"
-          disabled={view.busy}
-          onClick={onUpdateProfile}
-        >
+    <section className="chat">
+      <div className="chat-head">
+        <h2 className="room-title">#  {view.currentRoom}</h2>
+        <button type="button" className="ghost" disabled={view.busy} onClick={onUpdateProfile}>
           Update profile
         </button>
       </div>
-      <div className="min-h-0 flex-1 space-y-1 overflow-auto rounded-xl bg-stone-50 p-3 text-sm">
+      <div className="transcript">
         {view.transcript.map((line, index) => (
           <p key={`${line.timestamp}-${index}`}>
             {formatChatTime(line.timestamp)}  ·  {line.author}  ·  {line.text}
           </p>
         ))}
       </div>
-      <form className="flex gap-2" onSubmit={onSend}>
+      <form className="composer" onSubmit={onSend}>
         <input
-          className="min-w-0 flex-1 rounded-lg border border-stone-300 px-3 py-2"
+          className="field"
           placeholder="Write a message…"
           value={draft}
           onChange={(event) => onDraftChange(event.target.value)}
         />
-        <button type="submit" className="rounded-lg bg-stone-900 px-4 py-2 text-white" disabled={view.busy}>
+        <button type="submit" className="primary" disabled={view.busy}>
           Send
         </button>
       </form>

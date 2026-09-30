@@ -51,12 +51,13 @@ For a public site, terminate TLS at the reverse proxy (`wss://…`) and keep the
 | Invite | signed-in | Allow-lists a username for the current room. Not available from Lobby. |
 | Kick / Delete room | ADMIN | Delete refuses Lobby and General. |
 | Send / history | anyone in a room | History loads on join. Live pushes append while you stay in that room. |
+| Light / Dark, Comfortable / Compact | anyone | Header buttons call `UiContext`. That context sets `data-theme` and `data-density`. Colors, spacing, and the button labels live in `index.css`. Nothing is sent on the socket. |
 
 A heartbeat `ping` is answered with `pong` and is not shown in the transcript. If the socket drops, the page retries about one second later while it stays open.
 
 ## How a click becomes a packet
 
-`App.jsx` holds the dashboard state and the click handlers. The panels under `src/assets/` only render. `chatService.js` owns the socket and the shared session. `userService.js`, `roomService.js`, and `adminService.js` send the requests. `packet.js` matches `Packet::PacketType` and the C++ frame layout.
+`App.jsx` holds the dashboard state and the click handlers. `contexts/UiContext.jsx` holds theme and density and writes `data-theme` and `data-density` on the document; `index.css` owns the colors, spacing, and button labels. The panels under `src/assets/` only render. `chatService.js` owns the socket and the shared session. `userService.js`, `roomService.js`, and `adminService.js` send the requests. `packet.js` matches `Packet::PacketType` and the C++ frame layout.
 
 ```
 App  →  user / room / admin service  →  chatService  →  WebSocket binary frame  →  WebConnection  →  PacketProcessor
@@ -93,7 +94,9 @@ web/
 └── src/
     ├── main.jsx
     ├── App.jsx             Session state and click handlers
-    ├── index.css           Tailwind import
+    ├── index.css           Theme, density, and dashboard classes
+    ├── contexts/
+    │   └── UiContext.jsx   Light/dark and comfortable/compact
     ├── assets/
     │   ├── Header.jsx      Connection status and account actions
     │   ├── RoomSidebar.jsx Room list and room actions

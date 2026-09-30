@@ -31,7 +31,7 @@ Qt dashboards ship on `chat_client` and `chat_server` (default). Pass `--test` f
 - **Heartbeat** — server pings; client auto-replies `pong`; stale sockets are closed
 - **Client failover** — `--host`/`--port` and `--servers` merge with `SERVER_DIRECTORY`; endpoints the last directory reported as up are tried first; console and Qt show `reconnecting...` during a hop; a logged-in client sends `RECONNECT` so the new node takes presence and membership
 - **Gossip** — `HELLO`, `EVENT`, `DIGEST`, and `PULL` with periodic anti-entropy
-- **Qt GUI** — client chat dashboard and server Ports / Users / Rooms / Log panels (console via `--test`)
+- **Qt GUI** — client chat dashboard (light/dark and comfortable/compact) and server Ports / Users / Rooms / Log panels (console via `--test`)
 
 ## Architecture
 
@@ -139,7 +139,7 @@ Manual equivalent:
 | `scripts/build.ps1` | Configure (if needed) and build `chat_server` + `chat_client` |
 | `scripts/run_server.ps1` | Run one server in the current terminal |
 | `scripts/run_client.ps1` | Run one client in the current terminal |
-| `scripts/run.ps1` | Start one server in a new window (used by the cluster script) |
+| `scripts/run.ps1` | Start one server and one client in new windows (used by the cluster script) |
 | `scripts/run_cluster.ps1` | Build + 2-node cluster + 2 clients |
 | `scripts/run_test.ps1` | Build the Catch2 suite and run it with CTest |
 
@@ -147,7 +147,7 @@ Manual equivalent:
 
 `chat_server` also listens for browser WebSockets. `Server` owns `WebConnection` and runs that accept loop beside the TCP accept loop. Each binary frame is one framed `Packet`. Pass `--ws-port` (default `8080`). Qt clients keep using `--port`.
 
-The Vite app in `web/` is the same dashboard as the Qt client: sign in, log in, logout, profile, rooms (join, leave, create, invite, kick, delete), chat, and history. It answers heartbeat pings with `pong`. From `web/`, run `npm run dev` and open the printed local URL while a server is listening on `--ws-port`. Setup, scripts, and the frame layout are in [web/README.md](web/README.md).
+The Vite app in `web/` is the same dashboard as the Qt client: sign in, log in, logout, profile, rooms (join, leave, create, invite, kick, delete), chat, history, and the same light/dark and comfortable/compact controls. It answers heartbeat pings with `pong`. From `web/`, run `npm run dev` and open the printed local URL while a server is listening on `--ws-port`. Setup, scripts, and the frame layout are in [web/README.md](web/README.md).
 
 The browser is a chat client on that socket. Register, login, and profile update put the password in a `Packet`. The page does not keep a cookie or JWT, and it does not write the password to `localStorage` or `sessionStorage`. Argon2id stays on the node. For a deployed site, TLS ends at the reverse proxy and the chat ports stay private.
 
@@ -215,7 +215,7 @@ Headers live in `include/`; implementations live in `src/`. CMake adds `include/
 .\scripts\run_test.ps1 -R "Client login"
 ```
 
-See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**30** executables, **392** `TEST_CASE`s).
+See [tests/TESTS.md](tests/TESTS.md) for the case catalog (**31** executables, **403** `TEST_CASE`s).
 
 ## Status
 

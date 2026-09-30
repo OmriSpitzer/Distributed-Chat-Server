@@ -8,8 +8,6 @@ Backlog for the distributed chat system. Priority is approximate; items marked *
 
 # ------------------------------ VERSION 3.0 ------------------------------
 
-
-
 ## 1. Design Patterns - Implementation **(goal)**
 
 Ship the structural patterns below so client and server stay testable. Shared types (`IHealthCheck`, `HealthMonitor`) live in a common place; each process wires only the adapters it owns.
@@ -171,28 +169,14 @@ Strong unit surface (~340 cases); gaps are live dual-process, failover, GUI, and
 
 
 
-## 8. GUI additions **(goal)**
-
-Qt exists (client dashboard, server Ports/Users/Rooms/Log) but panels are timer-polled; Ports shows gossip seeds + live client endpoints from HELLO; no failover UX.
-
-### Server GUI
-
-- [ ] Event-driven refresh (subscribe to Logger / connection / room events) — keep timer as fallback.
-- [ ] Ports: live peer table (node id, socket, last HELLO/DIGEST time, up/down).
-- [ ] Live peer sockets on Ports panel (`GossipManager` snapshot getters — connected node ids, not only `config::PEERS`).
-- [ ] Users: show which **node** holds the session (from `online_users`), not only local `getSessions()`.
-- [ ] Gossip/event-log panel: recent rumor types, digest size, dropped ids near `MAX_EVENT_LOG`.
-- [ ] Health panel or Ports footer: `HealthMonitor` reports (DB / Heartbeat / Server).
-- [ ] Controls: drain listeners, “clear stale online”, copy node config.
-
-
+## 8. Client GUI additions **(goal)**
 
 ### Client GUI
 
 - [ ] Connection status strip: connected host:port, reconnecting, failed over to X (`HealthMonitor` / Client adapter).
 - [ ] Server picker / auto-failover progress (ties to §3); manual “switch server”.
 - [ ] Unread badge / scroll-to-bottom; optional toast on kick/invite/ROOM_LIST change.
-- [ ] Dark/light or denser chat layout without putting logic in widgets (still `Client` only).
+- [x] Dark/light or denser chat layout without putting logic in widgets (still `Client` only). The browser dashboard uses the same pair of controls; `App` holds the choice and the panels only paint it.
 - [ ] Accessibility: tab order, high-contrast errors, no updates off the GUI thread (keep queued signals).
 
 

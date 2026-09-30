@@ -1117,6 +1117,17 @@ std::string Client::loadMessageHistory(std::vector<ChatLine> &out) {
   return {};
 }
 
+// flip light / dark for the Qt dashboard
+void Client::toggleTheme() {
+  appearanceTheme = appearanceTheme == Theme::Dark ? Theme::Light : Theme::Dark;
+}
+
+// flip comfortable / compact for the Qt dashboard
+void Client::toggleDensity() {
+  appearanceDensity =
+      appearanceDensity == Density::Compact ? Density::Comfortable : Density::Compact;
+}
+
 // drop any queued chat pushes (e.g. when switching rooms)
 void Client::clearPendingChatMessages() {
   std::lock_guard<std::mutex> lock(chatMutex);

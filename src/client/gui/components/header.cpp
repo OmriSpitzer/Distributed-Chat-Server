@@ -19,11 +19,14 @@ Header::Header(const QString &title, QWidget *parent) : QWidget(parent) {
 
   headingLabel = new QLabel(title, this);
   headingSubLabel = new QLabel(this);
+  themeBtn = new Button("Light", nullptr, true, this, "GhostButton");
+  densityBtn = new Button("Comfortable", nullptr, true, this, "GhostButton");
   signUpBtn = new Button("Sign in", nullptr, true, this, "GhostButton");
   logInBtn = new Button("Log in", nullptr, true, this, "PrimaryButton");
   userChipBtn = new Button("Guest", nullptr, false, this, "UserChip");
   logoutBtn = new Button("Logout", nullptr, false, this, "GhostButton");
 
+  rootLayout = root;
   root->setContentsMargins(24, 16, 24, 16);
   root->setSpacing(16);
 
@@ -38,6 +41,8 @@ Header::Header(const QString &title, QWidget *parent) : QWidget(parent) {
 
   right->setContentsMargins(0, 0, 0, 0);
   right->setSpacing(8);
+  right->addWidget(themeBtn);
+  right->addWidget(densityBtn);
   right->addWidget(signUpBtn);
   right->addWidget(logInBtn);
   right->addWidget(userChipBtn);
@@ -45,6 +50,15 @@ Header::Header(const QString &title, QWidget *parent) : QWidget(parent) {
 
   root->addLayout(titles, 1);
   root->addLayout(right);
+}
+
+// assign header padding from the caller's spacing numbers
+void Header::applySpacing(int marginH, int marginV, int spacing) {
+  if (!rootLayout) {
+    return;
+  }
+  rootLayout->setContentsMargins(marginH, marginV, marginH, marginV);
+  rootLayout->setSpacing(spacing);
 }
 
 // set the logged in state and username

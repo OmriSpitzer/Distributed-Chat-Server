@@ -7,12 +7,14 @@
 
 #include "client/gui/pages/dashboard_page.h"
 #include "client/client.h"
+#include "client/gui/chat_style.h"
 #include "client/gui/components/button.h"
 #include "client/gui/components/header.h"
 #include "client/gui/components/pop_up_window.h"
 #include "utils/health/i_health_check.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
+#include <QApplication>
 #include <QComboBox>
 #include <QDateTime>
 #include <QFormLayout>
@@ -67,6 +69,16 @@ DashboardPage::DashboardPage(QWidget *parent, Client *client)
 
 // connect the header
 void DashboardPage::connectHeader() {
+  header()->themeButton()->setOnClick([this]() {
+    if (client()) {
+      client()->toggleTheme();
+    }
+  });
+  header()->densityButton()->setOnClick([this]() {
+    if (client()) {
+      client()->toggleDensity();
+    }
+  });
   header()->signUpButton()->setOnClick([this]() { openSignUpDialog(); });
   header()->logInButton()->setOnClick([this]() { openLogInDialog(); });
   header()->logoutButton()->setOnClick([this]() { logout(); });
@@ -74,20 +86,22 @@ void DashboardPage::connectHeader() {
 
 // build the workspace
 void DashboardPage::buildWorkspace() {
-  auto *split = new QWidget(this);    // create the split widget
-  auto *row = new QHBoxLayout(split); // create the row layout
+  auto *split = new QWidget(this); // create the split widget
+  splitRow = new QHBoxLayout(split); // create the row layout
+  auto *row = splitRow;
 
   // row layout properties
   row->setContentsMargins(0, 0, 0, 0);
   row->setSpacing(16);
 
   // side widget
-  auto *side = new QWidget(split);
+  sideCard = new QWidget(split);
+  auto *side = sideCard;
   side->setObjectName("SideCard"); // set the object name
   side->setFixedWidth(280);        // set the fixed width
 
   // side layout properties
-  auto *sideLayout = new QVBoxLayout(side);
+  sideLayout = new QVBoxLayout(side);
   sideLayout->setContentsMargins(16, 16, 16, 16);
   sideLayout->setSpacing(10);
 
@@ -132,7 +146,7 @@ void DashboardPage::buildWorkspace() {
   chat->setObjectName("ChatCard");
 
   // chat layout properties
-  auto *chatLayout = new QVBoxLayout(chat);
+  chatLayout = new QVBoxLayout(chat);
   chatLayout->setContentsMargins(16, 16, 16, 16);
   chatLayout->setSpacing(10);
 
@@ -198,6 +212,7 @@ void DashboardPage::refresh() {
   }
 
   flushIncomingChat();
+  applyAppearance();
 
   ClientState &state = client()->getState();
   const HealthStatus link = client()->health().check().status;
@@ -269,6 +284,49 @@ void DashboardPage::refresh() {
   // set the room title
   roomTitle->setText("#  " + currentRoom);
   leaveButton->setEnabled(currentRoom != "Lobby");
+}
+
+// paint the look Client already chose
+void DashboardPage::applyAppearance() {
+  const ChatLook::Theme theme = client()->theme();
+  const ChatLook::Density density = client()->density();
+  header()->themeButton()->setText(theme == ChatLook::Theme::Dark ? QStringLiteral("Dark")
+                                                                  : QStringLiteral("Light"));
+  header()->densityButton()->setText(density == ChatLook::Density::Compact
+                                          ? QStringLiteral("Compact")
+                                          : QStringLiteral("Comfortable"));
+  if (appearanceApplied && theme == appliedTheme && density == appliedDensity) {
+    return;
+  }
+
+  appliedTheme = theme;
+  appliedDensity = density;
+  appearanceApplied = true;
+
+  if (QApplication *app = qApp) {
+    app->setStyleSheet(chatStyleSheet(theme, density));
+  }
+
+  const ChatSpacing spacing = spacingFor(density);
+  getBodyLayout()->setContentsMargins(spacing.bodyMargin, spacing.bodyMargin, spacing.bodyMargin,
+                                      spacing.bodyMargin);
+  if (splitRow) {
+    splitRow->setSpacing(spacing.rowSpacing);
+  }
+  if (sideLayout) {
+    sideLayout->setContentsMargins(spacing.cardMargin, spacing.cardMargin, spacing.cardMargin,
+                                   spacing.cardMargin);
+    sideLayout->setSpacing(spacing.cardSpacing);
+  }
+  if (chatLayout) {
+    chatLayout->setContentsMargins(spacing.cardMargin, spacing.cardMargin, spacing.cardMargin,
+                                   spacing.cardMargin);
+    chatLayout->setSpacing(spacing.cardSpacing);
+  }
+  if (sideCard) {
+    sideCard->setFixedWidth(spacing.sideWidth);
+  }
+  header()->applySpacing(spacing.headerMarginH, spacing.headerMarginV, spacing.headerSpacing);
 }
 
 // append a message to the transcript
