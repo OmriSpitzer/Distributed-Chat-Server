@@ -19,6 +19,16 @@ Packet PacketBuilder::buildLogin(std::string_view username, std::string_view pas
   return Packet(username, "", Packet::PacketType::LOGIN, "", password);
 }
 
+// build a reconnect packet
+Packet PacketBuilder::buildReconnect(std::string_view username, std::string_view room) {
+  if (username.empty()) {
+    throw std::invalid_argument("Username is required");
+  }
+
+  const std::string roomName = room.empty() ? std::string("Lobby") : std::string(room);
+  return Packet(username, "", Packet::PacketType::RECONNECT, roomName, "");
+}
+
 // build a register packet
 Packet PacketBuilder::buildRegister(std::string_view username, std::string_view password,
                                     std::string_view email) {
@@ -93,6 +103,25 @@ Packet PacketBuilder::buildInviteToRoom(std::string_view username, std::string_v
   }
 
   return Packet(username, "", Packet::PacketType::ROOM_INVITE, room, inviteeUsername);
+}
+
+// build a kick packet
+Packet PacketBuilder::buildKickFromRoom(std::string_view username, std::string_view room,
+                                        std::string_view targetUsername) {
+  if (username.empty() || room.empty() || targetUsername.empty()) {
+    throw std::invalid_argument("Username, room and target are required");
+  }
+
+  return Packet(username, "", Packet::PacketType::ROOM_KICK, room, targetUsername);
+}
+
+// build a delete-room packet
+Packet PacketBuilder::buildDeleteRoom(std::string_view username, std::string_view room) {
+  if (username.empty() || room.empty()) {
+    throw std::invalid_argument("Username and room are required");
+  }
+
+  return Packet(username, "", Packet::PacketType::ROOM_DELETE, room, "");
 }
 
 // build a load message history packet

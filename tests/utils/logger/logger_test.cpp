@@ -3,18 +3,29 @@
  *
  * @brief Includes: empty state, log types, source/message edges, ordering,
  * getMessage bounds, clear, capacity eviction, stream output, singleton,
- * heartbeat unique ids, mixed types, size tracking.
+ * heartbeat unique ids, mixed types, size tracking, facade sink fan-out,
+ * nullptr / throwing / late / reentrant sinks, clear vs sinks, concurrency,
+ * ConsoleLogger stderr for ERROR.
  * @date 12-09-2026
  */
 
-#include "utils/models/logger.h"
-#include "utils/models/log_message.h"
+#include "utils/logger/consoleLogger.h"
+#include "utils/logger/i_logger.h"
+#include "utils/logger/logger.h"
+#include "utils/logger/log_message.h"
+#include <atomic>
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <cstddef>
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <thread>
 #include <unordered_set>
+#include <vector>
+
 
 /**
  * 1. empty state after clear
@@ -23,12 +34,21 @@
  * 4. messages keep insertion order
  * 5. getMessage bounds
  * 6. clear removes all messages
- * 7. capacity eviction at kMaxMessages
+ * 7. capacity eviction at MAX_MESSAGES
  * 8. stream output
  * 9. singleton identity
  * 10. heartbeat messages get unique ids
  * 11. mixed types
  * 12. size tracking
+ * 13. facade fan-out to ILogger sinks
+ * 14. ConsoleLogger is an ILogger sink
+ * 15. addLogger(nullptr) ignored
+ * 16. clear keeps registered sinks
+ * 17. late addLogger gets future messages only
+ * 18. throwing sink skips later sinks (ring still stores)
+ * 19. reentrant log from sink does not deadlock
+ * 20. concurrent log / size / getMessage
+ * 21. ConsoleLogger ERROR goes to stderr
  */
 
 // minimal globals
@@ -37,6 +57,7 @@ static const char *kSrc = "logger_test";
 
 static void resetLogger() {
   Logger::clear();
+  kLogger.clearLoggers();
   REQUIRE(Logger::size() == 0);
 }
 
@@ -191,7 +212,7 @@ TEST_CASE("Logger getMessage bounds", "[logger][getMessage]") {
   SECTION("empty logger rejects any index") {
     REQUIRE_THROWS_AS(kLogger.getMessage(0), std::out_of_range);
     REQUIRE_THROWS_AS(kLogger.getMessage(1), std::out_of_range);
-    REQUIRE_THROWS_AS(kLogger.getMessage(Logger::kMaxMessages), std::out_of_range);
+    REQUIRE_THROWS_AS(kLogger.getMessage(Logger::MAX_MESSAGES), std::out_of_range);
   }
 
   SECTION("valid indices after logging") {
@@ -236,41 +257,41 @@ TEST_CASE("Logger clear removes all messages", "[logger][clear]") {
   REQUIRE(kLogger.getMessage(0).getMessage() == "after clear");
 }
 
-// 7. capacity eviction at kMaxMessages
-TEST_CASE("Logger evicts oldest messages past kMaxMessages", "[logger][capacity]") {
+// 7. capacity eviction at MAX_MESSAGES
+TEST_CASE("Logger evicts oldest messages past MAX_MESSAGES", "[logger][capacity]") {
   resetLogger();
 
   SECTION("fills exactly to capacity") {
-    for (std::size_t i = 0; i < Logger::kMaxMessages; ++i) {
+    for (std::size_t i = 0; i < Logger::MAX_MESSAGES; ++i) {
       Logger::logInfo(kSrc, std::to_string(i));
     }
-    REQUIRE(Logger::size() == Logger::kMaxMessages);
+    REQUIRE(Logger::size() == Logger::MAX_MESSAGES);
     REQUIRE(kLogger.getMessage(0).getMessage() == "0");
-    REQUIRE(kLogger.getMessage(Logger::kMaxMessages - 1).getMessage() ==
-            std::to_string(Logger::kMaxMessages - 1));
+    REQUIRE(kLogger.getMessage(Logger::MAX_MESSAGES - 1).getMessage() ==
+            std::to_string(Logger::MAX_MESSAGES - 1));
   }
 
   SECTION("one past capacity drops the oldest") {
-    for (std::size_t i = 0; i < Logger::kMaxMessages; ++i) {
+    for (std::size_t i = 0; i < Logger::MAX_MESSAGES; ++i) {
       Logger::logInfo(kSrc, std::to_string(i));
     }
     Logger::logInfo(kSrc, "overflow");
 
-    REQUIRE(Logger::size() == Logger::kMaxMessages);
+    REQUIRE(Logger::size() == Logger::MAX_MESSAGES);
     REQUIRE(kLogger.getMessage(0).getMessage() == "1");
-    REQUIRE(kLogger.getMessage(Logger::kMaxMessages - 1).getMessage() == "overflow");
+    REQUIRE(kLogger.getMessage(Logger::MAX_MESSAGES - 1).getMessage() == "overflow");
   }
 
   SECTION("many past capacity keeps only the newest window") {
     const std::size_t extra = 50;
-    for (std::size_t i = 0; i < Logger::kMaxMessages + extra; ++i) {
+    for (std::size_t i = 0; i < Logger::MAX_MESSAGES + extra; ++i) {
       Logger::logWarning(kSrc, std::to_string(i));
     }
 
-    REQUIRE(Logger::size() == Logger::kMaxMessages);
+    REQUIRE(Logger::size() == Logger::MAX_MESSAGES);
     REQUIRE(kLogger.getMessage(0).getMessage() == std::to_string(extra));
-    REQUIRE(kLogger.getMessage(Logger::kMaxMessages - 1).getMessage() ==
-            std::to_string(Logger::kMaxMessages + extra - 1));
+    REQUIRE(kLogger.getMessage(Logger::MAX_MESSAGES - 1).getMessage() ==
+            std::to_string(Logger::MAX_MESSAGES + extra - 1));
   }
 }
 
@@ -398,3 +419,278 @@ TEST_CASE("Logger size tracks additions and clear", "[logger][size]") {
   }
   REQUIRE(Logger::size() == 10);
 }
+
+namespace {
+
+// recording sink for facade fan-out tests (process-lifetime; cleared via clearLoggers)
+class RecordingLogger : public ILogger {
+public:
+  mutable std::atomic<int> infoCount{0};
+  mutable std::atomic<int> warningCount{0};
+  mutable std::atomic<int> errorCount{0};
+  mutable std::atomic<int> heartbeatCount{0};
+  mutable std::string lastSource;
+  mutable std::string lastMessage;
+
+  void log(const LogMessage &message) override {
+    switch (message.getType()) {
+    case LogMessage::Type::INFO:
+      ++infoCount;
+      break;
+    case LogMessage::Type::WARNING:
+      ++warningCount;
+      break;
+    case LogMessage::Type::ERROR:
+      ++errorCount;
+      break;
+    case LogMessage::Type::HEARTBEAT:
+      ++heartbeatCount;
+      break;
+    }
+    lastSource = message.getSource();
+    lastMessage = message.getMessage();
+  }
+
+  void resetCounts() const {
+    infoCount = 0;
+    warningCount = 0;
+    errorCount = 0;
+    heartbeatCount = 0;
+    lastSource.clear();
+    lastMessage.clear();
+  }
+};
+
+static RecordingLogger kRecording;
+static ConsoleLogger kConsole;
+
+} // namespace
+
+// 13. facade fan-out to ILogger sinks
+TEST_CASE("Logger facade forwards to registered sinks", "[logger][facade][sink]") {
+  resetLogger();
+  kRecording.resetCounts();
+  kLogger.addLogger(&kRecording);
+
+  Logger::logInfo(kSrc, "via facade");
+  Logger::logWarning(kSrc, "warn");
+  Logger::logError(kSrc, "err");
+  Logger::logHeartbeat(kSrc, "beat");
+
+  REQUIRE(Logger::size() == 4);
+  REQUIRE(kRecording.infoCount == 1);
+  REQUIRE(kRecording.warningCount == 1);
+  REQUIRE(kRecording.errorCount == 1);
+  REQUIRE(kRecording.heartbeatCount == 1);
+  REQUIRE(kRecording.lastSource == kSrc);
+  REQUIRE(kRecording.lastMessage == "beat");
+
+  SECTION("duplicate addLogger is ignored") {
+    kRecording.resetCounts();
+    kLogger.addLogger(&kRecording);
+    Logger::logInfo(kSrc, "once");
+    REQUIRE(kRecording.infoCount == 1);
+  }
+
+  SECTION("clearLoggers stops fan-out") {
+    kLogger.clearLoggers();
+    kRecording.resetCounts();
+    Logger::logInfo(kSrc, "no sink");
+    REQUIRE(kRecording.infoCount == 0);
+    REQUIRE(Logger::size() >= 1);
+  }
+}
+
+// 14. ConsoleLogger is an ILogger sink
+TEST_CASE("ConsoleLogger registers as facade sink", "[logger][facade][console]") {
+  resetLogger();
+  kLogger.addLogger(&kConsole);
+  kLogger.addLogger(&kRecording);
+  kRecording.resetCounts();
+
+  Logger::logInfo(kSrc, "console path");
+  REQUIRE(Logger::size() == 1);
+  REQUIRE(kLogger.getMessage(0).getMessage() == "console path");
+  REQUIRE(kRecording.infoCount == 1);
+}
+
+namespace {
+
+class ThrowingLogger : public ILogger {
+public:
+  mutable std::atomic<int> callCount{0};
+
+  void log(const LogMessage &) override {
+    ++callCount;
+    throw std::runtime_error("sink failed");
+  }
+};
+
+class ReentrantLogger : public ILogger {
+public:
+  mutable std::atomic<int> callCount{0};
+
+  void log(const LogMessage &message) override {
+    const int n = ++callCount;
+    if (n == 1 && message.getMessage() == "outer") {
+      Logger::logInfo(kSrc, "inner");
+    }
+  }
+};
+
+static ThrowingLogger kThrowing;
+static ReentrantLogger kReentrant;
+
+} // namespace
+
+// 15. addLogger(nullptr) ignored
+TEST_CASE("Logger addLogger ignores nullptr", "[logger][facade][nullptr]") {
+  resetLogger();
+  kRecording.resetCounts();
+
+  kLogger.addLogger(nullptr);
+  kLogger.addLogger(&kRecording);
+  kLogger.addLogger(nullptr);
+
+  Logger::logInfo(kSrc, "after null");
+  REQUIRE(Logger::size() == 1);
+  REQUIRE(kRecording.infoCount == 1);
+  REQUIRE(kRecording.lastMessage == "after null");
+}
+
+// 16. clear keeps registered sinks
+TEST_CASE("Logger clear does not unregister sinks", "[logger][clear][sink]") {
+  resetLogger();
+  kLogger.addLogger(&kRecording);
+  kRecording.resetCounts();
+
+  Logger::logInfo(kSrc, "before clear");
+  REQUIRE(kRecording.infoCount == 1);
+
+  Logger::clear();
+  REQUIRE(Logger::size() == 0);
+
+  kRecording.resetCounts();
+  Logger::logInfo(kSrc, "after clear");
+  REQUIRE(Logger::size() == 1);
+  REQUIRE(kRecording.infoCount == 1);
+  REQUIRE(kRecording.lastMessage == "after clear");
+}
+
+// 17. late addLogger gets future messages only
+TEST_CASE("Logger late addLogger receives future messages only", "[logger][facade][late]") {
+  resetLogger();
+  kRecording.resetCounts();
+
+  Logger::logInfo(kSrc, "before sink");
+  REQUIRE(Logger::size() == 1);
+  REQUIRE(kRecording.infoCount == 0);
+
+  kLogger.addLogger(&kRecording);
+  Logger::logInfo(kSrc, "after sink");
+
+  REQUIRE(Logger::size() == 2);
+  REQUIRE(kLogger.getMessage(0).getMessage() == "before sink");
+  REQUIRE(kLogger.getMessage(1).getMessage() == "after sink");
+  REQUIRE(kRecording.infoCount == 1);
+  REQUIRE(kRecording.lastMessage == "after sink");
+}
+
+// 18. throwing sink skips later sinks (ring still stores)
+TEST_CASE("Logger throwing sink skips later sinks", "[logger][facade][throw]") {
+  resetLogger();
+  kThrowing.callCount = 0;
+  kRecording.resetCounts();
+
+  kLogger.addLogger(&kThrowing);
+  kLogger.addLogger(&kRecording);
+
+  REQUIRE_THROWS_AS(Logger::logInfo(kSrc, "boom"), std::runtime_error);
+
+  REQUIRE(Logger::size() == 1);
+  REQUIRE(kLogger.getMessage(0).getMessage() == "boom");
+  REQUIRE(kThrowing.callCount == 1);
+  REQUIRE(kRecording.infoCount == 0);
+}
+
+// 19. reentrant log from sink does not deadlock
+TEST_CASE("Logger reentrant sink log does not deadlock", "[logger][facade][reentrant]") {
+  resetLogger();
+  kReentrant.callCount = 0;
+  kLogger.addLogger(&kReentrant);
+
+  Logger::logInfo(kSrc, "outer");
+
+  REQUIRE(Logger::size() == 2);
+  REQUIRE(kLogger.getMessage(0).getMessage() == "outer");
+  REQUIRE(kLogger.getMessage(1).getMessage() == "inner");
+  REQUIRE(kReentrant.callCount == 2);
+}
+
+// 20. concurrent log / size / getMessage
+TEST_CASE("Logger concurrent log size and getMessage", "[logger][concurrency]") {
+  resetLogger();
+
+  constexpr int kThreads = 8;
+  constexpr int kPerThread = 100;
+  const std::size_t expected =
+      static_cast<std::size_t>(kThreads) * static_cast<std::size_t>(kPerThread);
+
+  std::vector<std::thread> writers;
+  writers.reserve(kThreads);
+  for (int t = 0; t < kThreads; ++t) {
+    writers.emplace_back([t] {
+      for (int i = 0; i < kPerThread; ++i) {
+        Logger::logInfo(kSrc, "t" + std::to_string(t) + "-" + std::to_string(i));
+      }
+    });
+  }
+
+  std::atomic<bool> readersStop{false};
+  std::thread reader([&] {
+    while (!readersStop.load()) {
+      const std::size_t n = Logger::size();
+      if (n == 0) {
+        continue;
+      }
+      try {
+        (void)kLogger.getMessage(n - 1);
+      } catch (const std::out_of_range &) {
+      }
+    }
+  });
+
+  for (std::thread &thread : writers) {
+    thread.join();
+  }
+  readersStop = true;
+  reader.join();
+
+  REQUIRE(Logger::size() == (std::min)(expected, Logger::MAX_MESSAGES));
+  REQUIRE_NOTHROW(kLogger.getMessage(0));
+  REQUIRE_NOTHROW(kLogger.getMessage(Logger::size() - 1));
+}
+
+// 21. ConsoleLogger ERROR goes to stderr
+TEST_CASE("ConsoleLogger ERROR writes to stderr", "[logger][console][stderr]") {
+  ConsoleLogger console;
+  const LogMessage errorMsg(kSrc, "err-line", LogMessage::Type::ERROR);
+  const LogMessage infoMsg(kSrc, "info-line", LogMessage::Type::INFO);
+
+  std::ostringstream errCapture;
+  std::ostringstream outCapture;
+  std::streambuf *oldErr = std::cerr.rdbuf(errCapture.rdbuf());
+  std::streambuf *oldOut = std::cout.rdbuf(outCapture.rdbuf());
+
+  console.log(errorMsg);
+  console.log(infoMsg);
+
+  std::cerr.rdbuf(oldErr);
+  std::cout.rdbuf(oldOut);
+
+  REQUIRE(errCapture.str().find("err-line") != std::string::npos);
+  REQUIRE(errCapture.str().find("info-line") == std::string::npos);
+  REQUIRE(outCapture.str().find("info-line") != std::string::npos);
+  REQUIRE(outCapture.str().find("err-line") == std::string::npos);
+}
+

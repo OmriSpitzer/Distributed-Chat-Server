@@ -10,8 +10,8 @@
 #include "config/config.h"
 #include "server/database_manager.h"
 #include "server/server.h"
-#include "utils/models/log_message.h"
-#include "utils/models/logger.h"
+#include "utils/logger/log_message.h"
+#include "utils/logger/logger.h"
 #include "utils/socket_io.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
@@ -142,8 +142,7 @@ bool hasLogContaining(LogMessage::Type type, std::string_view needle) {
 }
 
 std::string startedMessage(std::uint16_t port) {
-  return "Started on port " + std::to_string(port) + " with " +
-         std::to_string(config::THREAD_COUNT) + " worker threads";
+  return "Started on port " + std::to_string(port);
 }
 
 std::string captureDashboard(Server &server) {
@@ -157,6 +156,7 @@ std::string captureDashboard(Server &server) {
 void applyConfig(std::uint16_t port, std::uint16_t peerPort, const std::string &nodeId) {
   config::PORT = port;
   config::PEER_PORT = peerPort;
+  config::WS_PORT = 0;
   config::NODE_ID = nodeId;
   config::PEERS.clear();
 }
@@ -374,7 +374,8 @@ TEST_CASE("Server dashboard while stopped", "[server][dashboard]") {
   REQUIRE(text.find("Port: " + std::to_string(fixture.port)) != std::string::npos);
   REQUIRE(text.find("Peer port: " + std::to_string(fixture.peerPort)) != std::string::npos);
   REQUIRE(text.find("Database path: " + config::DB_PATH) != std::string::npos);
-  REQUIRE(text.find("Peers: (none)") != std::string::npos);
+  REQUIRE(text.find("Gossip seeds: (none)") != std::string::npos);
+  REQUIRE(text.find("Client endpoints: (none)") != std::string::npos);
   REQUIRE(text.find("Listening: no") != std::string::npos);
 }
 
@@ -405,8 +406,8 @@ TEST_CASE("Server dashboard lists peers", "[server][dashboard]") {
   config::PEERS = {"127.0.0.1:1", "127.0.0.1:2"};
   const std::string text = captureDashboard(fixture.server);
 
-  REQUIRE(text.find("Peers: 127.0.0.1:1, 127.0.0.1:2") != std::string::npos);
-  REQUIRE(text.find("(none)") == std::string::npos);
+  REQUIRE(text.find("Gossip seeds: 127.0.0.1:1, 127.0.0.1:2") != std::string::npos);
+  REQUIRE(text.find("Client endpoints: (none)") != std::string::npos);
 }
 
 // 11. start fails when the client port is exclusive

@@ -33,6 +33,12 @@ public:
   // showing the invite-to-room screen
   static std::optional<Packet> showInviteToRoom(const ClientState &state);
 
+  // showing the kick-from-room screen (admin / creator)
+  static std::optional<Packet> showKickFromRoom(const ClientState &state);
+
+  // showing the delete-room screen (admin)
+  static std::optional<Packet> showDeleteRoom(const ClientState &state);
+
   // showing the create message screen
   static std::optional<Packet> showCreateMessage(const User &user);
 

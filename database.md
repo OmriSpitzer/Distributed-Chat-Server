@@ -4,7 +4,7 @@ Each `chat_server` node owns a local SQLite file (default `data/node-1.db`). The
 
 Schema source of truth: `src/database/init.sql`. Queries live in `src/database/queries/`.
 
-**Related docs:** [README.md](README.md), [architecture.md](architecture.md) (who calls `DatabaseManager`), [tests/TESTS.md](tests/TESTS.md), [STEPS.md](STEPS.md).
+**Related docs:** [README.md](README.md), [architecture.md](architecture.md) (who calls `DatabaseManager`), [tests/TESTS.md](tests/TESTS.md), [FUTURE_WORK.md](FUTURE_WORK.md).
 
 ---
 
@@ -126,7 +126,7 @@ Identity and credentials. Domain `User` maps `username`, `email`, `user_type` �
 | `password` | `TEXT` | `NOT NULL` — Argon2id |
 | `user_type` | `TEXT` | `NOT NULL CHECK (ADMIN, USER, GUEST)` |
 
-New accounts are always `USER`. `ADMIN` exists in seed data; privilege checks are not enforced yet.
+New accounts are always `USER`. `ADMIN` exists in seed data. Admins may invite or kick in any room, create or delete rooms except Lobby/General, and join PRIVATE rooms without `allow_list`.
 
 ```mermaid
 flowchart LR
@@ -152,7 +152,7 @@ Chat spaces. `id` is assigned by SQLite `AUTOINCREMENT` (`sqlite3_last_insert_ro
 
 Ids **1** (Lobby) and **2** (General) are seed rooms. `deleteRoom` refuses `id < 3`.
 
-`PRIVATE` rooms require an `allow_list` hit (authenticated + listed). Guests cannot join private rooms. Creators are seeded on `ROOM_CREATE`; others via `ROOM_INVITE` / gossip `ROOM_ACL_ADD`.
+`PRIVATE` rooms require an `allow_list` hit (authenticated + listed), except **ADMIN** may join without being listed. Guests cannot join private rooms. Creators are seeded on `ROOM_CREATE`; others via `ROOM_INVITE` / gossip `ROOM_ACL_ADD`. Kick removes the allow-list row (`ROOM_KICK`).
 
 ### `messages`
 
@@ -191,7 +191,7 @@ Cluster-wide “who is logged in.” One row per username; `node_id` is the node
 | `username` | `TEXT` | `PRIMARY KEY` |
 | `node_id` | `TEXT` | `NOT NULL` |
 
-No foreign key: a crash can leave a stale row. Clearing presence on boot is still an open item (see [STEPS.md](STEPS.md)).
+No foreign key: a crash can leave a stale row on peers. `Server::start` deletes `online_users` rows whose `node_id` is this node. `RECONNECT` then sets `online_users.node_id` and every `membership.node_id` for that user to the node that accepted the new socket, and gossips that move.
 
 ### `allow_list`
 
@@ -290,7 +290,9 @@ flowchart LR
   subgraph Presence
     set_online
     clear_online
+    clear_node_presence
     is_user_online
+    get_online_node
   end
 
   subgraph Rooms
@@ -306,6 +308,8 @@ flowchart LR
     set_membership
     clear_membership
     clear_all_membership
+    move_membership
+    membership_node
   end
 
   subgraph ACL
@@ -328,7 +332,11 @@ flowchart LR
 | `clearMembership` | `clear_membership.sql` | drop one room |
 | `clearAllMembership` | `clear_all_membership.sql` | drop all rooms for user |
 | `isUserOnline` | `is_user_online.sql` | presence probe |
+| `onlineNode` | `get_online_node.sql` | `node_id` for a username |
 | `setOnline` / `clearOnline` | matching files | upsert / delete presence |
+| `clearNodePresence` | `clear_node_presence.sql` | delete presence rows for one `node_id` |
+| `moveMembership` | `move_membership.sql` | set `membership.node_id` for every room of a user |
+| `membershipNode` | `membership_node.sql` | `node_id` for one user in one room |
 | `createRoom` | `create_room.sql` | insert; id from `last_insert_rowid` |
 | `getRoom` / `listRooms` | matching files | by id / all rows |
 | `deleteRoom` | `delete_room.sql` | allow_list → membership → messages → room |
@@ -359,12 +367,13 @@ sequenceDiagram
   participant S as SQLite
 
   alt REGISTER
-    PP->>DB: createUser(username, password, email)
-    DB->>A: hashPassword
-    A-->>DB: Argon2id
+    PP->>A: hashPassword(password)
+    A-->>PP: Argon2id
+    PP->>DB: createUser(username, hash, email)
     DB->>S: INSERT users (user_type = USER)
     S-->>DB: row or UNIQUE fail
     DB-->>PP: User or ConstraintError
+    Note over PP: rumor USER_CREATED with hash (not plaintext)
   else LOGIN
     PP->>DB: loginUser(username, password)
     DB->>S: SELECT … password WHERE username
@@ -407,19 +416,20 @@ sequenceDiagram
 
 Logout clears `online_users` and all `membership` rows for that username, then rumors `LOGOUT`.
 
+`RECONNECT` looks the user up by username. When an `online_users` row exists and its `node_id` is not a live peer, it writes that `node_id` and every `membership.node_id` for the user to this node and rumors `RECONNECT`. Peers apply that rumor as the user's current node. A `LOGIN` rumor does not move a user who is already recorded on a different `node_id`.
+
 ---
 
 ## Seed data
 
 Applied with `INSERT OR IGNORE` so a second boot does not clash.
 
-| `users` | email | type |
-|---------|-------|------|
-| `omri` | `omri@gmail.com` | `USER` |
-| `spitzer` | `spitzer@gmail.com` | `USER` |
-| `admin` | `admin@gmail.com` | `ADMIN` |
+| `users` | email | type | password |
+|---------|-------|------|----------|
+| `admin` | `admin@example.com` | `ADMIN` | Argon2id of `admin` |
+| `user` | `user@example.com` | `USER` | Argon2id of `user` |
 
-Seed password strings are **placeholders**, not real Argon2 hashes.
+Seed passwords are real Argon2id hashes (same parameters as `Authentication::hashPassword`).
 
 | `rooms` | name | type | privacy |
 |---------|------|------|---------|
@@ -443,13 +453,13 @@ flowchart TB
     MID["Message ids unique per node boot"]
     SEED["Cannot delete rooms id 1–2"]
     IGN["INSERT OR IGNORE for gossip idempotency"]
+    GossipHash["USER_CREATED gossip carries Argon2id hash only"]
   end
 
   subgraph Gaps["Still open"]
     OFK["online_users has no FK to users"]
     Casc["No ON DELETE CASCADE — delete_room.sql orders DELETEs"]
-    Boot["Stale online_users after crash (no clear-on-boot)"]
-    Hash["USER_CREATED gossip may carry password material"]
+    Boot["Peers can keep a presence row after this node crashes"]
   end
 ```
 

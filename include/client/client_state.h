@@ -5,6 +5,7 @@
  */
 
 #pragma once
+#include "utils/models/client_endpoint.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
 #include <mutex>
@@ -23,6 +24,11 @@ public:
     return user.has_value() && user->getUserType() != User::UserType::GUEST;
   }
 
+  // logged-in ADMIN
+  bool isAdmin() const {
+    return user.has_value() && user->getUserType() == User::UserType::ADMIN;
+  }
+
   // replace the cached room directory (thread-safe)
   void setRooms(std::vector<Room> next) {
     std::lock_guard<std::mutex> lock(roomsMutex);
@@ -35,17 +41,37 @@ public:
     return rooms;
   }
 
+  // replace cached server chat endpoints (failover hints)
+  void setServerEndpoints(std::vector<ClientEndpoint> next) {
+    std::lock_guard<std::mutex> lock(endpointsMutex);
+    serverEndpoints = std::move(next);
+  }
+
+  // snapshot of cached server chat endpoints
+  std::vector<ClientEndpoint> getServerEndpoints() const {
+    std::lock_guard<std::mutex> lock(endpointsMutex);
+    return serverEndpoints;
+  }
+
   // clear the data
   void clear() {
     user.reset();
     currentRoom.reset();
-    std::lock_guard<std::mutex> lock(roomsMutex);
-    rooms.clear();
+    {
+      std::lock_guard<std::mutex> lock(roomsMutex);
+      rooms.clear();
+    }
+    {
+      std::lock_guard<std::mutex> lock(endpointsMutex);
+      serverEndpoints.clear();
+    }
   }
 
   std::optional<User> user;        // user data
   std::optional<Room> currentRoom; // current room data
 private:
-  std::vector<Room> rooms;       // cached room directory
-  mutable std::mutex roomsMutex; // guards rooms
+  std::vector<Room> rooms;                     // cached room directory
+  mutable std::mutex roomsMutex;               // guards rooms
+  std::vector<ClientEndpoint> serverEndpoints; // live chat host:port hints
+  mutable std::mutex endpointsMutex;           // guards serverEndpoints
 };

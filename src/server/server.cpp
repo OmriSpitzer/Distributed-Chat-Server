@@ -1,16 +1,27 @@
 /**
- * Server class
+ * Server class implementation file
  *
- * @brief Wires together the server components and owns the listen lifecycle.
+ * @brief Wires together the server components and owns the listen lifecycle
+ *
+ * Server class with fields: threadPool, connectionManager, gossipManager, heartbeat, acceptThread,
+ * running
+ * Used for managing the server lifecycle
  * @date 11-09-2026
  */
 
 #include "server/server.h"
 #include "config/config.h"
+#include "server/database_manager.h"
 #include "server/gossip_manager.h"
 #include "server/heartbeat.h"
-#include "utils/models/logger.h"
+#include "utils/health/db_health_adapter.h"
+#include "utils/health/heartbeat_health_adapter.h"
+#include "utils/health/server_health_adapter.h"
+#include "utils/logger/consoleLogger.h"
+#include "utils/logger/logger.h"
 #include <iostream>
+#include <memory>
+#include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -20,15 +31,27 @@
 // get connections
 ConnectionManager &Server::connections() { return connectionManager; }
 
+// get gossip manager
+GossipManager &Server::gossip() { return gossipManager; }
+
+// get health monitor
+HealthMonitor &Server::health() { return healthMonitor; }
+
 // start the server
 void Server::start() {
+  static ConsoleLogger consoleLogger;
+  Logger::getInstance().addLogger(&consoleLogger);
+
   // check if the server is already running
   if (running) {
     Logger::logInfo("Server", "Server is already running");
     return;
   }
 
-  Logger::logInfo("Server", "Starting server");
+  Logger::logInfo("Server", "Starting server"); // log the server starting
+
+  // this process no longer holds the sockets from the previous boot
+  DatabaseManager::getInstance().clearNodePresence(config::NODE_ID);
 
   // initialize winsock 2.2
   WSADATA data;
@@ -44,6 +67,14 @@ void Server::start() {
     return;
   }
 
+  if (!webConnection.startListening(config::WS_PORT)) {
+    Logger::logError("Server", "Failed to start WebSocket listening on port " +
+                                   std::to_string(config::WS_PORT));
+    connectionManager.stopListening();
+    WSACleanup();
+    return;
+  }
+
   running = true; // set the server to running
 
   // start heartbeat thread
@@ -53,12 +84,18 @@ void Server::start() {
   connectionManager.setGossip(&gossipManager);
   gossipManager.start();
 
-  // start the accept loop
-  acceptThread = std::thread([this] { connectionManager.acceptLoop(); }); // start the accept loop
+  // start the accept loops
+  acceptThread = std::thread([this] { connectionManager.acceptLoop(); });
+  webAcceptThread = std::thread([this] { webConnection.acceptLoop(); });
 
-  Logger::logInfo("Server", "Started on port " + std::to_string(config::PORT) + " with " +
-                                std::to_string(config::THREAD_COUNT) +
-                                " worker threads"); // log the server started
+  // add the health checks to the health monitor
+  healthMonitor.add(std::make_unique<ServerHealthAdapter>(*this));        // server health
+  healthMonitor.add(std::make_unique<HeartbeatHealthAdapter>(heartbeat)); // heartbeat health
+  healthMonitor.add(
+      std::make_unique<DbHealthAdapter>(DatabaseManager::getInstance())); // database health
+
+  Logger::logInfo("Server",
+                  "Started on port " + std::to_string(config::PORT)); // log the server started
 }
 
 // stop the server
@@ -72,6 +109,12 @@ void Server::stop() {
   // set the server to not running
   running = false;
 
+  // stop the WebSocket accept thread before closing client sockets
+  webConnection.stopListening();
+  if (webAcceptThread.joinable()) {
+    webAcceptThread.join();
+  }
+
   // stop all threads
   heartbeat.stop();
   gossipManager.stop();
@@ -80,7 +123,9 @@ void Server::stop() {
   if (acceptThread.joinable()) {
     acceptThread.join();
   }
-  threadPool.shutdown();
+  // acceptLoop can spawn one more handler while it is unwinding
+  connectionManager.joinClientThreads();
+  webConnection.joinClientThreads();
 
   // clean up winsock
   WSACleanup();
@@ -93,10 +138,10 @@ void Server::dashboard() {
   std::cout << "Server dashboard" << std::endl;
   std::cout << "--------------------------------" << std::endl;
   std::cout << "Node id: " << config::NODE_ID << std::endl;
-  std::cout << "Port: " << config::PORT << " Peer port: " << config::PEER_PORT
-            << " Thread count: " << config::THREAD_COUNT << std::endl;
+  std::cout << "Port: " << config::PORT << " Web port: " << webConnection.port()
+            << " Peer port: " << config::PEER_PORT << std::endl;
   std::cout << "Database path: " << config::DB_PATH << std::endl;
-  std::cout << "Peers: ";
+  std::cout << "Gossip seeds: ";
   if (config::PEERS.empty()) {
     std::cout << "(none)";
   } else {
@@ -108,7 +153,50 @@ void Server::dashboard() {
     }
   }
   std::cout << std::endl;
+  std::cout << "Client endpoints: ";
+  {
+    const auto live = gossipManager.getClientPeers();
+    if (live.empty()) {
+      std::cout << "(none)";
+    } else {
+      bool first = true;
+      for (const auto &entry : live) {
+        if (!first) {
+          std::cout << ", ";
+        }
+        first = false;
+        std::cout << entry.second.nodeId << "=" << entry.second.host << ":" << entry.second.port;
+      }
+    }
+  }
+  std::cout << std::endl;
   std::cout << "Listening: " << (connectionManager.isListening() ? "yes" : "no") << std::endl;
+
+  std::cout << "Health:" << std::endl;
+  HealthStatus overallStatus = HealthStatus::Up;
+  std::string overallDetail;
+  for (const auto &report : healthMonitor.checkAll()) {
+    std::cout << "  " << report.name << ": " << report.statusToString();
+    if (!report.detail.empty()) {
+      std::cout << " (" << report.detail << ")";
+    }
+    std::cout << std::endl;
+    if (report.status == HealthStatus::Down) {
+      overallStatus = HealthStatus::Down;
+      if (!overallDetail.empty()) {
+        overallDetail += "; ";
+      }
+      overallDetail += report.name + ":Down";
+    } else if (report.status == HealthStatus::Degraded && overallStatus != HealthStatus::Down) {
+      overallStatus = HealthStatus::Degraded;
+    }
+  }
+  std::cout << "Overall: " << healthStatusToString(overallStatus);
+  if (!overallDetail.empty()) {
+    std::cout << " (" << overallDetail << ")";
+  }
+  std::cout << std::endl;
+
   std::cout << "--------------------------------\n" << std::endl;
 }
 

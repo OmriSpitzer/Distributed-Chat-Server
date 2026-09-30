@@ -1,34 +1,31 @@
 /**
- * LogMessage class
+ * LogMessage class implementation file
  *
- * @brief LogMessage class to store a message and its metadata.
+ * @brief LogMessage class to store a message and its metadata
  * @date 12-09-2026
+ *
+ * LogMessage class with fields: id, source, message, type, timestamp
+ * Used for storing and displaying log messages in the server
  */
 
-#include "utils/models/log_message.h"
+#include "utils/logger/log_message.h"
 #include <atomic>
 #include <ctime>
 #include <ostream>
 #include <string>
 #include <unordered_map>
 
+// next message id
 namespace {
 std::atomic<uint64_t> next_message_id{0};
-}
+} // namespace
 
 // type to string map
-static const std::unordered_map<LogMessage::Type, std::string> type_to_string = {
+static const std::unordered_map<LogMessage::Type, std::string> logTypeToStringMap = {
     {LogMessage::Type::INFO, "INFO"},
     {LogMessage::Type::WARNING, "WARNING"},
     {LogMessage::Type::ERROR, "ERROR"},
     {LogMessage::Type::HEARTBEAT, "HEARTBEAT"}};
-
-// string to type map
-static const std::unordered_map<std::string, LogMessage::Type> string_to_type = {
-    {"INFO", LogMessage::Type::INFO},
-    {"WARNING", LogMessage::Type::WARNING},
-    {"ERROR", LogMessage::Type::ERROR},
-    {"HEARTBEAT", LogMessage::Type::HEARTBEAT}};
 
 // constructor
 LogMessage::LogMessage(std::string_view source, std::string_view message, LogMessage::Type type)
@@ -56,18 +53,18 @@ std::time_t LogMessage::getTimestamp() const { return timestamp; }
 
 // type to string
 std::string LogMessage::typeToString(LogMessage::Type type) {
-  auto it = type_to_string.find(type);
-  if (it != type_to_string.end()) {
+  auto it = logTypeToStringMap.find(type);
+  if (it != logTypeToStringMap.end()) {
     return it->second;
   }
-  return type_to_string.at(LogMessage::Type::INFO);
+  return logTypeToStringMap.at(LogMessage::Type::INFO);
 }
 
 // string to type
 LogMessage::Type LogMessage::stringToType(std::string_view type) {
-  auto it = string_to_type.find(std::string(type));
-  if (it != string_to_type.end()) {
-    return it->second;
+  for (const auto &[key, value] : logTypeToStringMap) {
+    if (value == type)
+      return key;
   }
   return LogMessage::Type::INFO;
 }

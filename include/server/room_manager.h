@@ -1,5 +1,5 @@
 /**
- * RoomManager header file class
+ * RoomManager class header file (Singleton)
  *
  * @date 13-09-2026
  */

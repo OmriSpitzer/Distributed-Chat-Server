@@ -1,15 +1,17 @@
 /**
- * Logger class
+ * Logger class implementation file (Facade & Singleton Design Pattern)
  *
- * @brief Logger class to store a list of messages.
- * @date 12-09-2026
+ * @brief Facade singleton: stores messages in a ring and forwards to ILogger sinks.
+ *
+ * Design patterns: Facade, Singleton
+ * Used for storing and displaying log messages; optional sinks via addLogger.
+ * @date 24-09-2026
  */
-
-#include "utils/models/logger.h"
-#include "utils/models/log_message.h"
-#include <iostream>
+#include "utils/logger/logger.h"
+#include "utils/logger/log_message.h"
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 // log an info message
 void Logger::logInfo(std::string_view source, std::string_view message) {
@@ -66,21 +68,44 @@ std::ostream &operator<<(std::ostream &out, const Logger &logger) {
   return out;
 }
 
-// add a message to the logger
+// register a child sink
+void Logger::addLogger(ILogger *logger) {
+  if (logger == nullptr) {
+    return;
+  }
+
+  std::lock_guard lock(messages_mutex);
+  for (const ILogger *existing : loggers) {
+    if (existing == logger) {
+      return;
+    }
+  }
+  loggers.push_back(logger);
+}
+
+// clear registered sinks
+void Logger::clearLoggers() {
+  std::lock_guard lock(messages_mutex);
+  loggers.clear();
+}
+
+// add a message
 void Logger::addMessage(std::string_view source, std::string_view message, LogMessage::Type type) {
   LogMessage logMessage(source, message, type);
 
+  // create the message and forward it to the sinks
+  std::vector<ILogger *> sinks;
   {
     std::lock_guard lock(messages_mutex);
     messages.push_back(logMessage);
-    while (messages.size() > kMaxMessages) {
+    while (messages.size() > MAX_MESSAGES) {
       messages.pop_front();
     }
+    sinks = loggers;
   }
 
-  if (type == LogMessage::Type::ERROR) {
-    std::cerr << logMessage << "\n";
-  } else {
-    std::cout << logMessage << "\n";
+  // forward the message to the sinks
+  for (ILogger *sink : sinks) {
+    sink->log(logMessage);
   }
 }

@@ -10,16 +10,22 @@
 #include "client/gui/pages/main_page.h"
 #include "client/packet_builder.h"
 #include "client/packet_handler.h"
+#include "config/config.h"
 #include "utils/RESPONSE_CODES.h"
-#include "utils/models/logger.h"
+#include "utils/health/client_health_adapter.h"
+#include "utils/logger/consoleLogger.h"
+#include "utils/logger/logger.h"
+#include "utils/models/client_endpoint.h"
 #include "utils/models/packet.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <ctime>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -39,6 +45,74 @@ std::optional<Packet> Client::waitFor(Packet::PacketType expected) {
       return response;
     }
     // ignore unexpected queued types (heartbeats/pushes are handled in Network)
+  }
+}
+
+// wait for a packet, or give up when the timeout elapses
+std::optional<Packet> Client::waitFor(Packet::PacketType expected,
+                                      std::chrono::milliseconds timeout) {
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (std::chrono::steady_clock::now() < deadline) {
+    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+        deadline - std::chrono::steady_clock::now());
+    auto response = network.receivePacketFor(remaining);
+    if (!response) {
+      return std::nullopt;
+    }
+    if (response->type == expected) {
+      return response;
+    }
+  }
+  return std::nullopt;
+}
+
+// send RECONNECT for the user still held in memory
+void Client::resumeSession() {
+  resumePending.store(false);
+
+  if (!state.isLoggedIn() || !state.user) {
+    return;
+  }
+  const std::string username = state.user->getUsername();
+  const std::string room = state.currentRoom ? state.currentRoom->getName() : std::string("Lobby");
+
+  Packet packet;
+  try {
+    packet = PacketBuilder::buildReconnect(username, room);
+  } catch (const std::invalid_argument &e) {
+    Logger::logError("Client " + id, std::string("Reconnect failed: ") + e.what());
+    return;
+  }
+
+  // the landing node can still see the old peer socket for a moment after that process dies
+  constexpr int kAttempts = 5;
+  for (int attempt = 0; attempt < kAttempts && !stopRequested.load(); ++attempt) {
+    if (attempt > 0) {
+      if (!sleepFor(std::chrono::milliseconds(250))) {
+        return;
+      }
+      if (!state.isLoggedIn() || !network.isConnected()) {
+        return;
+      }
+    }
+
+    if (!network.sendPacket(packet)) {
+      Logger::logError("Client " + id, "Reconnect failed: Failed to send reconnect request.");
+      return;
+    }
+
+    auto response = waitFor(Packet::PacketType::RECONNECT, std::chrono::seconds(3));
+    if (response && response->responseCode == static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+      if (!response->room.empty()) {
+        applyRoomDirectory(response->room);
+      }
+      Logger::logInfo("Client " + id, "Reconnected as " + username);
+      return;
+    }
+
+    const std::string error = !response || response->message.empty() ? std::string("no reply")
+                                                                     : response->message;
+    Logger::logWarning("Client " + id, "Reconnect failed: " + error);
   }
 }
 
@@ -62,7 +136,22 @@ void Client::applyRoomListPush(const Packet &packet) {
     applyRoomDirectory(packet.room);
   }
 
-  if (!packet.room.empty() && packet.room.rfind("room(", 0) != 0) {
+  const std::string &userPayload =
+      (packet.receiver.rfind("user(", 0) == 0) ? packet.receiver : packet.sender;
+  std::optional<User> incomingUser;
+  if (userPayload.rfind("user(", 0) == 0) {
+    try {
+      incomingUser = User::deserialize(userPayload);
+    } catch (const std::exception &e) {
+      Logger::logWarning("Client " + id, std::string("Bad connect user: ") + e.what());
+    }
+  }
+
+  // the new socket's anonymous Lobby welcome must not clear a session being resumed
+  const bool keepSession = state.isLoggedIn() && incomingUser &&
+                           incomingUser->getUserType() == User::UserType::GUEST;
+
+  if (!keepSession && !packet.room.empty() && packet.room.rfind("room(", 0) != 0) {
     if (packet.room == "Lobby") {
       state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
     } else {
@@ -70,14 +159,8 @@ void Client::applyRoomListPush(const Packet &packet) {
     }
   }
 
-  const std::string &userPayload =
-      (packet.receiver.rfind("user(", 0) == 0) ? packet.receiver : packet.sender;
-  if (userPayload.rfind("user(", 0) == 0) {
-    try {
-      state.user = User::deserialize(userPayload);
-    } catch (const std::exception &e) {
-      Logger::logWarning("Client " + id, std::string("Bad connect user: ") + e.what());
-    }
+  if (!keepSession && incomingUser) {
+    state.user = std::move(*incomingUser);
   }
 
   if (!state.getRooms().empty()) {
@@ -87,8 +170,157 @@ void Client::applyRoomListPush(const Packet &packet) {
   welcomeCv.notify_all();
 }
 
+// apply SERVER_DIRECTORY push (failover hints from gossip HELLO map)
+void Client::applyServerDirectoryPush(const Packet &packet) {
+  std::vector<ClientEndpoint> next;
+  std::size_t start = 0;
+  const std::string &body = packet.message;
+  while (start <= body.size()) {
+    const std::size_t end = body.find(';', start);
+    const std::string piece =
+        (end == std::string::npos) ? body.substr(start) : body.substr(start, end - start);
+    if (!piece.empty()) {
+      try {
+        next.push_back(ClientEndpoint::deserialize(piece));
+      } catch (const std::exception &) {
+        // skip malformed pieces so one bad entry does not wipe the directory
+      }
+    }
+    if (end == std::string::npos)
+      break;
+    start = end + 1;
+  }
+
+  const std::size_t count = next.size();
+  state.setServerEndpoints(std::move(next));
+  rebuildEndpoints();
+  Logger::logInfo("Client " + id, "Server directory updated (" + std::to_string(count) + ")");
+}
+
+// joins the failover thread
+Client::~Client() { stop(); }
+
+// rebuild the ring: directory-up endpoints, then the static seed
+void Client::rebuildEndpoints() {
+  std::vector<ServerPoint> seed;
+  seed.push_back(ServerPoint{config::SERVER_HOST, config::PORT});
+  for (const auto &neighbor : config::NEIGHBOR_SERVERS) {
+    seed.push_back(neighbor);
+  }
+  const ServerPoint connected = ring.current();
+  ring.replace(mergeFailoverList(connected, seed, state.getServerEndpoints()));
+}
+
+// sleep that returns false when stop() was requested
+bool Client::sleepFor(std::chrono::milliseconds delay) {
+  std::unique_lock<std::mutex> lock(waitMutex);
+  return !waitCv.wait_for(lock, delay, [this] { return stopRequested.load(); });
+}
+
+// advance the ring, sleep with backoff + jitter; false when the budget or stop ends the loop
+bool Client::failAndWait(int &attempt) {
+  ring.advance();
+  ++attempt;
+  const int laps = config::TEST_MODE ? 1 : 4;
+  const int limit = std::max(1, static_cast<int>(ring.size())) * laps;
+  if (attempt >= limit || stopRequested.load()) {
+    Logger::logError("Client " + id, "Stopped failing over after " + std::to_string(attempt) +
+                                         " attempts");
+    return false;
+  }
+
+  const int delayMs = fullJitterDelayMs(attempt - 1, rng);
+  Logger::logInfo("Client " + id, "Next endpoint in " + std::to_string(delayMs) + " ms");
+  return sleepFor(std::chrono::milliseconds(delayMs));
+}
+
+// socket up, heartbeat fresh, and HealthMonitor not Down
+bool Client::linkHealthy() { return healthMonitor.check().status == HealthStatus::Up; }
+
+// mark a hop and log "reconnecting..." once per drop
+void Client::markReconnecting() {
+  bool expected = false;
+  if (!reconnecting.compare_exchange_strong(expected, true)) {
+    return;
+  }
+  reconnects.fetch_add(1);
+  if (state.isLoggedIn()) {
+    resumePending.store(true);
+  }
+  Logger::logInfo("Client " + id, "reconnecting...");
+  forgetConnected();
+}
+
+// dial the ring until stop or the attempt budget is spent
+void Client::supervisorLoop() {
+  int attempt = 0;
+  bool hadLink = false;
+  while (!stopRequested.load()) {
+    const ServerPoint endpoint = ring.current();
+    if (endpoint.port == 0) {
+      Logger::logError("Client " + id, "No failover endpoints");
+      break;
+    }
+
+    Logger::logInfo("Client " + id, "Connecting to " + endpoint.host + ":" +
+                                        std::to_string(endpoint.port));
+    if (!network.connect(endpoint.host, endpoint.port)) {
+      if (hadLink) {
+        markReconnecting();
+      }
+      if (!failAndWait(attempt)) {
+        break;
+      }
+      continue;
+    }
+
+    hadLink = true;
+    rememberConnected(endpoint);
+    reconnecting.store(false);
+    waitCv.notify_all();
+    attempt = 0;
+    if (resumePending.load()) {
+      resumeSession();
+    }
+
+    while (!stopRequested.load() && linkHealthy()) {
+      if (!sleepFor(std::chrono::seconds(1))) {
+        break;
+      }
+    }
+    if (stopRequested.load()) {
+      break;
+    }
+
+    std::string reason = "health check failed";
+    if (network.heartbeatMissed()) {
+      reason = "heartbeat missed";
+    } else if (!network.isConnected()) {
+      reason = "peer closed";
+    }
+    markReconnecting();
+    Logger::logWarning("Client " + id, reason + ", trying next endpoint");
+    network.disconnect();
+    if (!failAndWait(attempt)) {
+      break;
+    }
+  }
+
+  reconnecting.store(false);
+  forgetConnected();
+  supervisorRunning = false;
+  waitCv.notify_all();
+}
+
 // start the client
 bool Client::start() {
+  if (supervisorRunning.load() || supervisor.joinable()) {
+    return false;
+  }
+
+  static ConsoleLogger consoleLogger;
+  Logger::getInstance().addLogger(&consoleLogger);
+
   id = std::to_string(++next_client_id); // create a unique id for the client
 
   {
@@ -99,14 +331,32 @@ bool Client::start() {
   network.setPushHandler([this](const Packet &packet) {
     if (packet.type == Packet::PacketType::ROOM_LIST) {
       applyRoomListPush(packet);
+    } else if (packet.type == Packet::PacketType::SERVER_DIRECTORY) {
+      applyServerDirectoryPush(packet);
     } else if (packet.type == Packet::PacketType::MESSAGE) {
       enqueueChatPush(packet);
     }
   });
 
-  // connect to the server
-  if (!network.connect()) {
+  rebuildEndpoints();
+  if (!healthWired) {
+    healthMonitor.add(std::make_unique<ClientHealthAdapter>(*this));
+    healthWired = true;
+  }
+  stopRequested = false;
+  supervisorRunning = true;
+  network.setLinkDownHandler([this] { waitCv.notify_all(); });
+  supervisor = std::thread([this] { supervisorLoop(); });
+
+  {
+    std::unique_lock<std::mutex> lock(waitMutex);
+    waitCv.wait(lock, [this] {
+      return network.isConnected() || !supervisorRunning.load() || stopRequested.load();
+    });
+  }
+  if (!network.isConnected()) {
     Logger::logError("Client " + id, "Failed to connect to the server");
+    stop();
     return false;
   }
 
@@ -140,15 +390,13 @@ bool Client::start() {
 // enqueue a chat push for the UI
 void Client::enqueueChatPush(const Packet &packet) {
   // only surface messages for the room the client is currently in
-  if (state.currentRoom && !packet.room.empty() &&
-      packet.room != state.currentRoom->getName()) {
+  if (state.currentRoom && !packet.room.empty() && packet.room != state.currentRoom->getName()) {
     return;
   }
   std::lock_guard<std::mutex> lock(chatMutex);
-  pendingChat.push_back(
-      ChatLine{packet.sender, packet.message,
-               packet.timestamp != 0 ? packet.timestamp
-                                     : static_cast<std::uint64_t>(std::time(nullptr))});
+  pendingChat.push_back(ChatLine{
+      packet.sender, packet.message,
+      packet.timestamp != 0 ? packet.timestamp : static_cast<std::uint64_t>(std::time(nullptr))});
 }
 
 // drain chat pushes received on the network thread
@@ -160,10 +408,56 @@ std::vector<ChatLine> Client::takePendingChatMessages() {
 }
 
 // stop the client
-void Client::stop() { network.disconnect(); }
+void Client::stop() {
+  {
+    std::lock_guard<std::mutex> lock(waitMutex);
+    stopRequested = true;
+  }
+  waitCv.notify_all();
+  if (supervisor.joinable()) {
+    supervisor.join();
+  }
+  network.disconnect();
+  supervisorRunning = false;
+}
 
 // check if the client is alive
-bool Client::isAlive() const { return network.isConnected(); }
+bool Client::isAlive() const { return network.isConnected() && !network.heartbeatMissed(); }
+
+// rolled-up client health
+HealthMonitor &Client::health() { return healthMonitor; }
+
+// true while the failover supervisor is running
+bool Client::isRunning() const { return supervisorRunning.load(); }
+
+// true from a live-link drop until the next dial succeeds
+bool Client::isReconnecting() const { return reconnecting.load(); }
+
+// host:port of the live socket; empty when the link is down
+std::string Client::connectedEndpoint() const {
+  std::lock_guard<std::mutex> lock(endpointMutex);
+  if (connectedHost.empty() || connectedPort == 0) {
+    return {};
+  }
+  return connectedHost + ":" + std::to_string(connectedPort);
+}
+
+// remember the host:port of the live socket
+void Client::rememberConnected(const ServerPoint &endpoint) {
+  std::lock_guard<std::mutex> lock(endpointMutex);
+  connectedHost = endpoint.host;
+  connectedPort = endpoint.port;
+}
+
+// drop the host:port of the live socket
+void Client::forgetConnected() {
+  std::lock_guard<std::mutex> lock(endpointMutex);
+  connectedHost.clear();
+  connectedPort = 0;
+}
+
+// how many times a live link has dropped since start
+int Client::reconnectCount() const { return reconnects.load(); }
 
 // join a room by name (requires login). Empty = success; otherwise error text.
 std::string Client::joinRoom(std::string_view roomName) {
@@ -436,6 +730,7 @@ std::string Client::logout() {
   state.setRooms(std::move(rooms));
   state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
   state.user = User::anonymousUser();
+  resumePending.store(false);
   clearPendingChatMessages();
   Logger::logInfo("Client " + id, "Logged out");
   return {};
@@ -551,6 +846,106 @@ std::string Client::inviteToRoom(std::string_view roomName, std::string_view inv
   return {};
 }
 
+// kick a user from a room (ADMIN, or room creator). Empty = success; otherwise error text.
+std::string Client::kickFromRoom(std::string_view roomName, std::string_view targetUsername) {
+  if (!isAlive()) {
+    const std::string error = "Not connected to the server.";
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+  if (!state.isLoggedIn() || !state.user) {
+    const std::string error = "Log in to kick users.";
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+
+  const std::string room =
+      roomName.empty() && state.currentRoom ? state.currentRoom->getName() : std::string(roomName);
+
+  Packet kickPacket;
+  try {
+    kickPacket = PacketBuilder::buildKickFromRoom(state.user->getUsername(), room, targetUsername);
+  } catch (const std::invalid_argument &e) {
+    Logger::logError("Client " + id, std::string("Kick failed: ") + e.what());
+    return std::string(e.what());
+  }
+
+  if (!network.sendPacket(kickPacket)) {
+    const std::string error = "Failed to send kick request.";
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+
+  auto response = waitFor(Packet::PacketType::ROOM_KICK);
+  if (!response) {
+    const std::string error = "Connection lost while kicking.";
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+
+  if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+    const std::string error =
+        response->message.empty() ? std::string("Kick failed.") : response->message;
+    Logger::logError("Client " + id, "Kick failed: " + error);
+    return error;
+  }
+
+  Logger::logInfo("Client " + id, response->message.empty() ? "User kicked" : response->message);
+  return {};
+}
+
+// delete a room (ADMIN only; not Lobby / General). Empty = success; otherwise error text.
+std::string Client::deleteRoom(std::string_view roomName) {
+  if (!isAlive()) {
+    const std::string error = "Not connected to the server.";
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+  if (!state.isAdmin() || !state.user) {
+    const std::string error = "Admin required to delete a room.";
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+
+  const std::string room =
+      roomName.empty() && state.currentRoom ? state.currentRoom->getName() : std::string(roomName);
+
+  Packet deletePacket;
+  try {
+    deletePacket = PacketBuilder::buildDeleteRoom(state.user->getUsername(), room);
+  } catch (const std::invalid_argument &e) {
+    Logger::logError("Client " + id, std::string("Delete room failed: ") + e.what());
+    return std::string(e.what());
+  }
+
+  if (!network.sendPacket(deletePacket)) {
+    const std::string error = "Failed to send delete-room request.";
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+
+  auto response = waitFor(Packet::PacketType::ROOM_DELETE);
+  if (!response) {
+    const std::string error = "Connection lost while deleting room.";
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+
+  if (response->responseCode != static_cast<int>(RESPONSE_CODES::SUCCESS)) {
+    const std::string error =
+        response->message.empty() ? std::string("Delete room failed.") : response->message;
+    Logger::logError("Client " + id, "Delete room failed: " + error);
+    return error;
+  }
+
+  if (state.currentRoom && state.currentRoom->getName() == room) {
+    state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
+  }
+
+  Logger::logInfo("Client " + id, "Room deleted: " + room);
+  return {};
+}
+
 // update profile (username and optional new password). Empty = success; otherwise error text.
 std::string Client::updateProfile(std::string_view username, std::string_view newPassword,
                                   std::string_view email) {
@@ -604,7 +999,8 @@ std::string Client::updateProfile(std::string_view username, std::string_view ne
   return error;
 }
 
-// send a chat message in the current room (guests OK; not persisted). Empty = success; otherwise error text.
+// send a chat message in the current room (guests OK; not persisted). Empty = success; otherwise
+// error text.
 std::string Client::sendMessage(std::string_view text) {
   if (!isAlive()) {
     const std::string error = "Not connected to the server.";
@@ -747,6 +1143,17 @@ std::string Client::loadMessageHistory(std::vector<ChatLine> &out) {
   return {};
 }
 
+// flip light / dark for the Qt dashboard
+void Client::toggleTheme() {
+  appearanceTheme = appearanceTheme == Theme::Dark ? Theme::Light : Theme::Dark;
+}
+
+// flip comfortable / compact for the Qt dashboard
+void Client::toggleDensity() {
+  appearanceDensity =
+      appearanceDensity == Density::Compact ? Density::Comfortable : Density::Compact;
+}
+
 // drop any queued chat pushes (e.g. when switching rooms)
 void Client::clearPendingChatMessages() {
   std::lock_guard<std::mutex> lock(chatMutex);
@@ -868,9 +1275,38 @@ void Client::showDashboard() {
       break;
     }
 
-    // logout option
+    // kick (admin) or logout (user)
     case 8: {
-      logout();
+      if (state.isAdmin()) {
+        std::optional<Packet> kickPacket = ConsoleUI::showKickFromRoom(state);
+        if (!kickPacket) {
+          break;
+        }
+        kickFromRoom(kickPacket->room, kickPacket->message);
+      } else {
+        logout();
+      }
+      break;
+    }
+
+    // delete room (admin)
+    case 9: {
+      if (!state.isAdmin()) {
+        break;
+      }
+      std::optional<Packet> deletePacket = ConsoleUI::showDeleteRoom(state);
+      if (!deletePacket) {
+        break;
+      }
+      deleteRoom(deletePacket->room);
+      break;
+    }
+
+    // logout (admin)
+    case 10: {
+      if (state.isAdmin()) {
+        logout();
+      }
       break;
     }
     default:

@@ -1,5 +1,5 @@
 /**
- * User header file class
+ * User class header file
  *
  * @date 11-09-2026
  */

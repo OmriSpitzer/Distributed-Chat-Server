@@ -20,7 +20,8 @@ namespace {
 const int MIN_MENU_CHOICE = 1; // minimum menu choice
 const int MAX_MENU_CHOICE = 3; // maximum menu choice
 const int MIN_USER_CHOICE = 1; // minimum user dashboard choice
-const int MAX_USER_CHOICE = 8; // maximum user dashboard choice
+const int MAX_USER_CHOICE = 8; // maximum user dashboard choice (non-admin)
+const int MAX_ADMIN_CHOICE = 10; // maximum user dashboard choice (admin)
 
 std::optional<int> tryReadMenuChoice(int min, int max) {
   std::cout << "Enter your choice: ";
@@ -103,10 +104,18 @@ int ConsoleUI::showUserDashboard(const ClientState &state) {
     std::cout << "5. Create Room\n";
     std::cout << "6. Load Message History\n";
     std::cout << "7. Invite to Room\n";
-    std::cout << "8. Logout\n";
+    const bool admin = state.user->getUserType() == User::UserType::ADMIN;
+    if (admin) {
+      std::cout << "8. Kick from Room\n";
+      std::cout << "9. Delete Room\n";
+      std::cout << "10. Logout\n";
+    } else {
+      std::cout << "8. Logout\n";
+    }
     std::cout << "--------------------------------\n";
 
-    if (const auto answer = tryReadMenuChoice(MIN_USER_CHOICE, MAX_USER_CHOICE)) {
+    const int maxChoice = admin ? MAX_ADMIN_CHOICE : MAX_USER_CHOICE;
+    if (const auto answer = tryReadMenuChoice(MIN_USER_CHOICE, maxChoice)) {
       return *answer;
     }
     std::cout << "\nInvalid choice. Please enter a valid choice.\n\n";
@@ -246,6 +255,64 @@ std::optional<Packet> ConsoleUI::showInviteToRoom(const ClientState &state) {
 
   try {
     return PacketBuilder::buildInviteToRoom(state.user->getUsername(), room, *invitee);
+  } catch (const std::invalid_argument &e) {
+    std::cout << ">> " << e.what() << '\n';
+    return std::nullopt;
+  }
+}
+
+// showing the kick-from-room screen
+std::optional<Packet> ConsoleUI::showKickFromRoom(const ClientState &state) {
+  if (!state.user) {
+    return std::nullopt;
+  }
+
+  std::string room;
+  if (state.currentRoom && !state.currentRoom->getName().empty()) {
+    room = state.currentRoom->getName();
+    std::cout << ">> Kicking from current room: " << room << '\n';
+  } else {
+    const auto roomName = readLine(">> Room to kick from (type 'exit' to go back): ");
+    if (!roomName) {
+      return std::nullopt;
+    }
+    room = *roomName;
+  }
+
+  const auto target = readLine(">> Username to kick (type 'exit' to go back): ");
+  if (!target) {
+    return std::nullopt;
+  }
+
+  try {
+    return PacketBuilder::buildKickFromRoom(state.user->getUsername(), room, *target);
+  } catch (const std::invalid_argument &e) {
+    std::cout << ">> " << e.what() << '\n';
+    return std::nullopt;
+  }
+}
+
+// showing the delete-room screen
+std::optional<Packet> ConsoleUI::showDeleteRoom(const ClientState &state) {
+  if (!state.user) {
+    return std::nullopt;
+  }
+
+  std::string room;
+  if (state.currentRoom && state.currentRoom->getName() != "Lobby" &&
+      state.currentRoom->getName() != "General") {
+    room = state.currentRoom->getName();
+    std::cout << ">> Deleting current room: " << room << '\n';
+  } else {
+    const auto roomName = readLine(">> Room to delete (type 'exit' to go back): ");
+    if (!roomName) {
+      return std::nullopt;
+    }
+    room = *roomName;
+  }
+
+  try {
+    return PacketBuilder::buildDeleteRoom(state.user->getUsername(), room);
   } catch (const std::invalid_argument &e) {
     std::cout << ">> " << e.what() << '\n';
     return std::nullopt;

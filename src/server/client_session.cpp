@@ -1,7 +1,12 @@
 /**
- * ClientSession class
+ * ClientSession class implementation file
  *
- * @brief Holds the per-client session state for a single client.
+ * @brief Holds the per-client session state for a single client
+ *
+ * ClientSession class with fields: user, room, clientSocket, sendMutex_, stateMutex_, closed_,
+ * authenticated, lastHeartbeatTime
+ * Used for managing the client session state
+ *
  * @date 11-09-2026
  */
 

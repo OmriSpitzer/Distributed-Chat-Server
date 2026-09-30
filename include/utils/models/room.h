@@ -1,5 +1,5 @@
 /**
- * Room header file class
+ * Room class header file
  *
  * @date 11-09-2026
  */
@@ -61,8 +61,10 @@ public:
   // deserialize one room
   static Room deserialize(const std::string &serialized);
 
-  // serialize / deserialize a directory (semicolon-separated rooms)
+  // serialize a list of rooms
   static std::string serializeList(const std::vector<Room> &rooms);
+
+  // deserialize a list of rooms
   static std::vector<Room> deserializeList(const std::string &serialized);
 
 private:

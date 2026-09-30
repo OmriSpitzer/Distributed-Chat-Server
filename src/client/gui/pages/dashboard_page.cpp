@@ -7,11 +7,14 @@
 
 #include "client/gui/pages/dashboard_page.h"
 #include "client/client.h"
+#include "client/gui/chat_style.h"
 #include "client/gui/components/button.h"
 #include "client/gui/components/header.h"
 #include "client/gui/components/pop_up_window.h"
+#include "utils/health/i_health_check.h"
 #include "utils/models/room.h"
 #include "utils/models/user.h"
+#include <QApplication>
 #include <QComboBox>
 #include <QDateTime>
 #include <QFormLayout>
@@ -22,6 +25,7 @@
 #include <QListWidgetItem>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QScrollBar>
 #include <QVariant>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -66,6 +70,16 @@ DashboardPage::DashboardPage(QWidget *parent, Client *client)
 
 // connect the header
 void DashboardPage::connectHeader() {
+  header()->themeButton()->setOnClick([this]() {
+    if (client()) {
+      client()->toggleTheme();
+    }
+  });
+  header()->densityButton()->setOnClick([this]() {
+    if (client()) {
+      client()->toggleDensity();
+    }
+  });
   header()->signUpButton()->setOnClick([this]() { openSignUpDialog(); });
   header()->logInButton()->setOnClick([this]() { openLogInDialog(); });
   header()->logoutButton()->setOnClick([this]() { logout(); });
@@ -73,20 +87,22 @@ void DashboardPage::connectHeader() {
 
 // build the workspace
 void DashboardPage::buildWorkspace() {
-  auto *split = new QWidget(this);    // create the split widget
-  auto *row = new QHBoxLayout(split); // create the row layout
+  auto *split = new QWidget(this); // create the split widget
+  splitRow = new QHBoxLayout(split); // create the row layout
+  auto *row = splitRow;
 
   // row layout properties
   row->setContentsMargins(0, 0, 0, 0);
   row->setSpacing(16);
 
   // side widget
-  auto *side = new QWidget(split);
+  sideCard = new QWidget(split);
+  auto *side = sideCard;
   side->setObjectName("SideCard"); // set the object name
   side->setFixedWidth(280);        // set the fixed width
 
   // side layout properties
-  auto *sideLayout = new QVBoxLayout(side);
+  sideLayout = new QVBoxLayout(side);
   sideLayout->setContentsMargins(16, 16, 16, 16);
   sideLayout->setSpacing(10);
 
@@ -103,6 +119,10 @@ void DashboardPage::buildWorkspace() {
       new Button("Create room", [this]() { openCreateRoomDialog(); }, false, side, "GhostButton");
   inviteButton =
       new Button("Invite", [this]() { openInviteDialog(); }, loggedIn, side, "PrimaryButton");
+  kickButton =
+      new Button("Kick", [this]() { openKickDialog(); }, false, side, "GhostButton");
+  deleteRoomButton =
+      new Button("Delete room", [this]() { openDeleteRoomDialog(); }, false, side, "GhostButton");
 
   // room actions
   auto *roomActions = new QHBoxLayout();
@@ -111,19 +131,23 @@ void DashboardPage::buildWorkspace() {
   auto *roomActions2 = new QHBoxLayout();
   roomActions2->addWidget(createRoomButton, 1);
   roomActions2->addWidget(inviteButton, 1);
+  auto *roomActions3 = new QHBoxLayout();
+  roomActions3->addWidget(kickButton, 1);
+  roomActions3->addWidget(deleteRoomButton, 1);
 
   // add widgets to the side layout
   sideLayout->addWidget(roomsLabel);
   sideLayout->addWidget(roomsList, 1);
   sideLayout->addLayout(roomActions);
   sideLayout->addLayout(roomActions2);
+  sideLayout->addLayout(roomActions3);
 
   // chat widget
   auto *chat = new QWidget(split);
   chat->setObjectName("ChatCard");
 
   // chat layout properties
-  auto *chatLayout = new QVBoxLayout(chat);
+  chatLayout = new QVBoxLayout(chat);
   chatLayout->setContentsMargins(16, 16, 16, 16);
   chatLayout->setSpacing(10);
 
@@ -141,12 +165,22 @@ void DashboardPage::buildWorkspace() {
   // transcript
   transcript = new QPlainTextEdit(chat);
   transcript->setReadOnly(true);
+  connect(transcript->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) {
+    if (adjustingScroll || !transcriptAtBottom()) {
+      return;
+    }
+    unreadCount = 0;
+    showUnread();
+  });
 
   // composer row
   auto *composerRow = new QHBoxLayout();
+  unreadButton =
+      new Button("1 new", [this]() { scrollTranscriptToBottom(); }, false, chat, "PrimaryButton");
   composer = new QLineEdit(chat);
   composer->setPlaceholderText("Write a message…");
   sendButton = new Button("Send", [this]() { sendMessage(); }, true, chat, "PrimaryButton");
+  composerRow->addWidget(unreadButton);
   composerRow->addWidget(composer, 1);
   composerRow->addWidget(sendButton);
 
@@ -189,16 +223,32 @@ void DashboardPage::refresh() {
   }
 
   flushIncomingChat();
+  applyAppearance();
 
   ClientState &state = client()->getState();
-  const bool connected = client()->isAlive();
+  const HealthStatus link = client()->health().check().status;
+  const bool connected = link != HealthStatus::Down;
   const QString currentRoom = roomNameOf(state);
   const std::vector<Room> rooms = state.getRooms();
 
-  header()->subtitleLabel()->setText(connected ? "Connected" : "Disconnected");
+  QString subtitle = QStringLiteral("Disconnected");
+  if (client()->isReconnecting()) {
+    subtitle = QStringLiteral("reconnecting...");
+  } else if (link == HealthStatus::Up) {
+    subtitle = QStringLiteral("Connected");
+    const std::string endpoint = client()->connectedEndpoint();
+    if (!endpoint.empty()) {
+      subtitle += QStringLiteral(" ") + QString::fromStdString(endpoint);
+    }
+  } else if (link == HealthStatus::Degraded) {
+    subtitle = QStringLiteral("Degraded");
+  }
+  header()->subtitleLabel()->setText(subtitle);
   header()->setLoggedIn(state.isLoggedIn(), displayName());
   createRoomButton->setVisible(state.isLoggedIn());
   inviteButton->setVisible(state.isLoggedIn());
+  kickButton->setVisible(state.isAdmin());
+  deleteRoomButton->setVisible(state.isAdmin());
 
   // oldest created first (room id is AUTOINCREMENT)
   std::vector<Room> roomsSorted = rooms;
@@ -216,8 +266,13 @@ void DashboardPage::refresh() {
     nextRows.push_back({name, roomListLabel(room, currentRoom)});
   }
   if (nextRows.empty()) {
-    nextRows.push_back({QString(), connected ? QStringLiteral("(waiting for rooms…)")
-                                             : QStringLiteral("(not connected)")});
+    QString placeholder = QStringLiteral("(not connected)");
+    if (client()->isReconnecting()) {
+      placeholder = QStringLiteral("(reconnecting...)");
+    } else if (connected) {
+      placeholder = QStringLiteral("(waiting for rooms…)");
+    }
+    nextRows.push_back({QString(), placeholder});
   }
 
   bool roomsUnchanged = roomsList->count() == static_cast<int>(nextRows.size());
@@ -246,9 +301,108 @@ void DashboardPage::refresh() {
   leaveButton->setEnabled(currentRoom != "Lobby");
 }
 
+// paint the look Client already chose
+void DashboardPage::applyAppearance() {
+  const ChatLook::Theme theme = client()->theme();
+  const ChatLook::Density density = client()->density();
+  header()->themeButton()->setText(theme == ChatLook::Theme::Dark ? QStringLiteral("Dark")
+                                                                  : QStringLiteral("Light"));
+  header()->densityButton()->setText(density == ChatLook::Density::Compact
+                                          ? QStringLiteral("Compact")
+                                          : QStringLiteral("Comfortable"));
+  if (appearanceApplied && theme == appliedTheme && density == appliedDensity) {
+    return;
+  }
+
+  appliedTheme = theme;
+  appliedDensity = density;
+  appearanceApplied = true;
+
+  if (QApplication *app = qApp) {
+    app->setStyleSheet(chatStyleSheet(theme, density));
+  }
+
+  const ChatSpacing spacing = spacingFor(density);
+  getBodyLayout()->setContentsMargins(spacing.bodyMargin, spacing.bodyMargin, spacing.bodyMargin,
+                                      spacing.bodyMargin);
+  if (splitRow) {
+    splitRow->setSpacing(spacing.rowSpacing);
+  }
+  if (sideLayout) {
+    sideLayout->setContentsMargins(spacing.cardMargin, spacing.cardMargin, spacing.cardMargin,
+                                   spacing.cardMargin);
+    sideLayout->setSpacing(spacing.cardSpacing);
+  }
+  if (chatLayout) {
+    chatLayout->setContentsMargins(spacing.cardMargin, spacing.cardMargin, spacing.cardMargin,
+                                   spacing.cardMargin);
+    chatLayout->setSpacing(spacing.cardSpacing);
+  }
+  if (sideCard) {
+    sideCard->setFixedWidth(spacing.sideWidth);
+  }
+  header()->applySpacing(spacing.headerMarginH, spacing.headerMarginV, spacing.headerSpacing);
+}
+
+// true when the transcript viewport is on the latest line
+bool DashboardPage::transcriptAtBottom() const {
+  if (!transcript) {
+    return true;
+  }
+  const QScrollBar *bar = transcript->verticalScrollBar();
+  return bar->value() >= bar->maximum();
+}
+
+// show or hide the "N new" control
+void DashboardPage::showUnread() {
+  if (unreadCount < 0) {
+    unreadCount = 0;
+  }
+  if (!unreadButton) {
+    return;
+  }
+  if (unreadCount == 0) {
+    unreadButton->setVisible(false);
+    return;
+  }
+  unreadButton->setText(unreadCount == 1 ? QStringLiteral("1 new")
+                                          : QString::number(unreadCount) + QStringLiteral(" new"));
+  unreadButton->setVisible(true);
+}
+
+// move the transcript to the latest line and clear the badge
+void DashboardPage::scrollTranscriptToBottom() {
+  if (!transcript) {
+    unreadCount = 0;
+    showUnread();
+    return;
+  }
+  adjustingScroll = true;
+  QScrollBar *bar = transcript->verticalScrollBar();
+  bar->setValue(bar->maximum());
+  adjustingScroll = false;
+  unreadCount = 0;
+  showUnread();
+}
+
 // append a message to the transcript
 void DashboardPage::appendMessage(const QString &author, const QString &text, quint64 timestamp) {
+  if (!transcript) {
+    return;
+  }
+  QScrollBar *bar = transcript->verticalScrollBar();
+  const int saved = bar->value();
+  const bool atBottom = saved >= bar->maximum();
+  adjustingScroll = true;
   transcript->appendPlainText(formatChatTime(timestamp) + "  ·  " + author + "  ·  " + text);
+  if (atBottom) {
+    bar->setValue(bar->maximum());
+  } else {
+    bar->setValue(saved);
+  }
+  adjustingScroll = false;
+  unreadCount = atBottom ? 0 : unreadCount + 1;
+  showUnread();
 }
 
 // drain network chat pushes into the transcript
@@ -268,7 +422,11 @@ void DashboardPage::resetTranscriptForCurrentRoom() {
     return;
   }
   client()->clearPendingChatMessages();
+  adjustingScroll = true;
   transcript->clear();
+  unreadCount = 0;
+  showUnread();
+  adjustingScroll = false;
 
   std::vector<ChatLine> lines;
   const std::string error = client()->loadMessageHistory(lines);
@@ -518,7 +676,7 @@ void DashboardPage::openInviteDialog() {
 
   const QString currentRoom = roomNameOf(client()->getState());
   if (currentRoom == "Lobby") {
-    QMessageBox::information(this, "Invite", "Join a private room before inviting.");
+    QMessageBox::information(this, "Invite", "Join a room before inviting.");
     return;
   }
 
@@ -547,6 +705,102 @@ void DashboardPage::openInviteDialog() {
   }
 
   QMessageBox::information(this, "Invite", "Invited " + username + " to " + currentRoom + ".");
+}
+
+// open the kick dialog (ADMIN stub — same shape as invite)
+void DashboardPage::openKickDialog() {
+  if (!client()) {
+    return;
+  }
+  if (!client()->getState().isAdmin()) {
+    QMessageBox::information(this, "Kick", "Admin required to kick users.");
+    return;
+  }
+
+  const QString currentRoom = roomNameOf(client()->getState());
+  if (currentRoom == "Lobby") {
+    QMessageBox::information(this, "Kick", "Join a room before kicking.");
+    return;
+  }
+
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *target = new QLineEdit(form);
+  layout->addRow("Room", new QLabel(currentRoom, form));
+  layout->addRow("Username", target);
+
+  if (!PopUpWindow::run(this, "Kick from room", form, target)) {
+    return;
+  }
+
+  const QString username = target->text().trimmed();
+  if (username.isEmpty()) {
+    QMessageBox::warning(this, "Kick", "Username cannot be empty.");
+    return;
+  }
+
+  const std::string error =
+      client()->kickFromRoom(currentRoom.toStdString(), username.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Kick", QString::fromStdString(error));
+    return;
+  }
+
+  QMessageBox::information(this, "Kick", "Kicked " + username + " from " + currentRoom + ".");
+}
+
+// open the delete-room dialog (ADMIN stub)
+void DashboardPage::openDeleteRoomDialog() {
+  if (!client()) {
+    return;
+  }
+  if (!client()->getState().isAdmin()) {
+    QMessageBox::information(this, "Delete room", "Admin required to delete a room.");
+    return;
+  }
+
+  auto *form = new QWidget;
+  auto *layout = new QFormLayout(form);
+  auto *roomField = new QComboBox(form);
+  roomField->setEditable(true);
+  const QString currentRoom = roomNameOf(client()->getState());
+  for (const Room &room : client()->getState().getRooms()) {
+    const QString name = QString::fromStdString(room.getName());
+    if (name == QStringLiteral("Lobby") || name == QStringLiteral("General")) {
+      continue;
+    }
+    roomField->addItem(name);
+  }
+  if (currentRoom != QStringLiteral("Lobby") && currentRoom != QStringLiteral("General")) {
+    const int idx = roomField->findText(currentRoom);
+    if (idx >= 0) {
+      roomField->setCurrentIndex(idx);
+    }
+  }
+  layout->addRow("Room", roomField);
+
+  if (!PopUpWindow::run(this, "Delete room", form, roomField->lineEdit())) {
+    return;
+  }
+
+  const QString name = roomField->currentText().trimmed();
+  if (name.isEmpty()) {
+    QMessageBox::warning(this, "Delete room", "Room name cannot be empty.");
+    return;
+  }
+  if (name == QStringLiteral("Lobby") || name == QStringLiteral("General")) {
+    QMessageBox::warning(this, "Delete room", "Cannot delete Lobby or General.");
+    return;
+  }
+
+  const std::string error = client()->deleteRoom(name.toStdString());
+  if (!error.empty()) {
+    QMessageBox::warning(this, "Delete room", QString::fromStdString(error));
+    return;
+  }
+
+  resetTranscriptForCurrentRoom();
+  refresh();
 }
 
 // leave the room
@@ -583,6 +837,7 @@ void DashboardPage::sendMessage() {
   }
 
   flushIncomingChat();
+  scrollTranscriptToBottom();
   composer->clear();
 }
 

@@ -7,6 +7,7 @@
  * @date 13-09-2026
  */
 
+#include "auth/authentication.h"
 #include "config/config.h"
 #include "server/client_session.h"
 #include "server/connection_manager.h"
@@ -390,7 +391,8 @@ TEST_CASE("RoomManager authenticated join persists and leaveAll clears",
   ensureRandomRoom();
 
   const std::string name = unique("auth");
-  REQUIRE_NOTHROW(db().createUser(name, "secret", name + "@example.com"));
+  REQUIRE_NOTHROW(db().createUser(name, Authentication::hashPassword("secret"),
+                                  name + "@example.com"));
   TrackedSession tracked(nextFakeSocket(), makeUser(name));
   tracked.get().setAuthenticated(true);
 
@@ -503,7 +505,8 @@ TEST_CASE("RoomManager deleteRoom moves members to Lobby", "[room_manager][delet
 
   db();
   const std::string user = unique("del");
-  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"),
+                                  user + "@example.com"));
   connected.session->setUser(makeUser(user));
   connected.session->setAuthenticated(true);
 
@@ -516,8 +519,14 @@ TEST_CASE("RoomManager deleteRoom moves members to Lobby", "[room_manager][delet
   REQUIRE_FALSE(rooms().getRoom(name));
   REQUIRE(connected.session->getRoom().getName() == RoomManager::LOBBY.getName());
 
-  // still in Lobby members after forced move
+  // deleteRoom pushes ROOM_LIST for the Lobby move — drain it before chat
   REQUIRE(setRecvTimeout(connected.client, 500));
+  auto lobbyList = socket_io::readPacket(connected.client);
+  REQUIRE(lobbyList);
+  REQUIRE(lobbyList->type == Packet::PacketType::ROOM_LIST);
+  REQUIRE(lobbyList->room == RoomManager::LOBBY.getName());
+
+  // still in Lobby members after forced move
   REQUIRE(rooms().broadcast(RoomManager::LOBBY, makeMsg("lobby-hi", RoomManager::LOBBY.getName()),
                             net.connections));
   auto got = socket_io::readPacket(connected.client);
@@ -572,7 +581,8 @@ TEST_CASE("RoomManager typical create join leave delete flow", "[room_manager][f
 
   db();
   const std::string user = unique("flow");
-  REQUIRE_NOTHROW(db().createUser(user, "secret", user + "@example.com"));
+  REQUIRE_NOTHROW(db().createUser(user, Authentication::hashPassword("secret"),
+                                  user + "@example.com"));
   connected.session->setUser(makeUser(user));
   connected.session->setAuthenticated(true);
 

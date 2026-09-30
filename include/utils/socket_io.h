@@ -1,5 +1,5 @@
 /**
- * Socket I/O functions header
+ * Socket I/O helpers header
  *
  * @date 13-09-2026
  */

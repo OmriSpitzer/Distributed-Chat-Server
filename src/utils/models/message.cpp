@@ -1,8 +1,11 @@
 /**
- * Message class
+ * Message class implementation file
  *
- * @brief Message class to store a message and its metadata.
+ * @brief Message class to store a message and its metadata
  * @date 11-09-2026
+ *
+ * Message class with fields: from, to, content, timestamp, id
+ * Used for storing and displaying messages between users
  */
 
 #include "utils/models/message.h"
@@ -16,7 +19,7 @@ namespace {
 // local counter
 std::atomic<uint64_t> next_message_id{0};
 
-// boot id
+// distinguishes message ids from this process
 const std::string boot_id =
     std::to_string(static_cast<uint64_t>(std::time(nullptr)) * 1000003ull + std::random_device{}());
 

@@ -1,8 +1,13 @@
 /**
- * Room class
+ * Room class implementation file
  *
  * @brief Room class to store a room and its metadata.
  * @date 11-09-2026
+ *
+ * Room class with fields: id, name, type, privacy, created_at, creator_email
+ * Used for storing and displaying rooms in the server
+ * Serialized format: room(id|name|type|privacy)
+ * Serialized list format: room1;room2;room3;...
  */
 #include "utils/models/room.h"
 #include <ctime>
@@ -30,33 +35,10 @@ static const std::unordered_map<Room::RoomType, std::string> typeMap{
     {Room::RoomType::LOBBY, "Lobby"},
 };
 
-// string to type map
-static const std::unordered_map<std::string, Room::RoomType> stringToTypeMap{
-    {"R&D", Room::RoomType::RESEARCH_AND_DEVELOPMENT},
-    {"Production", Room::RoomType::PRODUCTION},
-    {"QA", Room::RoomType::QA},
-    {"DevOps", Room::RoomType::DEVOPS},
-    {"Security", Room::RoomType::SECURITY},
-    {"Design", Room::RoomType::DESIGN},
-    {"Marketing", Room::RoomType::MARKETING},
-    {"HR", Room::RoomType::HR},
-    {"Finance", Room::RoomType::FINANCE},
-    {"Legal", Room::RoomType::LEGAL},
-    {"Customer Support", Room::RoomType::CUSTOMER_SUPPORT},
-    {"Other", Room::RoomType::OTHER},
-    {"Lobby", Room::RoomType::LOBBY},
-};
-
 // privacy to string map
 static const std::unordered_map<Room::Privacy, std::string> privacyMap{
     {Room::Privacy::PUBLIC, "PUBLIC"},
     {Room::Privacy::PRIVATE, "PRIVATE"},
-};
-
-// string to privacy map
-static const std::unordered_map<std::string, Room::Privacy> stringToPrivacyMap{
-    {"PUBLIC", Room::Privacy::PUBLIC},
-    {"PRIVATE", Room::Privacy::PRIVATE},
 };
 
 // constructor
@@ -86,16 +68,18 @@ std::string Room::privacyToString(Room::Privacy privacy) {
   return privacyMap.at(Room::Privacy::PUBLIC);
 }
 Room::RoomType Room::stringToRoomType(std::string_view type) {
-  if (stringToTypeMap.find(std::string(type)) != stringToTypeMap.end()) {
-    return stringToTypeMap.at(std::string(type));
+  for (const auto &[key, value] : typeMap) {
+    if (value == type)
+      return key;
   }
-  return Room::RoomType::OTHER;
+  return RoomType::OTHER;
 }
 Room::Privacy Room::stringToPrivacy(std::string_view privacy) {
-  if (stringToPrivacyMap.find(std::string(privacy)) != stringToPrivacyMap.end()) {
-    return stringToPrivacyMap.at(std::string(privacy));
+  for (const auto &[key, value] : privacyMap) {
+    if (value == privacy)
+      return key;
   }
-  return Room::Privacy::PUBLIC;
+  return Privacy::PUBLIC;
 }
 
 // getters
@@ -117,26 +101,32 @@ std::string Room::serialize() const {
 // deserialize
 Room Room::deserialize(const std::string &serialized) {
   static const std::string prefix = "room(";
+
+  // check correct serialization format
   if (serialized.size() < prefix.size() + 1 || serialized.compare(0, prefix.size(), prefix) != 0 ||
       serialized.back() != ')') {
     throw std::invalid_argument("Invalid serialized room");
   }
 
+  // extract the body of the serialized room
   const std::string body = serialized.substr(prefix.size(), serialized.size() - prefix.size() - 1);
   const std::size_t first = body.find('|');
   const std::size_t second =
       (first == std::string::npos) ? std::string::npos : body.find('|', first + 1);
   const std::size_t third =
       (second == std::string::npos) ? std::string::npos : body.find('|', second + 1);
-  if (first == std::string::npos || second == std::string::npos || third == std::string::npos) {
-    throw std::invalid_argument("Invalid serialized room");
-  }
 
+  // check if all the fields are present
+  if (first == std::string::npos || second == std::string::npos || third == std::string::npos)
+    throw std::invalid_argument("Invalid serialized room");
+
+  // extract the fields from the body
   const std::string idStr = body.substr(0, first);
   const std::string name = body.substr(first + 1, second - first - 1);
   const std::string type = body.substr(second + 1, third - second - 1);
   const std::string privacy = body.substr(third + 1);
 
+  // convert the id string to an integer
   int id = 0;
   try {
     id = std::stoi(idStr);
@@ -144,10 +134,11 @@ Room Room::deserialize(const std::string &serialized) {
     throw std::invalid_argument("Invalid serialized room id");
   }
 
+  // create the room object
   return Room(id, name, Room::stringToRoomType(type), Room::stringToPrivacy(privacy));
 }
 
-// serialize a directory
+// serialize a list of rooms
 std::string Room::serializeList(const std::vector<Room> &rooms) {
   std::string out;
   for (std::size_t i = 0; i < rooms.size(); ++i) {
@@ -159,18 +150,23 @@ std::string Room::serializeList(const std::vector<Room> &rooms) {
   return out;
 }
 
-// deserialize a directory
+// deserialize a list of rooms
 std::vector<Room> Room::deserializeList(const std::string &serialized) {
   std::vector<Room> rooms;
+
+  // check if the serialized list is empty
   if (serialized.empty()) {
     return rooms;
   }
 
+  // extract the rooms from the serialized list
   std::size_t start = 0;
   while (start <= serialized.size()) {
     const std::size_t end = serialized.find(';', start);
-    const std::string piece =
-        (end == std::string::npos) ? serialized.substr(start) : serialized.substr(start, end - start);
+    const std::string piece = (end == std::string::npos) ? serialized.substr(start)
+                                                         : serialized.substr(start, end - start);
+
+    // check if the piece is not empty
     if (!piece.empty()) {
       try {
         rooms.push_back(Room::deserialize(piece));

@@ -2,17 +2,19 @@
 
 Catch2 cases wired in `CMakeLists.txt` (`catch_discover_tests`). Run with CTest after a CMake build.
 
-Totals: **24** executables, **330** `TEST_CASE`s.
+Totals: **32** executables, **417** `TEST_CASE`s.
 
 Catch2 tags used throughout: `[flow]` typical happy path, `[edge]` invalid/empty/boundary, `[thread]` / `[concurrent]` races, `[slow]` heartbeat waits.
 
 `tests/class/` is leftover and is **not** built.
 
-**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [STEPS.md](../STEPS.md)
+**Related docs:** [README.md](../README.md) · [architecture.md](../architecture.md) · [database.md](../database.md) · [FUTURE_WORK.md](../FUTURE_WORK.md)
 
 Manual multi-node smoke (not Catch2): `.\scripts\run_cluster.ps1` — 2 servers + 2 clients.
 
 ```powershell
+.\scripts\run_test.ps1
+# or, after a build:
 ctest --test-dir build --output-on-failure
 ```
 
@@ -23,14 +25,16 @@ ctest --test-dir build --output-on-failure
 | Executable | File | Cases |
 |---|---|---|
 | `user_test` | `tests/utils/user_test.cpp` | 10 |
+| `client_endpoint_test` | `tests/utils/client_endpoint_test.cpp` | 3 |
 | `room_test` | `tests/utils/room_test.cpp` | 12 |
 | `message_test` | `tests/utils/message_test.cpp` | 12 |
 | `packet_test` | `tests/utils/packet_test.cpp` | 11 |
-| `log_message_test` | `tests/utils/log_message_test.cpp` | 12 |
-| `logger_test` | `tests/utils/logger_test.cpp` | 12 |
+| `log_message_test` | `tests/utils/logger/log_message_test.cpp` | 12 |
+| `logger_test` | `tests/utils/logger/logger_test.cpp` | 21 |
 | `serializer_test` | `tests/utils/serializer_test.cpp` | 8 |
 | `socket_io_test` | `tests/utils/socket_io_test.cpp` | 10 |
 | `gossip_payload_test` | `tests/utils/gossip_payload_test.cpp` | 11 |
+| `health_test` | `tests/utils/health_test.cpp` | 15 |
 
 ### User (`[user]`)
 
@@ -44,6 +48,12 @@ ctest --test-dir build --output-on-failure
 - User anonymousUser
 - User serialize / deserialize
 - User deserialize rejects invalid input
+
+### ClientEndpoint (`[client_endpoint]`)
+
+- ClientEndpoint serialize round-trip
+- ClientEndpoint deserialize rejects bad input
+- ClientEndpoint isLiveClientEndpoint
 
 ### Room (`[room]`)
 
@@ -112,12 +122,21 @@ ctest --test-dir build --output-on-failure
 - Logger keeps insertion order
 - Logger getMessage bounds
 - Logger clear removes all messages
-- Logger evicts oldest messages past kMaxMessages
+- Logger evicts oldest messages past MAX_MESSAGES
 - Logger stream output
 - Logger is a singleton
 - Logger heartbeat messages receive unique ids
 - Logger mixed types keep distinct ids and fields
 - Logger size tracks additions and clear
+- Logger facade forwards to registered sinks
+- ConsoleLogger registers as facade sink
+- Logger addLogger ignores nullptr
+- Logger clear does not unregister sinks
+- Logger late addLogger receives future messages only
+- Logger throwing sink skips later sinks
+- Logger reentrant sink log does not deadlock
+- Logger concurrent log size and getMessage
+- ConsoleLogger ERROR writes to stderr
 
 ### Serializer (`[serializer]`)
 
@@ -157,6 +176,44 @@ ctest --test-dir build --output-on-failure
 - gossip_payload rejects legacy pipe format
 - gossip_payload double round-trip stable
 
+### Health (`[health]`)
+
+- healthStatusToString maps each status
+- HealthReport statusToString uses status field
+- HealthMonitor empty check is Up
+- HealthMonitor all Up stays Up
+- HealthMonitor one Down yields overall Down
+- HealthMonitor Degraded without Down
+- HealthMonitor Down wins over Degraded
+- DbHealthAdapter reports Up when ping succeeds
+- HeartbeatHealthAdapter tracks isRunning
+- ServerHealthAdapter tracks isAlive
+- ClientHealthAdapter reports Down when not connected
+- ClientHealthAdapter reports Up when connected
+- HealthMonitor rollup with Server Heartbeat Db adapters
+- Client health monitor reports Down before connect
+- HealthMonitor rollup with live Client and Db adapters
+
+---
+
+## Config
+
+| Executable | File | Cases |
+|---|---|---|
+| `config_test` | `tests/config/config_test.cpp` | 9 |
+
+### Config (`[config]`)
+
+- parsePort accepts in-range ports
+- parsePort rejects invalid text
+- parsePeers splits commas and skips empty items
+- parseNeighborServers stores endpoints
+- parseNeighborServers skips the primary endpoint and duplicates
+- parseNeighborServers rejects a bad entry
+- parseArgs applies flags including servers
+- parseArgs host and port drop a matching neighbor
+- parseArgs rejects help unknown flags missing values and bad ports
+
 ---
 
 ## Auth — Argon2id
@@ -189,11 +246,12 @@ ctest --test-dir build --output-on-failure
 | Executable | File | Cases |
 |---|---|---|
 | `client_state_test` | `tests/client/client_state_test.cpp` | 10 |
-| `packet_builder_test` | `tests/client/packet_builder_test.cpp` | 21 |
-| `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 7 |
+| `endpoint_ring_test` | `tests/client/endpoint_ring_test.cpp` | 9 |
+| `packet_builder_test` | `tests/client/packet_builder_test.cpp` | 23 |
+| `packet_handler_test` | `tests/client/packet_handler_test.cpp` | 8 |
 | `network_test` | `tests/client/network_test.cpp` | 11 |
 | `console_ui_test` | `tests/client/console_ui_test.cpp` | 18 |
-| `client_test` | `tests/client/client_test.cpp` | 10 |
+| `client_test` | `tests/client/client_test.cpp` | 17 |
 
 ### ClientState (`[client_state]`)
 
@@ -207,6 +265,18 @@ ctest --test-dir build --output-on-failure
 - ClientState clear is idempotent
 - ClientState anonymous and empty-field users
 - ClientState Lobby room assignment
+
+### EndpointRing (`[endpoint_ring]` / `[failover]`)
+
+- EndpointRing walks the list and wraps
+- EndpointRing replace keeps the cursor host
+- EndpointRing replace drops a missing cursor
+- Backoff ceiling doubles and caps
+- Full jitter stays within the ceiling
+- Failover list prefers directory endpoints
+- Failover list keeps the connected endpoint first
+- Failover list keeps the seed when the directory is empty
+- Failover list ignores directory entries that are not up
 
 ### PacketBuilder (`[packet_builder]`)
 
@@ -227,18 +297,25 @@ ctest --test-dir build --output-on-failure
 - PacketBuilder buildCreateRoom rejects empty arguments
 - PacketBuilder buildInviteToRoom maps fields
 - PacketBuilder buildInviteToRoom rejects empty arguments
+- PacketBuilder buildKickFromRoom maps fields
+- PacketBuilder buildKickFromRoom rejects empty arguments
+- PacketBuilder buildDeleteRoom maps fields
+- PacketBuilder buildDeleteRoom rejects empty arguments
 - PacketBuilder buildLoadMessageHistory maps fields
 - PacketBuilder buildLoadMessageHistory rejects empty arguments
 - PacketBuilder sets defaults and timestamp
 - PacketBuilder accepts whitespace-only arguments
+- PacketBuilder buildReconnect maps fields
+- PacketBuilder buildReconnect rejects empty arguments
 
 ### PacketHandler (`[packet_handler]`)
 
 - PacketHandler LOGIN success deserializes user
 - PacketHandler REGISTER success deserializes user
+- PacketHandler UPDATE_USER success deserializes user
 - PacketHandler rejects non-SUCCESS auth responses
 - PacketHandler rejects invalid auth payload
-- PacketHandler ignores non-auth packet types
+- PacketHandler ignores every non-user packet type
 - PacketHandler SUCCESS with empty message fails
 - PacketHandler responseCode edge values
 
@@ -264,6 +341,7 @@ ctest --test-dir build --output-on-failure
 - ConsoleUI showUserDashboard without user returns -1
 - ConsoleUI showUserDashboard accepts a valid choice
 - ConsoleUI showUserDashboard EOF returns Logout
+- ConsoleUI showUserDashboard admin EOF returns Logout
 - ConsoleUI showLogin builds a LOGIN packet
 - ConsoleUI showLogin cancel on username exit
 - ConsoleUI showLogin cancel on password exit
@@ -276,6 +354,8 @@ ctest --test-dir build --output-on-failure
 - ConsoleUI showUpdateProfile builds password UPDATE_USER
 - ConsoleUI showUpdateProfile back cancels
 - ConsoleUI showCreateRoom builds a ROOM_CREATE packet
+- ConsoleUI showKickFromRoom builds a ROOM_KICK packet
+- ConsoleUI showDeleteRoom builds a ROOM_DELETE packet
 
 ### Client (`[client]`) — mocked peer, not a live `chat_server`
 
@@ -289,6 +369,13 @@ ctest --test-dir build --output-on-failure
 - Client login failure keeps connection
 - Client register success round-trip
 - Client login then logout
+- Client fails over when the first endpoint refuses
+- Client fails over when the peer closes
+- Client reports reconnecting on hop without re-login
+- Client sends RECONNECT on hop when logged in
+- Client appearance defaults to light and comfortable
+- Client appearance toggles round-trip
+- Client connected endpoint is the dialed host port
 
 ---
 
@@ -297,12 +384,12 @@ ctest --test-dir build --output-on-failure
 | Executable | File | Cases |
 |---|---|---|
 | `client_session_test` | `tests/server/client_session_test.cpp` | 11 |
-| `database_manager_test` | `tests/server/database_manager_test.cpp` | 20 |
+| `database_manager_test` | `tests/server/database_manager_test.cpp` | 24 |
 | `heartbeat_test` | `tests/server/heartbeat_test.cpp` | 19 |
 | `room_manager_test` | `tests/server/room_manager_test.cpp` | 18 |
-| `packet_processor_test` | `tests/server/packet_processor_test.cpp` | 18 |
+| `packet_processor_test` | `tests/server/packet_processor_test.cpp` | 21 |
 | `connection_manager_test` | `tests/server/connection_manager_test.cpp` | 19 |
-| `gossip_manager_test` | `tests/server/gossip_manager_test.cpp` | 23 |
+| `gossip_manager_test` | `tests/server/gossip_manager_test.cpp` | 24 |
 | `server_test` | `tests/server/server_test.cpp` | 13 |
 
 ### ClientSession (`[client_session]`)
@@ -330,6 +417,7 @@ ctest --test-dir build --output-on-failure
 - DatabaseManager createUser string edges
 - DatabaseManager loginUser success
 - DatabaseManager loginUser failures
+- DatabaseManager seed users login with real passwords
 - DatabaseManager saveMessage success and duplicate id
 - DatabaseManager saveMessage foreign keys
 - DatabaseManager saveMessage content edges
@@ -341,6 +429,10 @@ ctest --test-dir build --output-on-failure
 - DatabaseManager typical register login logout flow
 - DatabaseManager createRoom assigns id and round-trips
 - DatabaseManager updateUser password and username
+- DatabaseManager claims presence when the recorded node is down
+- DatabaseManager clearNodePresence drops one node
+- DatabaseManager allow list add check and remove
+- DatabaseManager allow list edges
 
 ### Heartbeat (`[heartbeat]`)
 
@@ -405,6 +497,10 @@ ctest --test-dir build --output-on-failure
 - PacketProcessor ROOM_CREATE
 - PacketProcessor LOAD_MESSAGE_HISTORY
 - PacketProcessor typical register message logout flow
+- PacketProcessor ADMIN privilege checks
+- PacketProcessor reconnect adopts a down node
+- PacketProcessor reconnect rejects a live local session
+- PacketProcessor answers every packet type
 
 ### ConnectionManager (`[connection_manager]`)
 
@@ -427,6 +523,7 @@ ctest --test-dir build --output-on-failure
 - ConnectionManager stopListening closes clients
 - ConnectionManager typical connect login message disconnect flow
 - ConnectionManager hasSession false for guest and wrong user
+- ConnectionManager pushes SERVER_DIRECTORY after login
 
 ### GossipManager (`[gossip_manager]`)
 
@@ -440,6 +537,7 @@ ctest --test-dir build --output-on-failure
 - GossipManager rumor LOGIN and LOGOUT update presence
 - GossipManager rumor USER_CREATED inserts user
 - GossipManager rumor ROOM_CREATED and ROOM_ACL_ADD
+- GossipManager rumor ROOM_DELETED and ROOM_KICK
 - GossipManager rumor ROOM_JOIN and ROOM_LEAVE
 - GossipManager rumor MESSAGE saves history
 - GossipManager duplicate rumor event id is ignored
@@ -453,6 +551,9 @@ ctest --test-dir build --output-on-failure
 - GossipManager dial connects to listening peer
 - GossipManager concurrent rumor is safe
 - GossipManager typical LOGIN MESSAGE LOGOUT flow
+- GossipManager tracks live client endpoints from HELLO
+- GossipManager pushes SERVER_DIRECTORY to chat clients on peer change
+- GossipManager rumor RECONNECT moves presence and membership
 
 ### Server (`[server]`)
 
@@ -472,19 +573,63 @@ ctest --test-dir build --output-on-failure
 
 ---
 
+## WebConnection
+
+`WebConnection` is owned by `Server` and linked into `server_lib`.
+
+| Executable | File | Cases |
+|---|---|---|
+| `web_connection_test` | `tests/server/web_connection_test.cpp` | 5 |
+
+### WebConnection (`[web_connection]`)
+
+- WebConnection accept key matches RFC 6455
+- WebConnection upgrade response
+- WebConnection upgrade rejects a request without a key
+- WebConnection binary frame round-trip
+- WebConnection session receives welcome and heartbeat pong
+
+---
+
+## Func / E2E
+
+Live `Server` + `Client` (same libraries as `chat_server` / `chat_client`), not mocks.
+
+| Executable | File | Cases |
+|---|---|---|
+| `two_client_message_push_test` | `tests/func/two_client_message_push_test.cpp` | 1 |
+| `session_rules_test` | `tests/func/session_rules_test.cpp` | 4 |
+| `failover_e2e_test` | `tests/func/failover_e2e_test.cpp` | 1 |
+
+### Two-client MESSAGE push (`[func][e2e][message]`)
+
+- E2E two clients same room MESSAGE push received
+
+### Session rules (`[func][e2e][room]` / `[auth]`)
+
+- E2E join leave Lobby rules
+- E2E join unknown room returns error
+- E2E logout then login again
+- E2E double login rejected
+
+### Failover (`[func][e2e][failover]`)
+
+- E2E kill node A logged-in client fails over to B
+
+---
+
 ## Functionality still untested
 
 Product behaviors that exist (or are TODOs) without a dedicated Catch2 case. Highest value first. Cluster rumor / DIGEST / HELLO paths are covered in `gossip_manager_test` above; gaps below are mostly **live dual-process** or missing unit surfaces.
 
-### End-to-end (live `chat_server` + `chat_client` / Client)
+### End-to-end (live `Server` + `Client`)
 
-- Two clients on one node: login, join the same room, send a MESSAGE; the other client receives the push.
+- [x] Two clients on one node: seed login (admin/user), join the same room, send a MESSAGE; the other client receives the push (`tests/func/`).
+- [x] Cannot leave Lobby; leave General → Lobby; join unknown room error + state unchanged; logout/login; double-login rejected (`session_rules_test`).
 - Client join-room / leave-room / send-message full UI round-trips against a live server.
-- Client cannot leave Lobby; join unknown room returns NOT_FOUND and state is unchanged.
 - Disconnect / Ctrl+C while logged in: server clears `online_users` and rumors LOGOUT.
-- Client reconnect after server restart; session is anonymous until login again.
-- Register then login on a second client with the same username is rejected (`user already logged in`).
-- Logout then login again on the same connection.
+- [x] Kill node A while a logged-in client is in a room: cached `SERVER_DIRECTORY`, land on node B, same user and room, MESSAGE again (`failover_e2e_test`).
+- Client reconnect after a single-node restart resumes the in-memory user (unit: mocked peer sends `RECONNECT`). A restarted node clears its own presence row, so that path is still open.
 - Invite to private room + join allow-list path across a live client.
 
 ### Cluster / gossip (two live processes)
@@ -496,16 +641,14 @@ Unit coverage exists in `gossip_manager_test`. Still open as **two `chat_server`
 - Duplicate login across nodes: A holds the socket, B rejects LOGIN.
 - ROOM_JOIN / MESSAGE / ACL across live peer sockets (beyond in-process peer fixtures).
 - Event-log cap (`MAX_EVENT_LOG`): late PULL cannot resurrect dropped ids.
-- Clear `online_users` on node boot (product TODO — see STEPS §6).
+- [x] Clear this node's `online_users` on boot (`DatabaseManager clearNodePresence drops one node`; `Server::start` calls `clearNodePresence`).
 
 Smoke: `.\scripts\run_cluster.ps1`.
 
 ### Persistence and rooms
 
-- `allow_list` CRUD edges as dedicated `DatabaseManager` cases (join/invite covered via packet processor / gossip).
-- Server restart with the same `--db`: users, rooms, messages, membership survive; `online_users` should be empty until login (clear-on-boot not implemented).
-- `deleteRoom` over the wire (no client packet type yet).
-- ADMIN privilege checks (seed has ADMIN; no gates yet).
+- [x] `allow_list` add, check, and remove (`DatabaseManager allow list add check and remove`).
+- Still open as a live Catch2 case: restart one `chat_server` on the same `--db` and check that users, rooms, messages, and membership are still there. Boot already clears this node's `online_users` rows (`Server::start` calls `clearNodePresence`).
 
 ### Heartbeat (client + server together)
 
@@ -516,8 +659,8 @@ Covered at component level (`heartbeat_test`, `network_test` pong). Still open:
 ### Missing unit / config surfaces
 
 - **ThreadPool**: enqueue, worker execution, shutdown while tasks queued (pool is constructed but unused for session I/O).
-- **config::parseArgs / parsePort / parsePeers**: CLI flags, invalid port, unknown flag, missing value.
-- **PacketHandler** beyond LOGIN/REGISTER (Client often checks `responseCode` alone).
+- [x] **config::parseArgs / parsePort / parsePeers / `--servers`**: CLI flags, invalid port, unknown flag, missing value (`config_test`).
+- [x] **PacketHandler** for every type: LOGIN, REGISTER, and UPDATE_USER deserialize a user; every other type returns empty (`packet_handler_test`). `PacketProcessor` answers every `PacketType`, including `ROOM_LIST` and `SERVER_DIRECTORY`.
 - ConsoleUI invite / history / leave prompts if added as dedicated screens.
 - `waitFor` skipping unexpected queued types.
 - `Network` receive timeout with no packet as a named case.

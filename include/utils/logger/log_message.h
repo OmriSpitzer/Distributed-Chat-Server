@@ -1,9 +1,8 @@
 /**
- * LogMessage header file class
+ * Log Message class header file
  *
  * @date 12-09-2026
  */
-
 #pragma once
 #include <ctime>
 #include <ostream>

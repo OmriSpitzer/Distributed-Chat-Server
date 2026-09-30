@@ -104,6 +104,14 @@ TEST_CASE("ConsoleUI showUserDashboard EOF returns Logout", "[console_ui][menu][
   REQUIRE(ConsoleUI::showUserDashboard(state) == 8);
 }
 
+TEST_CASE("ConsoleUI showUserDashboard admin EOF returns Logout", "[console_ui][menu][edge]") {
+  ClientState state;
+  state.user = User("admin", "admin@example.com", User::UserType::ADMIN);
+  state.currentRoom = Room(1, "Lobby", Room::RoomType::LOBBY);
+  IoRedirect io("");
+  REQUIRE(ConsoleUI::showUserDashboard(state) == 10);
+}
+
 // 7. showLogin builds a LOGIN packet
 TEST_CASE("ConsoleUI showLogin builds a LOGIN packet", "[console_ui][login]") {
   IoRedirect io("alice\nsecret\n");
@@ -240,4 +248,31 @@ TEST_CASE("ConsoleUI showCreateRoom builds a ROOM_CREATE packet", "[console_ui][
     REQUIRE(packet->room == "Secure");
     REQUIRE(packet->message == "PRIVATE");
   }
+}
+
+TEST_CASE("ConsoleUI showKickFromRoom builds a ROOM_KICK packet", "[console_ui][kick]") {
+  ClientState state;
+  makeLoggedIn(state);
+  state.currentRoom = Room(3, "Secure", Room::RoomType::OTHER, Room::Privacy::PRIVATE);
+  IoRedirect io("bob\n");
+  const auto packet = ConsoleUI::showKickFromRoom(state);
+
+  REQUIRE(packet.has_value());
+  REQUIRE(packet->type == Packet::PacketType::ROOM_KICK);
+  REQUIRE(packet->sender == "alice");
+  REQUIRE(packet->room == "Secure");
+  REQUIRE(packet->message == "bob");
+}
+
+TEST_CASE("ConsoleUI showDeleteRoom builds a ROOM_DELETE packet", "[console_ui][delete]") {
+  ClientState state;
+  makeLoggedIn(state);
+  state.currentRoom = Room(3, "Labs", Room::RoomType::OTHER);
+  IoRedirect io("");
+  const auto packet = ConsoleUI::showDeleteRoom(state);
+
+  REQUIRE(packet.has_value());
+  REQUIRE(packet->type == Packet::PacketType::ROOM_DELETE);
+  REQUIRE(packet->sender == "alice");
+  REQUIRE(packet->room == "Labs");
 }

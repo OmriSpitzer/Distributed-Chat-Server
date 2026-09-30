@@ -1,35 +1,55 @@
 /**
  * Server log panel implementation
  *
+ * @brief Live updates via QtLogger signals
  * @date 15-09-2026
  */
 
 #include "server/gui/panels/log_panel.h"
-#include "utils/models/logger.h"
+#include "utils/logger/logger.h"
+#include "utils/logger/qtLogger.h"
 #include <QDateTime>
 #include <QPlainTextEdit>
 #include <QScrollBar>
-#include <QTimer>
+
+namespace {
+QtLogger &qtLoggerInstance() {
+  static QtLogger instance;
+  return instance;
+}
+} // namespace
 
 LogPanel::LogPanel(QWidget *parent, Server *server) : Panel("Server log", parent, server) {
   logTextView = new QPlainTextEdit(this);
-  refreshTimer = new QTimer(this);
 
   logTextView->setReadOnly(true);
   logTextView->setPlaceholderText("Retrieving log messages...");
   getBodyLayout()->addWidget(logTextView, 1);
 
-  connect(refreshTimer, &QTimer::timeout, this, &LogPanel::refresh);
-  refreshTimer->start(REFRESH_INTERVAL);
-  refresh();
+  QtLogger &qtLogger = qtLoggerInstance();
+  Logger::getInstance().addLogger(&qtLogger);
+  connect(&qtLogger, &QtLogger::logLine, this, &LogPanel::appendLine, Qt::QueuedConnection);
+
+  refresh(); // one-shot backlog from the in-memory ring
 }
 
-void LogPanel::refresh() {
-  Logger &logger = Logger::getInstance();
-  const std::size_t n = logger.size();
+// append the log line to the UI
+void LogPanel::appendLine(const QString &line) {
   const int verticalValue = logTextView->verticalScrollBar()->value();
   const int verticalMax = logTextView->verticalScrollBar()->maximum();
   const bool stickToBottom = verticalValue == verticalMax;
+
+  logTextView->appendPlainText(line);
+
+  if (stickToBottom) {
+    logTextView->verticalScrollBar()->setValue(logTextView->verticalScrollBar()->maximum());
+  }
+}
+
+// refresh the log panel
+void LogPanel::refresh() {
+  Logger &logger = Logger::getInstance();
+  const std::size_t n = logger.size();
 
   logTextView->clear();
   for (std::size_t i = 0; i < n; ++i) {
@@ -40,11 +60,10 @@ void LogPanel::refresh() {
     }
   }
 
-  if (stickToBottom) {
-    logTextView->verticalScrollBar()->setValue(logTextView->verticalScrollBar()->maximum());
-  }
+  logTextView->verticalScrollBar()->setValue(logTextView->verticalScrollBar()->maximum());
 }
 
+// log the message to the UI
 void LogPanel::logMessage(const LogMessage &msg) {
   const QString line =
       QString("[%1] (%2) %3: %4")

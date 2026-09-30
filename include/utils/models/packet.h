@@ -1,5 +1,5 @@
 /**
- * Packet header file class
+ * Packet class header file
  *
  * @date 12-09-2026
  */
@@ -30,6 +30,10 @@ public:
     ROOM_LIST,
     LOAD_MESSAGE_HISTORY,
     ROOM_INVITE,
+    ROOM_DELETE,
+    ROOM_KICK,
+    SERVER_DIRECTORY,
+    RECONNECT,
   };
 
   // constructors
@@ -63,4 +67,7 @@ public:
 
   // convert string to packet type
   static PacketType stringToPacketType(std::string_view type);
+
+  // check if a packet type is valid
+  static bool isValidPacketType(PacketType type);
 };

@@ -1,5 +1,5 @@
 /**
- * PacketProcessor header file class
+ * Packet processor class header file
  *
  * @date 13-09-2026
  */

@@ -1,7 +1,11 @@
 /**
- * User class
+ * User class implementation file
  *
- * @brief User class to store a user and its metadata.
+ * @brief User class to store a user and its metadata
+ *
+ * User class with fields: username, email, user_type
+ * Used for storing and displaying users in the server
+ * Serialized format: user(username|email|user_type)
  * @date 11-09-2026
  */
 
@@ -13,17 +17,10 @@
 #include <unordered_map>
 
 // type to string map
-static const std::unordered_map<User::UserType, std::string> kTypeToString{
+static const std::unordered_map<User::UserType, std::string> userTypeToStringMap{
     {User::UserType::ADMIN, "ADMIN"},
     {User::UserType::USER, "USER"},
     {User::UserType::GUEST, "GUEST"},
-};
-
-// string to type map
-static const std::unordered_map<std::string, User::UserType> kStringToType{
-    {"ADMIN", User::UserType::ADMIN},
-    {"USER", User::UserType::USER},
-    {"GUEST", User::UserType::GUEST},
 };
 
 // constructor
@@ -48,18 +45,18 @@ User::UserType User::getUserType() const { return this->user_type; }
 
 // type to string
 std::string User::typeToString(User::UserType user_type) {
-  auto it = kTypeToString.find(user_type);
-  if (it != kTypeToString.end()) {
+  auto it = userTypeToStringMap.find(user_type);
+  if (it != userTypeToStringMap.end()) {
     return it->second;
   }
-  return kTypeToString.at(User::UserType::GUEST);
+  return userTypeToStringMap.at(User::UserType::GUEST);
 }
 
 // string to type
 User::UserType User::stringToType(const std::string_view &type) {
-  auto it = kStringToType.find(std::string(type));
-  if (it != kStringToType.end()) {
-    return it->second;
+  for (const auto &[key, value] : userTypeToStringMap) {
+    if (value == type)
+      return key;
   }
   return User::UserType::GUEST;
 }
@@ -95,21 +92,28 @@ std::string User::serialize() const {
 // deserialize
 User User::deserialize(const std::string &serialized) {
   static const std::string prefix = "user(";
+
+  // check correct serialization format
   if (serialized.size() < prefix.size() + 1 || serialized.compare(0, prefix.size(), prefix) != 0 ||
       serialized.back() != ')') {
     throw std::invalid_argument("Invalid serialized user");
   }
 
+  // extract the body of the serialized user
   const std::string body = serialized.substr(prefix.size(), serialized.size() - prefix.size() - 1);
   const std::size_t first = body.find('|');
   const std::size_t second =
       (first == std::string::npos) ? std::string::npos : body.find('|', first + 1);
-  if (first == std::string::npos || second == std::string::npos) {
-    throw std::invalid_argument("Invalid serialized user");
-  }
 
+  // check if all the fields are present
+  if (first == std::string::npos || second == std::string::npos)
+    throw std::invalid_argument("Invalid serialized user");
+
+  // extract the fields from the body
   const std::string username = body.substr(0, first);
   const std::string email = body.substr(first + 1, second - first - 1);
   const std::string userType = body.substr(second + 1);
+
+  // create the user object
   return User(username, email, User::stringToType(userType));
 }
